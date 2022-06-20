@@ -1,0 +1,52 @@
+{
+    "attribute": {
+        "age": "成年",
+        "birth": "中国",
+        "constellation": "水瓶座",
+        "contact": "微信123456789",
+        "gender": "男",
+        "hobby": "发呆",
+        "job": "产品布道者",
+        "name": "陈升",
+        "voice": "YUN_XI",
+        "zodiac": "蛇"
+    },
+    "interact": {
+        "QnA": "E:/QnA/全局QnA.xlsx",
+        "maxInteractTime": 15,
+        "perception": {
+            "chat": 7,
+            "follow": 10,
+            "gift": 50,
+            "indifferent": 10,
+            "join": 10
+        },
+        "playSound": false
+    },
+    "items": [
+        {
+            "QnA": "E:/QnA/商品QnA.xlsx",
+            "demoVideo": "C:/Demo.mp4",
+            "enabled": false,
+            "explain": {
+                "character": "",
+                "discount": "",
+                "intro": "",
+                "price": "",
+                "promise": "",
+                "usage": ""
+            },
+            "name": ""
+        }
+    ],
+    "source": {
+        "liveRoom": {
+            "enabled": false,
+            "url": "https://live.douyin.com/"
+        },
+        "record": {
+            "device": "",
+            "enabled": false
+        }
+    }
+}

@@ -1,0 +1,17 @@
+requests~=2.26.0
+selenium~=4.1.3
+numpy~=1.19.5
+pyaudio~=0.2.11
+websockets~=10.2
+ws4py~=0.5.1
+pyqt5~=5.15.6
+flask~=2.1.1
+openpyxl~=3.0.9
+pygame~=2.1.2
+flask_cors~=3.0.10
+PyQtWebEngine~=5.15.5
+eyed3~=0.9.6
+websocket~=0.2.1
+websocket-client~=1.3.2
+azure-cognitiveservices-speech~=1.21.0
+aliyun-python-sdk-core==2.13.3
