@@ -135,6 +135,8 @@ python main.py
 
 控制器与采用 WebSocket 方式与 UE 通讯
 
+下载: [https://pan.baidu.com/s/1L6yUR5cRFuNBiuPaXcmHaQ?pwd=8s8d](https://pan.baidu.com/s/1L6yUR5cRFuNBiuPaXcmHaQ?pwd=8s8d)
+
 通讯地址: [`ws://127.0.0.1:10002`](ws://127.0.0.1:10002)
 
 消息格式: 查看 [WebSocket.md](https://github.com/TheRamU/Fay/blob/main/WebSocket.md)
