@@ -2,7 +2,7 @@
     <br>
     <img src="images/icon.png" alt="Fay">
     <h1>FAY</h1>
-	<h3>数  字  人  控  制  器</h3>
+	<h3>数  字  人  控  制  器(这是元宇宙吗？)</h3>
 </div>
 
 
