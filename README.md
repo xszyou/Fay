@@ -133,7 +133,7 @@ python main.py
 
 
 
-## 与数字形象通讯（非必须）
+## 与数字形象通讯（非必须,控制器需要关闭“面板播放”）
 
 控制器与采用 WebSocket 方式与 UE 通讯
 
@@ -180,3 +180,7 @@ python main.py
     └── util.py
 ```
 进一步交流请联系QQ 467665317
+
+技术交流群
+
+![mmqrcode1665648480395](C:\Users\Administrator\Documents\GitHub\Fay\images\mmqrcode1665648480395.png)
