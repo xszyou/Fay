@@ -11,9 +11,34 @@
 ​		使用UE、C4D、DAZ、LIVE2D等三维引擎软件开发的数字形象可以与本“数字人控制器”对接，从而实现虚拟主播、数字导游、数字助手等。我们提供UE4对接的demo，但我们更鼓励用户自行实现喜欢的数字形象。
 
 ​		当然，若不考虑外观形象的话，本“数字人控制器”其实也可以独立使用的，可以充当一个语音助理。
-<img src="images/1.png" alt="直播">
-<img src="images/2.png" alt="助理">
-<img src="images/3.png" alt="QA">
+
+<img src="images/5.png" alt="QA">
+
+## 语音指令
+
+- **关闭核心**
+  关闭
+  再见
+  你走吧
+- **静音**
+  静音
+  闭嘴
+  我想静静
+- **取消静音**
+  取消静音
+  你在哪呢？
+  你可以说话了
+- **播放歌曲**
+  播放歌曲
+  播放音乐
+  唱首歌
+  放首歌
+  听音乐
+  你会唱歌吗？
+- **暂停播放**
+  暂停播放
+  别唱了
+  我不想听了
 
 
 ## 环境
@@ -183,4 +208,5 @@ python main.py
 
 技术交流群
 
-![mmqrcode1665648480395](C:\Users\Administrator\Documents\GitHub\Fay\images\mmqrcode1665648480395.png)
+<img src="images/4.png" alt="直播">
+

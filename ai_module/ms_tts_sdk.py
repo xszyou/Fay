@@ -10,7 +10,7 @@ from utils import config_util as cfg
 
 class Speech:
     def __init__(self):
-        self.__speech_config = speechsdk.SpeechConfig(subscription=cfg.key_ms_tts_key, region="eastasia")
+        self.__speech_config = speechsdk.SpeechConfig(subscription=cfg.key_ms_tts_key, region=cfg.key_ms_tts_region)
         self.__speech_config.speech_recognition_language = "zh-CN"
         self.__speech_config.speech_synthesis_voice_name = "zh-CN-XiaoxiaoNeural"
         self.__speech_config.set_speech_synthesis_output_format(speechsdk.SpeechSynthesisOutputFormat.Audio16Khz32KBitRateMonoMp3)

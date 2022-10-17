@@ -10,6 +10,7 @@ key_ali_nls_key_id = None
 key_ali_nls_key_secret = None
 key_ali_nls_app_key = None
 key_ms_tts_key = None
+Key_ms_tts_region = None
 key_xf_aiui_app_id = None
 key_xf_aiui_api_key = None
 key_xf_ltp_app_id = None
@@ -23,6 +24,7 @@ def load_config():
     global key_ali_nls_key_secret
     global key_ali_nls_app_key
     global key_ms_tts_key
+    global key_ms_tts_region
     global key_xf_aiui_app_id
     global key_xf_aiui_api_key
     global key_xf_ltp_app_id
@@ -35,6 +37,7 @@ def load_config():
     key_ali_nls_key_secret = system_config.get('key', 'ali_nls_key_secret')
     key_ali_nls_app_key = system_config.get('key', 'ali_nls_app_key')
     key_ms_tts_key = system_config.get('key', 'ms_tts_key')
+    key_ms_tts_region  = system_config.get('key', 'ms_tts_region')
     key_xf_aiui_app_id = system_config.get('key', 'xf_aiui_app_id')
     key_xf_aiui_api_key = system_config.get('key', 'xf_aiui_api_key')
     key_xf_ltp_app_id = system_config.get('key', 'xf_ltp_app_id')

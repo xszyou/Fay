@@ -1,6 +1,6 @@
 requests~=2.26.0
 selenium~=4.1.3
-numpy~=1.19.5
+numpy~=1.22.0
 pyaudio~=0.2.11
 websockets~=10.2
 ws4py~=0.5.1

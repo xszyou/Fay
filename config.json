@@ -1,18 +1,18 @@
 {
     "attribute": {
-        "age": "成年",
-        "birth": "中国",
-        "constellation": "水瓶座",
-        "contact": "微信123456789",
-        "gender": "男",
-        "hobby": "发呆",
-        "job": "产品布道者",
-        "name": "陈升",
+        "age": "\u6210\u5e74",
+        "birth": "\u4e2d\u56fd",
+        "constellation": "\u6c34\u74f6\u5ea7",
+        "contact": "qq467665317",
+        "gender": "\u7537",
+        "hobby": "\u53d1\u5446",
+        "job": "\u4ea7\u54c1\u5e03\u9053\u8005",
+        "name": "\u9648\u5347",
         "voice": "YUN_XI",
-        "zodiac": "蛇"
+        "zodiac": "\u86c7"
     },
     "interact": {
-        "QnA": "E:/QnA/全局QnA.xlsx",
+        "QnA": "qa_demo.xlsx",
         "maxInteractTime": 15,
         "perception": {
             "chat": 7,
@@ -21,11 +21,11 @@
             "indifferent": 10,
             "join": 10
         },
-        "playSound": false
+        "playSound": true
     },
     "items": [
         {
-            "QnA": "E:/QnA/商品QnA.xlsx",
+            "QnA": "qa_demo.xlsx",
             "demoVideo": "C:/Demo.mp4",
             "enabled": false,
             "explain": {
@@ -45,8 +45,8 @@
             "url": "https://live.douyin.com/"
         },
         "record": {
-            "device": "",
-            "enabled": false
+            "device": "\u9ea6\u514b\u98ce (HD Webcam C525)",
+            "enabled": true
         }
     }
 }
