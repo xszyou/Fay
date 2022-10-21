@@ -208,5 +208,5 @@ python main.py
 
 技术交流群
 
-<img src="images/4.png" alt="直播">
+<img src="images/37.jpg" alt="直播">
 
