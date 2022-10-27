@@ -14,6 +14,28 @@
 
 <img src="images/5.png" alt="QA">
 
+相关文章：
+
+1、[(34条消息) 非常全面的数字人解决方案_郭泽斌之心的博客-CSDN博客_数字人算法](https://blog.csdn.net/aa84758481/article/details/124758727)
+
+2、[(34条消息) Fay数字人开源项目在mac 上的安装办法_郭泽斌之心的博客-CSDN博客](https://blog.csdn.net/aa84758481/article/details/127551258)
+
+
+
+最近更新：
+
+2022.10.27
+
+1、更新mac上的麦克风参数；
+2、解决mac上无法重启问题；
+3、上传brew安装脚本。
+
+2022.10.17
+
+1、更新语音指令；
+
+2、补充人设语法；
+
 ## 语音指令
 
 - **关闭核心**
@@ -208,5 +230,5 @@ python main.py
 
 技术交流群
 
-<img src="images/37.jpg" alt="直播">
+<img src="images/37.png" alt="微信群">
 

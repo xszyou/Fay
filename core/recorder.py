@@ -95,13 +95,13 @@ class Recorder:
         device_id = self.__findInternalRecordingDevice(p)
         if device_id < 0:
             return
-        stream = p.open(input_device_index=device_id, rate=self.__RATE, format=self.__FORMAT, channels=self.__CHANNELS, input=True)
+        stream = p.open(input_device_index=device_id, rate=self.__RATE, format=self.__FORMAT, channels=self.__CHANNELS, input=True, frames_per_buffer=1024)
 
         isSpeaking = False
         last_mute_time = time.time()
         last_speaking_time = time.time()
         while self.__running:
-            data = stream.read(1024)
+            data = stream.read(1024, exception_on_overflow=False)
             level = audioop.rms(data, 2)
             if len(self.__history_data) >= 5:
                 self.__history_data.pop(0)

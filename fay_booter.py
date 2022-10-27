@@ -154,12 +154,12 @@ def start():
         util.log(1, '开启录音服务...')
         recorderListener = RecorderListener(record['device'], feiFei)  # 监听麦克风
         recorderListener.start()
-
-    util.log(1, '注册命令...')
-    MyThread(target=console_listener).start()  # 监听控制台
+# mac下启动经常获取了不明内容，导致关闭再开启时等待输入
+#    util.log(1, '注册命令...')
+#    MyThread(target=console_listener).start()  # 监听控制台
 
     util.log(1, '完成!')
-    util.log(1, '使用 \'help\' 获取帮助.')
+#    util.log(1, '使用 \'help\' 获取帮助.')
 
 # if __name__ == '__main__':
 #     ws_server: MyServer = None
