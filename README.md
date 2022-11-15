@@ -230,5 +230,5 @@ python main.py
 
 技术交流群
 
-<img src="images/37.jpg" alt="微信群">
+<img src="images/33.jpg" alt="微信群">
 
