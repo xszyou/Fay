@@ -186,7 +186,7 @@ python main.py
 
 下载: [https://pan.baidu.com/s/1L6yUR5cRFuNBiuPaXcmHaQ?pwd=8s8d](https://pan.baidu.com/s/1L6yUR5cRFuNBiuPaXcmHaQ?pwd=8s8d)
 
-通讯地址: [`ws://127.0.0.1:10002`](ws://127.0.0.1:10002)
+通讯地址: [`ws://127.0.0.1:10002`](ws://127.0.0.1:10002)（已接通）
 
 消息格式: 查看 [WebSocket.md](https://github.com/TheRamU/Fay/blob/main/WebSocket.md)
 
@@ -230,5 +230,5 @@ python main.py
 
 技术交流群
 
-<img src="images/security_Screenshot_20221124-100227-272.png" alt="微信群">
+<img src="images/20221206104257.png" alt="微信群">
 
