@@ -238,5 +238,5 @@ python main.py
 
 技术交流群
 
-<img src="images/Dingtalk_20221226102048.jpg" alt="微信群">
+<img src="images/20230116105510.jpg" alt="微信群">
 
