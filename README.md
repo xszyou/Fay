@@ -239,5 +239,6 @@ python main.py
 技术交流群
 
 <img src="images/20230116105510.jpg" alt="微信群">
+v2.0：2023年1月25晚上10点腾讯会议见：https://meeting.tencent.com/dm/y2Vq5Iut8mN0
 
 
