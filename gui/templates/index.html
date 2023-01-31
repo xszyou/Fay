@@ -8,8 +8,10 @@
 
     <!-- index.css -->
     <link rel="stylesheet" href="{{ url_for('static',filename='css/index.css') }}"></link>
+    <!-- <link rel="stylesheet" href="./css/index.css"> -->
     <!-- 引入element-ui样式 -->
-    <!-- <link rel="stylesheet" href="{{ url_for('static',filename='css/element.css') }}"></link> -->
+    <!-- <link rel="stylesheet" href="./css/element.css"> -->
+    <link rel="stylesheet" href="{{ url_for('static',filename='css/element.css') }}"></link>
     <link rel="stylesheet" href="https://unpkg.com/element-ui/lib/theme-chalk/index.css">
 
     <title>自动商品介绍控制器</title>
@@ -20,7 +22,7 @@
 <div id="app">
     <div class="main">
         <div class="title">
-            <h2>数字人控制器</h2>
+            <h2>Fay控制器2.0</h2>
         </div>
         <div class="main_box">
             <div class="left">
@@ -228,13 +230,16 @@
 </div>
 </body>
 <!-- 开发环境vue.js -->
-<script src="https://cdn.jsdelivr.net/npm/vue@2/dist/vue.js"></script>
+<script src="{{ url_for('static',filename='js/vue.js') }}"></script>
+<!--<script src="https://cdn.jsdelivr.net/npm/vue@2/dist/vue.js"></script>-->
 <!-- 发行环境vue.js -->
 <!-- <script src="https://cdn.jsdelivr.net/npm/vue@2"></script> -->
 <!-- 引入element-ui组件库 -->
-<script src="https://unpkg.com/element-ui/lib/index.js"></script>
-<!-- <script src="{{ url_for('static',filename='js/element.js') }}"></script> -->
+<!-- <script src="./js/element.js"></script> -->
+<script src="{{ url_for('static',filename='js/element.js') }}"></script>
 <!-- index.js -->
+<!-- <script src="./js/index.js"></script> -->
+<!-- <script src="./js/self-adaption.js"></script> -->
 
 <script src="{{ url_for('static',filename='js/index.js') }}"></script>
 <script src="{{ url_for('static',filename='js/self-adaption.js') }}"></script>

@@ -3,6 +3,7 @@ import json
 import codecs
 from configparser import ConfigParser
 
+
 config: json = None
 system_config: ConfigParser = None
 system_chrome_driver = None
@@ -15,6 +16,7 @@ key_xf_aiui_app_id = None
 key_xf_aiui_api_key = None
 key_xf_ltp_app_id = None
 key_xf_ltp_api_key = None
+key_ngrok_cc_id = None
 
 def load_config():
     global config
@@ -29,6 +31,7 @@ def load_config():
     global key_xf_aiui_api_key
     global key_xf_ltp_app_id
     global key_xf_ltp_api_key
+    global key_ngrok_cc_id
 
     system_config = ConfigParser()
     system_config.read('system.conf', encoding='UTF-8')
@@ -42,6 +45,7 @@ def load_config():
     key_xf_aiui_api_key = system_config.get('key', 'xf_aiui_api_key')
     key_xf_ltp_app_id = system_config.get('key', 'xf_ltp_app_id')
     key_xf_ltp_api_key = system_config.get('key', 'xf_ltp_api_key')
+    key_ngrok_cc_id = system_config.get('key', 'ngrok_cc_id')
 
     config = json.load(codecs.open('config.json', encoding='utf-8'))
 

@@ -4,6 +4,7 @@ import os
 import random
 import time
 import wave
+import socket
 
 import eyed3
 from openpyxl import load_workbook
@@ -11,11 +12,12 @@ from openpyxl import load_workbook
 # 适应模型使用
 import numpy as np
 # import tensorflow as tf
-
+import fay_booter
 from ai_module import xf_aiui
 from ai_module import xf_ltp
 from ai_module.ms_tts_sdk import Speech
-from core import wsa_server, tts_voice
+from core import wsa_server, tts_voice, song_player
+from core.interact import Interact
 from core.tts_voice import EnumVoice
 from scheduler.thread_manager import MyThread
 from utils import util, storer, config_util
@@ -30,14 +32,28 @@ class FeiFei:
         self.a_msg = 'hi,我叫菲菲，英文名是fay'
         self.mood = 0.0  # 情绪值
         self.item_index = 0
+        self.deviceSocket = None
+        self.deviceConnect = None
+
+        #启动音频输入输出设备的连接服务
+        self.deviceSocketThread = MyThread(target=self.__accept_audio_device_output_connect)
+        self.deviceSocketThread.start()
 
         self.X = np.array([1, 0, 0, 0, 0, 0, 0, 0]).reshape(1, -1)  # 适应模型变量矩阵
         # self.W = np.array([0.01577594,1.16119452,0.75828,0.207746,1.25017864,0.1044121,0.4294899,0.2770932]).reshape(-1,1) #适应模型变量矩阵
         self.W = np.array([0.0, 0.6, 0.1, 0.7, 0.3, 0.0, 0.0, 0.0]).reshape(-1, 1)  # 适应模型变量矩阵
 
+        self.command_keyword = [
+            [['播放歌曲', '播放音乐', '唱首歌', '放首歌', '听音乐', '你会唱歌吗', '我想首听歌'], 'playSong'],
+            [['关闭', '再见', '你走吧'], 'stop'],
+            [['静音', '闭嘴', '我想静静'], 'mute'],
+            [['取消静音', '你在哪呢', '你可以说话了'], 'unmute'],
+            [['换个性别', '换个声音'], 'changeVoice']
+        ]
+
         # 人设提问关键字
         self.attribute_keyword = [
-            [['你叫什么名字', '你的名字是什么','你是谁'], 'name'],
+            [['你叫什么名字', '你的名字是什么'], 'name'],
             [['你是男的还是女的', '你是男生还是女生', '你的性别是什么', '你是男生吗', '你是女生吗', '你是男的吗', '你是女的吗', '你是男孩子吗', '你是女孩子吗', ], 'gender', ],
             [['你今年多大了', '你多大了', '你今年多少岁', '你几岁了', '你今年几岁了', '你今年几岁了', '你什么时候出生', '你的生日是什么', '你的年龄'], 'age', ],
             [['你的家乡在哪', '你的家乡是什么', '你家在哪', '你住在哪', '你出生在哪', '你的出生地在哪', '你的出生地是什么', ], 'birth', ],
@@ -69,6 +85,8 @@ class FeiFei:
         self.__running = True
         self.sp.connect()  # 预连接
         self.last_quest_time = time.time()
+        self.playing = False
+        self.muting = False
 
     def __string_similar(self, s1, s2):
         return difflib.SequenceMatcher(None, s1, s2).quick_ratio()
@@ -101,7 +119,44 @@ class FeiFei:
             return last_answer
         return None
 
-    def __get_answer(self, text):
+    def __play_song(self):
+        self.playing = True
+        song_player.play()
+        self.playing = False
+        wsa_server.get_web_instance().add_cmd({"panelMsg": ""})
+
+    def __get_answer(self, interleaver, text):
+
+        if interleaver == "mic":
+            # 命令
+            keyword = self.__get_keyword(self.command_keyword, text)
+            if keyword is not None:
+                if keyword == "playSong":
+                    MyThread(target=self.__play_song).start()
+                    wsa_server.get_web_instance().add_cmd({"panelMsg": ""})
+                elif keyword == "stop":
+                    fay_booter.stop()
+                    wsa_server.get_web_instance().add_cmd({"panelMsg": ""})
+                    wsa_server.get_web_instance().add_cmd({"liveState": 0})
+                elif keyword == "mute":
+                    self.muting = True
+                    self.speaking = True
+                    self.a_msg = "好的"
+                    MyThread(target=self.__say, args=['interact']).start()
+                    time.sleep(0.5)
+                    wsa_server.get_web_instance().add_cmd({"panelMsg": ""})
+                elif keyword == "unmute":
+                    self.muting = False
+                    return None
+                elif keyword == "changeVoice":
+                    voice = tts_voice.get_voice_of(config_util.config["attribute"]["voice"])
+                    for v in tts_voice.get_voice_list():
+                        if v != voice:
+                            config_util.config["attribute"]["voice"] = v.name
+                            break
+                    config_util.save_config(config_util.config)
+                    wsa_server.get_web_instance().add_cmd({"panelMsg": ""})
+                return "NO_ANSWER"
 
         # 人设问答
         keyword = self.__get_keyword(self.attribute_keyword, text)
@@ -170,16 +225,18 @@ class FeiFei:
                 # 简化逻辑：默认执行带货脚本，带货脚本执行其间有人互动，则执行完当前脚本就回应最后三条互动，回应完继续执行带货脚本
                 if i <= 3 and len(self.interactive) > i:
                     i += 1
-                    interact = self.interactive[0 - i]
-                    if interact[0] == 1:
-                        self.q_msg = interact[2]
-                    index = interact[0]
+                    interact: Interact = self.interactive[0 - i]
+                    if interact.interact_type == 1:
+                        self.q_msg = interact.data["msg"]
+                    index = interact.interact_type
                     # print("index:{0}".format(index))
-                    user_name = interact[1]
+                    user_name = interact.data["user"]
                     # self.__isExecute = True #!!!!
 
                     if index == 1:
-                        answer = self.__get_answer(self.q_msg)
+                        answer = self.__get_answer(interact.interleaver, self.q_msg)
+                        if self.muting:
+                            continue
                         text = ''
                         if answer is None:
                             try:
@@ -197,8 +254,9 @@ class FeiFei:
                                 util.log(1, '自然语言处理错误！')
                                 wsa_server.get_web_instance().add_cmd({"panelMsg": ""})
                                 continue
-                        else:
+                        elif answer != 'NO_ANSWER':
                             text = answer
+
                         if len(user_name) == 0:
                             self.a_msg = text
                         else:
@@ -209,22 +267,34 @@ class FeiFei:
                             random.randint(0, 2)]
 
                     elif index == 3:
-                        msg = ""
-                        for index in range(1, len(interact), 4):
-                            try:
-                                gift = interact[index + 2]
-                                gift_name = '礼物'
-                                if gift[0] != -1:
-                                    gift_name = gift[1]
-                                msg = msg + "{}送给我的{}个{}，".format(interact[index], interact[index + 3], gift_name)
-                            except BaseException as e:
-                                print("[System] 礼物处理错误！")
-                                print(e)
-                        self.a_msg = '感谢感谢，感谢' + msg
+                        gift = interact.data["gift"]
+                        self.a_msg = '感谢感谢，感谢 {}送给我的{}个{}'.format(interact.data["user"], interact.data["amount"], gift[1])
 
                     elif index == 4:
                         self.a_msg = '感谢关注'
 
+                    elif index == 5:
+                        msg = ""
+                        for i in range(0, len(interact.data["gifts"])):
+                            user = interact.data["gifts"][i]["user"]
+                            gift = interact.data["gifts"][i]["gift"]
+                            amount = interact.data["gifts"][i]["amount"]
+                            msg += "{}送给我的{}个{}".format(user, amount, gift[1])
+                        self.a_msg = '感谢感谢，感谢' + msg
+
+                    # elif index == 5:
+                    #     msg = ""
+                    #     for index in range(1, len(interact), 4):
+                    #         try:
+                    #             gift = interact[index + 2]
+                    #             gift_name = '礼物'
+                    #             if gift[0] != -1:
+                    #                 gift_name = gift[1]
+                    #             msg = msg + "{}送给我的{}个{}，".format(interact[index], interact[index + 3], gift_name)
+                    #         except BaseException as e:
+                    #             print("[System] 礼物处理错误！")
+                    #             print(e)
+                    #     self.a_msg = '感谢感谢，感谢' + msg
                     self.last_speak_data = self.a_msg
                     self.speaking = True
                     MyThread(target=self.__say, args=['interact']).start()
@@ -280,46 +350,53 @@ class FeiFei:
             return "usage"
         return None
 
-    def on_interact(self, interact):
+    def on_interact(self, interact: Interact):
 
         # 合并同类交互
         # 进入
-        if interact[0] == 2:
+        if interact.interact_type == 2:
             itr = self.__get_interactive(2)
             if itr is None:
                 self.interactive.append(interact)
             else:
-                newItr = (2, itr[1] + ', ' + interact[1], itr[2])
+                newItr = (2, itr.data["user"] + ', ' + interact.data["user"], itr.data["msg"])
                 self.interactive.remove(itr)
                 self.interactive.append(newItr)
 
         # 送礼
-        elif interact[0] == 3:
-            itr = self.__get_interactive(3)
-            if itr is None:
-                self.interactive.append(interact)
-            else:
-                newItrList = []
-                newItrList.extend(itr)
-                newItrList.append(itr[2])
-                newItrList.append(itr[3])
-                newItrList.append(itr[4])
-                self.interactive.remove(itr)
-                self.interactive.append(tuple(newItrList))
+        elif interact.interact_type == 3:
+            gifts = []
+            rm_list = []
+            for itr in self.interactive:
+                if itr.interact_type == 3:
+                    gifts.append({
+                        "user": itr.data["user"],
+                        "gift": itr.data["gift"],
+                        "amount": itr.data["amount"]
+                    })
+                    rm_list.append(itr)
+                elif itr.interact_type == 5:
+                    for gift in itr.data["gifts"]:
+                        gifts.append(gift)
+                    rm_list.append(itr)
+            if len(rm_list) > 0:
+                for itr in rm_list:
+                    self.interactive.remove(itr)
+                self.interactive.append(Interact("live", 5, {"gifts": gifts}))
 
         # 关注
-        elif interact[0] == 4:
+        elif interact.interact_type == 4:
             if self.__get_interactive(2) is None:
                 self.interactive.append(interact)
 
         else:
             self.interactive.append(interact)
-        MyThread(target=self.__update_mood, args=[interact[0]]).start()
+        MyThread(target=self.__update_mood, args=[interact.interact_type]).start()
         MyThread(target=storer.storage_live_interact, args=[interact]).start()
 
-    def __get_interactive(self, interactType):
+    def __get_interactive(self, interactType) -> Interact:
         for interact in self.interactive:
-            if interact[0] == interactType:
+            if interact is Interact and interact.interact_type == interactType:
                 return interact
         return None
 
@@ -397,19 +474,13 @@ class FeiFei:
             else:
                 # print(self.__get_mood().name + self.a_msg)
                 util.printInfo(1, '菲菲', '({}) {}'.format(self.__get_mood(), self.a_msg))
-                MyThread(target=storer.storage_live_interact, args=[(0, '菲菲', self.a_msg)]).start()
+                MyThread(target=storer.storage_live_interact, args=[Interact('Fay', 0, {'user': 'Fay', 'msg': self.a_msg})]).start()
                 util.log(1, '合成音频...')
                 tm = time.time()
                 result = self.sp.to_sample(self.a_msg, self.__get_mood())
-                util.log(1, '合成音频完成. 耗时: {} ms'.format(math.floor((time.time() - tm) * 1000)))
-                if result is not None:
-                    # playsound(result)
-                    # with wave.open(result, 'rb') as wav_file:
-                    #     wav_length = wav_file.getnframes() / float(wav_file.getframerate())
-                    #     time.sleep(wav_length)
+                util.log(1, '合成音频完成. 耗时: {} ms 文件:{}'.format(math.floor((time.time() - tm) * 1000), result))
+                if result is not None:            
                     MyThread(target=self.__send_audio, args=[result, styleType]).start()
-                    # MyThread(target=self.__play_audio, args=[result]).start()
-                    # MyThread(target=self.__waiting_speaking, args=[result]).start()
                     return result
         except BaseException as e:
             print(e)
@@ -425,13 +496,33 @@ class FeiFei:
 
     def __send_audio(self, file_url, say_type):
         try:
-            audio_length = eyed3.load(file_url).info.time_secs
+            # audio_length = eyed3.load(file_url).info.time_secs mp3音频长度
+            with wave.open(file_url, 'rb') as wav_file:
+                audio_length = wav_file.getnframes() / float(wav_file.getframerate())
             if audio_length <= config_util.config["interact"]["maxInteractTime"] or say_type == "script":
-                if config_util.config["interact"]["playSound"]:
+                if config_util.config["interact"]["playSound"]: # 播放音频
                     self.__play_sound(file_url)
-                else:
+                else:#TODO 发送音频给ue和socket
                     content = {'Topic': 'Unreal', 'Data': {'Key': 'audio', 'Value': os.path.abspath(file_url), 'Time': audio_length, 'Type': say_type}}
                     wsa_server.get_instance().add_cmd(content)
+                    if self.deviceConnect is not None:
+                        try:
+                            self.deviceConnect.send(b'\x00\x01\x02\x03\x04\x05\x06\x07\x08') # 发送音频开始标志，同时也检查设备是否在线
+                            wavfile = open(os.path.abspath(file_url),'rb')
+                            data = wavfile.read(1024)
+                            total = 0
+                            while data:
+                                total += len(data)
+                                self.deviceConnect.send(data)
+                                data = wavfile.read(1024)
+                                time.sleep(0.001)
+                            self.deviceConnect.send(b'\x08\x07\x06\x05\x04\x03\x02\x01\x00')# 发送音频结束标志
+                            util.log(1, "远程音频发送完成：{}".format(total))
+                        except socket.error as serr:
+                            util.log(1,"远程音频输入输出设备已经断开：{}".format(serr))
+
+
+                    
                 wsa_server.get_web_instance().add_cmd({"panelMsg": self.a_msg})
                 time.sleep(audio_length + 0.5)
                 wsa_server.get_web_instance().add_cmd({"panelMsg": ""})
@@ -441,22 +532,28 @@ class FeiFei:
         except Exception as e:
             print(e)
 
-    # def __send_audio(self, file_url, say_type):
-    #     try:
-    #         # time.sleep(0.25)
-    #         with wave.open(file_url, 'rb') as wav_file:
-    #             wav_length = wav_file.getnframes() / float(wav_file.getframerate())
-    #         print(wav_length)
-    #         if wav_length <= config_util.config["interact"]["maxInteractTime"] or say_type == "script":
-    #             if config_util.config["interact"]["playSound"]:
-    #                 self.__play_sound(file_url)
-    #             else:
-    #                 content = {'Topic': 'Unreal', 'Data': {'Key': 'audio', 'Value': os.path.abspath(file_url), 'Time': wav_length, 'Type': say_type}}
-    #                 wsa_server.get_instance().add_cmd(content)
-    #             time.sleep(wav_length + 0.5)
-    #         self.speaking = False
-    #     except Exception as e:
-    #         print(e)
+    def __device_socket_keep_alive(self):
+        while True:
+            if self.deviceConnect is not None:
+                try:
+                    self.deviceConnect.send(b'\xf0\xf1\xf2\xf3\xf4\xf5\xf6\xf7\xf8')#发送心跳包
+                except Exception as serr:
+                    util.log(1,"远程音频输入输出设备已经断开：{}".format(serr))
+                    self.deviceConnect = None
+            time.sleep(1)
+
+    def __accept_audio_device_output_connect(self):
+        self.deviceSocket = socket.socket(socket.AF_INET,socket.SOCK_STREAM) 
+        self.deviceSocket.bind(("0.0.0.0",10001))   
+        self.deviceSocket.listen(1)
+        addr = None        
+        try:
+            while True:
+                self.deviceConnect,addr=self.deviceSocket.accept()   #接受TCP连接，并返回新的套接字与IP地址
+                MyThread(target=self.__device_socket_keep_alive).start()
+                util.log(1,"远程音频输入输出设备连接上：{}".format(addr))
+        except Exception as err:
+            pass
 
     def __waiting_speaking(self, file_url):
         try:
@@ -501,4 +598,14 @@ class FeiFei:
 
     def stop(self):
         self.__running = False
+        song_player.stop()
+        self.speaking = False
+        self.playing = False
         self.sp.close()
+        wsa_server.get_web_instance().add_cmd({"panelMsg": ""})
+        if self.deviceConnect is not None:
+            self.deviceConnect.close()
+            self.deviceConnect = None
+        if self.deviceSocket is not None:
+            self.deviceSocket.close()
+

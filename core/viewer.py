@@ -9,6 +9,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support.expected_conditions import presence_of_element_located
 
+from core.interact import Interact
 from scheduler.thread_manager import MyThread
 from utils import config_util, util
 
@@ -46,7 +47,7 @@ class Viewer:
         self.live_driver.get(self.url)
         self.user_driver = webdriver.Chrome(config_util.system_chrome_driver, options=self.chrome_options)
         self.__wait_live_start()
-        self.user_sec_uid = self.__get_render_data(self.live_driver)['app']['initialState']['roomStore']['roomInfo']['room']['owner']['sec_uid']
+        self.user_sec_uid = self.__get_render_data(self.live_driver)['initialState']['roomStore']['roomInfo']['room']['owner']['sec_uid']
         MyThread(target=self.__live_state_runnable).start()
         MyThread(target=self.__join_runnable).start()
         MyThread(target=self.__interact_runnable).start()
@@ -142,7 +143,7 @@ class Viewer:
             if len(text) > 0 and self.last_join_data != text:
                 self.last_join_data = text
                 user = text[0:len(text) - 3]
-                return 2, user, '来了'
+                return Interact("live", 2, {"user": user, "msg": "来了"})
         except BaseException as e:
             return None
         return None
@@ -213,9 +214,14 @@ class Viewer:
                     gift = self.__get_gift_type(item_msg.get_attribute('src'))
                     arg = speak[1].split(' ')
                     amount = int(arg[len(arg) - 1])  # 礼物数量
-                    interact_data.append((3, speak[0], ('送出了 {0} X {1}'.format(gift[1], amount)), gift, amount))
+                    interact_data.append(Interact("live", 3, {
+                        "user": speak[0],
+                        "msg": ('送出了 {0} X {1}'.format(gift[1], amount)),
+                        "gift": gift,
+                        "amount": amount
+                    }))
                 else:
-                    interact_data.append((1, speak[0], speak[1]))
+                    interact_data.append(Interact("live", 1, {"user": speak[0], "msg": speak[1]}))
         except BaseException as e:
             interact_data.reverse()
             return interact_data
@@ -266,7 +272,13 @@ class Viewer:
                         break
                 if fs >= 0:
                     if self.live_started and 0 < followers < fs:
-                        self.on_interact((4, 'None', '粉丝关注'), time.time())
+                        self.on_interact(
+                            Interact("live", 4, {
+                                "user": "None",
+                                "msg": "粉丝关注"
+                            }),
+                            time.time()
+                        )
                     followers = fs
                 else:
                     util.log(1, '粉丝数获取异常')

@@ -3,12 +3,16 @@ import math
 import time
 from abc import abstractmethod
 
+
 import pyaudio
+import wave
+
 
 from ai_module.ali_nls import ALiNls
 from core import wsa_server
 from scheduler.thread_manager import MyThread
 from utils import util
+
 
 # 启动时间 (秒)
 _ATTACK = 0.2
@@ -19,32 +23,23 @@ _RELEASE = 0.75
 
 class Recorder:
 
-    def __init__(self, device, fay):
-        self.__device = device
+    def __init__(self, fay):
         self.__fay = fay
 
-        self.__RATE = 16000
-        self.__FORMAT = pyaudio.paInt16
-        self.__CHANNELS = 1
+        
 
         self.__running = True
         self.__processing = False
         self.__history_level = []
         self.__history_data = []
-        self.__dynamic_threshold = 0.5
+        self.__dynamic_threshold = 0.5 # 声音识别的音量阈值
 
         self.__MAX_LEVEL = 25000
         self.__MAX_BLOCK = 100
 
         self.__aLiNls = ALiNls()
 
-    def __findInternalRecordingDevice(self, p):
-        for i in range(p.get_device_count()):
-            devInfo = p.get_device_info_by_index(i)
-            if devInfo['name'].find(self.__device) >= 0 and devInfo['hostApi'] == 0:
-                return i
-        util.log(1, '[!] 无法找到内录设备!')
-        return -1
+    
 
     def __get_history_average(self, number):
         total = 0
@@ -73,6 +68,8 @@ class Recorder:
         print(text + " [" + str(int(per * 100)) + "%]")
 
     def __waitingResult(self, iat: ALiNls):
+        if self.__fay.playing:
+            return
         self.processing = True
         t = time.time()
         tm = time.time()
@@ -90,18 +87,22 @@ class Recorder:
             self.dynamic_threshold = self.__get_history_percentage(30)
             wsa_server.get_web_instance().add_cmd({"panelMsg": ""})
 
+   
     def __record(self):
-        p = pyaudio.PyAudio()
-        device_id = self.__findInternalRecordingDevice(p)
-        if device_id < 0:
-            return
-        stream = p.open(input_device_index=device_id, rate=self.__RATE, format=self.__FORMAT, channels=self.__CHANNELS, input=True, frames_per_buffer=1024)
+        self.total = 0
+    
+        stream = self.get_stream()
 
         isSpeaking = False
         last_mute_time = time.time()
         last_speaking_time = time.time()
         while self.__running:
-            data = stream.read(1024, exception_on_overflow=False)
+            data = stream.read(1024)
+            if not data:
+                continue
+            else:
+                self.total += len(data)
+
             level = audioop.rms(data, 2)
             if len(self.__history_data) >= 5:
                 self.__history_data.pop(0)
@@ -122,8 +123,8 @@ class Recorder:
             if percentage > self.__dynamic_threshold and not self.__fay.speaking:
                 last_speaking_time = time.time()
                 if not self.__processing and not isSpeaking and time.time() - last_mute_time > _ATTACK:
-                    soon = True
-                    isSpeaking = True
+                    soon = True  #
+                    isSpeaking = True  #用户正在说话
                     util.log(3, "聆听中...")
                     self.__aLiNls = ALiNls()
                     try:
@@ -144,9 +145,10 @@ class Recorder:
             if not soon and isSpeaking:
                 self.__aLiNls.send(data)
 
-        stream.stop_stream()
-        stream.close()
-        p.terminate()
+        
+        
+        print("接收完成：{}".format(self.total))
+        
 
     def set_processing(self, processing):
         self.__processing = processing
@@ -161,3 +163,9 @@ class Recorder:
     @abstractmethod
     def on_speaking(self, text):
         pass
+
+    #TODO Edit by xszyou on 20230113:把流的获取方式封装出来方便实现麦克风录制及网络流等不同的流录制子类
+    @abstractmethod
+    def get_stream(self):
+        pass
+

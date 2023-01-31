@@ -1,10 +1,21 @@
 import time
+from io import BytesIO
+import socket
+import pyaudio
+import numpy as np
+import scipy.io.wavfile as wav
+import wave
 
+from core.interact import Interact
 from core.recorder import Recorder
 from core.fay_core import FeiFei
 from core.viewer import Viewer
 from scheduler.thread_manager import MyThread
-from utils import util, config_util
+from utils import util, config_util, stream_util, ngrok_util
+from core.wsa_server import MyServer
+
+
+
 
 feiFei: FeiFei = None
 viewerListener: Viewer = None
@@ -18,15 +29,15 @@ class ViewerListener(Viewer):
     def __init__(self, url):
         super().__init__(url)
 
-    def on_interact(self, interact, event_time):
+    def on_interact(self, interact: Interact, event_time):
         type_names = {
             1: '发言',
             2: '进入',
             3: '送礼',
             4: '关注'
         }
-        util.printInfo(1, type_names[interact[0]], '{}: {}'.format(interact[1], interact[2]), event_time)
-        if interact[0] == 1:
+        util.printInfo(1, type_names[interact.interact_type], '{}: {}'.format(interact.data["user"], interact.data["msg"]), event_time)
+        if interact.interact_type == 1:
             feiFei.last_quest_time = time.time()
         thr = MyThread(target=feiFei.on_interact, args=[interact])
         thr.start()
@@ -36,17 +47,99 @@ class ViewerListener(Viewer):
         feiFei.set_sleep(not is_live_started)
         pass
 
-
+#录制麦克风音频输入并传给aliyun
 class RecorderListener(Recorder):
 
     def __init__(self, device, fei):
-        super().__init__(device, fei)
+        self.__device = device
+        self.__RATE = 16000
+        self.__FORMAT = pyaudio.paInt16
+        self.__CHANNELS = 1
+
+        super().__init__(fei)
 
     def on_speaking(self, text):
-        interact = (1, '', text)
-        util.printInfo(3, "语音", '{}'.format(interact[2]), time.time())
-        feiFei.on_interact(interact)
-        time.sleep(2)
+        if len(text) > 1:
+            interact = Interact("mic", 1, {'user': '', 'msg': text})
+            util.printInfo(3, "语音", '{}'.format(interact.data["msg"]), time.time())
+            feiFei.on_interact(interact)
+            time.sleep(2)
+
+    def get_stream(self):
+        self.paudio = pyaudio.PyAudio()
+        device_id = self.__findInternalRecordingDevice(self.paudio)
+        if device_id < 0:
+            return
+        self.stream = self.paudio.open(input_device_index=device_id, rate=self.__RATE, format=self.__FORMAT, channels=self.__CHANNELS, input=True)
+        return self.stream
+
+    def __findInternalRecordingDevice(self, p):
+        for i in range(p.get_device_count()):
+            devInfo = p.get_device_info_by_index(i)
+            if devInfo['name'].find(self.__device) >= 0 and devInfo['hostApi'] == 0:
+                return i
+        util.log(1, '[!] 无法找到内录设备!')
+        return -1
+    
+    def stop(self):
+        super().stop()
+        self.stream.stop_stream()
+        self.stream.close()
+        self.paudio.terminate()
+
+
+#TODO Edit by xszyou on 20230113:录制远程设备音频输入并传给aliyun
+class DeviceInputListener(Recorder):
+    def __init__(self, fei):
+        super().__init__(fei)
+        self.__running = True
+        self.ngrok = None
+        self.thread = MyThread(target=self.run)
+        self.thread.start()  #启动远程音频输入设备监听线程
+
+    def run(self):
+        #启动ngork
+        if config_util.key_ngrok_cc_id is not None:
+            MyThread(target=self.start_ngrok, args=[config_util.key_ngrok_cc_id]).start()
+              
+        self.streamCache = stream_util.StreamCache(1024*1024*20)
+        addr = None
+        while self.__running:
+            try:
+                
+                data = b""
+                while feiFei.deviceConnect:
+                    data = feiFei.deviceConnect.recv(1024)
+                    self.streamCache.write(data)
+                    time.sleep(0.005)
+                self.streamCache.clear()
+         
+            except Exception as err:
+                pass
+            time.sleep(1)
+
+    def on_speaking(self, text):
+        if len(text) > 1:
+            interact = Interact("mic", 1, {'user': '', 'msg': text})
+            util.printInfo(3, "语音", '{}'.format(interact.data["msg"]), time.time())
+            feiFei.on_interact(interact)
+            time.sleep(2)
+
+    def get_stream(self):
+        while feiFei.deviceConnect is None:
+            pass
+        return self.streamCache
+
+    def stop(self):
+        super().stop()
+        self.__running = False
+        self.ngrok.stop()
+
+    def start_ngrok(self, clientId):
+        self.ngrok = ngrok_util.NgrokCilent(clientId)
+        self.ngrok.start()
+        
+
 
 
 def console_listener():
@@ -93,30 +186,32 @@ def console_listener():
             util.printInfo(1, type_names[i], '{}: {}'.format('控制台', msg))
             if i == 1:
                 feiFei.last_quest_time = time.time()
-            thr = MyThread(target=feiFei.on_interact, args=[(i, '', msg)])
+            thr = MyThread(target=feiFei.on_interact, args=[("console", i, '', msg)])
             thr.start()
             thr.join()
 
         else:
             util.log(1, '未知命令！使用 \'help\' 获取帮助.')
 
-
+#停止服务
 def stop():
     global feiFei
     global viewerListener
     global recorderListener
     global __running
+    global deviceInputListener
 
     util.log(1, '正在关闭服务...')
     __running = False
-    # util.log('正在关闭通讯服务...')
-    # wsa_server.get_instance().stop_server()
     if viewerListener is not None:
         util.log(1, '正在关闭直播服务...')
         viewerListener.stop()
     if recorderListener is not None:
         util.log(1, '正在关闭录音服务...')
         recorderListener.stop()
+    if deviceInputListener is not None:
+        util.log(1, '正在关闭远程音频输入输出服务...')
+        deviceInputListener.stop()
     util.log(1, '正在关闭核心服务...')
     feiFei.stop()
     util.log(1, '服务已关闭！')
@@ -128,15 +223,15 @@ def start():
     global viewerListener
     global recorderListener
     global __running
+    global deviceInputListener
 
     util.log(1, '开启服务...')
     __running = True
     util.log(1, '读取配置...')
     config_util.load_config()
-    #
-    # util.log('开启通讯服务...')
-    # ws_server = MyServer()
-    # ws_server.start_server()
+
+
+    
 
     util.log(1, '开启核心服务...')
     feiFei = FeiFei()
@@ -144,6 +239,8 @@ def start():
 
     liveRoom = config_util.config['source']['liveRoom']
     record = config_util.config['source']['record']
+
+    
 
     if liveRoom['enabled']:
         util.log(1, '开启直播服务...')
@@ -154,12 +251,19 @@ def start():
         util.log(1, '开启录音服务...')
         recorderListener = RecorderListener(record['device'], feiFei)  # 监听麦克风
         recorderListener.start()
-# mac下启动经常获取了不明内容，导致关闭再开启时等待输入
-#    util.log(1, '注册命令...')
-#    MyThread(target=console_listener).start()  # 监听控制台
+
+    #TODO edit by xszyou on 20230113:通过此服务来连接k210、手机等音频输入设备
+    util.log(1,'开启远程设备音频输入服务...')
+    deviceInputListener = DeviceInputListener(feiFei)  # 设备音频输入输出麦克风
+    deviceInputListener.start()
+
+    util.log(1, '注册命令...')
+    MyThread(target=console_listener).start()  # 监听控制台
 
     util.log(1, '完成!')
-#    util.log(1, '使用 \'help\' 获取帮助.')
+    util.log(1, '使用 \'help\' 获取帮助.')
+
+    
 
 # if __name__ == '__main__':
 #     ws_server: MyServer = None

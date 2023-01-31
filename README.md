@@ -2,7 +2,7 @@
     <br>
     <img src="images/icon.png" alt="Fay">
     <h1>FAY</h1>
-	<h3>数  字  人  控  制  器(这是元宇宙吗？)</h3>
+	<h3>数  字  人  Fay  控  制  器(这是元宇宙吗？)</h3>
 </div>
 
 
@@ -20,9 +20,18 @@
 
 2、[(34条消息) Fay数字人开源项目在mac 上的安装办法_郭泽斌之心的博客-CSDN博客](https://blog.csdn.net/aa84758481/article/details/127551258)
 
+目前最新版本是2.0。在新版本里我们提出一个全新的架构。在这个架构下每个人都可以把Fay控制器搭建在自己个人电脑上（未来，或许我们会提供终端），让你电脑成为你数字助理的载体。你的所有设备（手表、手机、眼镜、笔记本）随时可以与你的数字助理通讯，数字助理将通过电脑为你处理数字世界里的所有事情。（贾维斯？Her?）
+![](images/20230122074644.png)
 
 
 最近更新：
+2023.01
+1、控制器pc内网穿透，音频输入输出设备远程直连；
+2、提供android 音频输入输出工程示例代码；
+3、提供python音频输入输出工程示例代码（远程PC、树莓派等可用）；
+4、补传1.0语音指令音乐播放模块（暂不支持远程播放）；
+5、重构及补充若干工具模块：websocket、多线程、缓冲器、音频流录制器等；
+6、修复1.x版本的多个bug。
 
 2022.12
 
@@ -161,6 +170,13 @@ python main.py
 
 
 
+#### socket远程音频输入
+
+可以接入远程音频输入，远程音频输出
+
+
+
+
 #### 商品栏
 
 填入商品介绍，数字人将自动讲解商品。
@@ -175,18 +191,32 @@ python main.py
 
 
 
-启动前需填入应用密钥
+启动前需填入应用密钥[`system.conf`](https://github.com/TheRamU/Fay/blob/main/system.conf)
 
-| 模块                      | 描述                       | 链接                                                         |
+| 代码模块                  | 描述                       | 链接                                                         |
 | ------------------------- | -------------------------- | ------------------------------------------------------------ |
 | ./ai_module/ali_nls.py    | 阿里云 实时语音识别        | https://ai.aliyun.com/nls/trans                              |
 | ./ai_module/ms_tts_sdk.py | 微软 文本转语音 基于SDK    | https://azure.microsoft.com/zh-cn/services/cognitive-services/text-to-speech/ |
 | ./ai_module/xf_aiui.py    | 讯飞 人机交互-自然语言处理 | https://aiui.xfyun.cn/solution/webapi                        |
 | ./ai_module/xf_ltp.py     | 讯飞 情感分析              | https://www.xfyun.cn/service/emotion-analysis                |
+| ./utils/ngrok_util.py     | ngrok.cc 外网穿透          | http://ngrok.cc                                              |
 
 
 
 
+
+## 与远程音频输入输出设备连接（非必须,外网需要配置http://ngrok.cc ngrok tcp通道的clientid）
+
+控制器与采用 socket(非websocket) 方式与 音频输出设备通讯
+
+内网通讯地址: [`ws://127.0.0.1:10001`](ws://127.0.0.1:10001)
+
+外网通讯地址: 通过http://ngrok.cc获取
+
+![](images/Dingtalk_20230131122109.jpg)
+
+
+消息格式: 参考 [remote_audio.py](https://github.com/TheRamU/Fay/blob/main/python_connector_demo/remote_audio.py)
 
 ## 与数字形象通讯（非必须,控制器需要关闭“面板播放”）
 
@@ -199,6 +229,8 @@ python main.py
 消息格式: 查看 [WebSocket.md](https://github.com/TheRamU/Fay/blob/main/WebSocket.md)
 
 ![](images/UE.png)
+
+
 
 
 
@@ -238,7 +270,7 @@ python main.py
 
 技术交流群
 
-<img src="images/20230116105510.jpg" alt="微信群">
+<img src="images/-1101731868-3469777.png" alt="微信群">
 v2.0：2023年1月25晚上10点腾讯会议见：https://meeting.tencent.com/dm/y2Vq5Iut8mN0
 
 

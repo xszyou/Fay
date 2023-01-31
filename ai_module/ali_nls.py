@@ -8,7 +8,7 @@ import _thread as thread
 from aliyunsdkcore.client import AcsClient
 from aliyunsdkcore.request import CommonRequest
 
-from core import wsa_server
+from core import wsa_server, song_player
 from scheduler.thread_manager import MyThread
 from utils import util
 from utils import config_util as cfg
@@ -69,6 +69,10 @@ class ALiNls:
         }
         return header
 
+    def __on_msg(self):
+        if "暂停" in self.finalResults or "不想听了" in self.finalResults or "别唱了" in self.finalResults:
+            song_player.stop()
+
     # 收到websocket消息的处理
     def on_message(self, ws, message):
         try:
@@ -79,9 +83,11 @@ class ALiNls:
                 self.done = True
                 self.finalResults = data['payload']['result']
                 wsa_server.get_web_instance().add_cmd({"panelMsg": self.finalResults})
+                self.__on_msg()
             elif name == 'TranscriptionResultChanged':
                 self.finalResults = data['payload']['result']
                 wsa_server.get_web_instance().add_cmd({"panelMsg": self.finalResults})
+                self.__on_msg()
 
         except Exception as e:
             print(e)
@@ -112,12 +118,13 @@ class ALiNls:
                 try:
                     if len(self.__frames) > 0:
                         frame = self.__frames[0]
+
                         self.__frames.pop(0)
                         if type(frame) == dict:
                             ws.send(json.dumps(frame))
                         elif type(frame) == bytes:
                             ws.send(frame, websocket.ABNF.OPCODE_BINARY)
-                        # print('发送 ------> ' + str(type(frame)))
+                        #print('发送 ------> ' + str(type(frame)))
                 except Exception as e:
                     print(e)
                 time.sleep(0.04)

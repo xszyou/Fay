@@ -3,6 +3,8 @@ import os
 from threading import Thread
 import time
 
+from core.interact import Interact
+
 FILE_URL = "datas/data-" + time.strftime("%Y%m%d%H%M%S") + ".csv"
 
 
@@ -14,10 +16,10 @@ def __write_to_file(text):
     file.close()
 
 
-def storage_live_interact(interact):
-    interact_type = interact[0]
-    user = interact[1].replace(',', '，')
-    msg = interact[2].replace(',', '，')
+def storage_live_interact(interact: Interact):
+    interact_type = interact.interact_type
+    user = interact.data["user"].replace(',', '，')
+    msg = interact.data["msg"].replace(',', '，')
     msg_type = {
         0: '主播',
         1: '发言',

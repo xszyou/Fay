@@ -26,7 +26,8 @@ def __get_device_list():
         devInfo = audio.get_device_info_by_index(i)
         if devInfo['hostApi'] == 0:
             device_list.append(devInfo["name"])
-    return device_list
+    
+    return list(set(device_list))
 
 
 @__app.route('/api/submit', methods=['post'])
