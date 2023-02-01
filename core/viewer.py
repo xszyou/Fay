@@ -47,7 +47,7 @@ class Viewer:
         self.live_driver.get(self.url)
         self.user_driver = webdriver.Chrome(config_util.system_chrome_driver, options=self.chrome_options)
         self.__wait_live_start()
-        self.user_sec_uid = self.__get_render_data(self.live_driver)['initialState']['roomStore']['roomInfo']['room']['owner']['sec_uid']
+        self.user_sec_uid = self.__get_render_data(self.live_driver)['app']['initialState']['roomStore']['roomInfo']['room']['owner']['sec_uid']
         MyThread(target=self.__live_state_runnable).start()
         MyThread(target=self.__join_runnable).start()
         MyThread(target=self.__interact_runnable).start()
