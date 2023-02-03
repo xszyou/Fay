@@ -24,30 +24,33 @@
 
 4、【开源项目FAY——UE工程讲解】https://www.bilibili.com/video/BV1C8411P7Ac?vd_source=64cd9062f5046acba398177b62bea9ad
 
+5、m1机器安装办法（Gason提供）：https://www.zhihu.com/question/437075754
+
 
 目前最新版本是2.0。在新版本里我们提出一个全新的架构。在这个架构下每个人都可以把Fay控制器搭建在自己个人电脑上（未来，或许我们会提供终端），让你电脑成为你数字助理的载体。你的所有设备（手表、手机、眼镜、笔记本）随时可以与你的数字助理通讯，数字助理将通过电脑为你处理数字世界里的所有事情。（贾维斯？Her?）
 ![](images/20230122074644.png)
 
-2023.01
+2023.01：
 1、控制器pc内网穿透，音频输入输出设备远程直连；
 2、提供android 音频输入输出工程示例代码；
 3、提供python音频输入输出工程示例代码（远程PC、树莓派等可用）；
 4、补传1.0语音指令音乐播放模块（暂不支持远程播放）；
 5、重构及补充若干工具模块：websocket、多线程、缓冲器、音频流录制器等；
-6、修复1.x版本的多个bug。
+6、修复1.x版本的多个bug；
+7、集成看板娘。
 
-2022.12
+2022.12：
 1、上传bin目录（用于直播互动）；
 
-2022.11
+2022.11：
 1、更新抖音直播获取粉丝互动数据的xpath;
 
-2022.10.27
+2022.10.27：
 1、更新mac上的麦克风参数；
 2、解决mac上无法重启问题；
 3、上传brew安装脚本。
 
-2022.10.17
+2022.10.17：
 1、更新语音指令；
 2、补充人设语法；
 
@@ -220,7 +223,9 @@ python main.py
 
 控制器与采用 WebSocket 方式与 UE 通讯
 
-下载: [https://pan.baidu.com/s/1L6yUR5cRFuNBiuPaXcmHaQ?pwd=8s8d](https://pan.baidu.com/s/1L6yUR5cRFuNBiuPaXcmHaQ?pwd=8s8d)
+下载工程: [https://pan.baidu.com/s/1RBo2Pie6A5yTrCf1cn_Tuw?pwd=ck99](https://pan.baidu.com/s/1RBo2Pie6A5yTrCf1cn_Tuw?pwd=ck99)
+
+下载工程: [https://pan.baidu.com/s/1CsJ647uV5rS2NjQH3QT0Iw?pwd=s9s8](https://pan.baidu.com/s/1CsJ647uV5rS2NjQH3QT0Iw?pwd=s9s8)
 
 通讯地址: [`ws://127.0.0.1:10002`](ws://127.0.0.1:10002)（已接通）
 

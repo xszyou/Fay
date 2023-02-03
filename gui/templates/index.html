@@ -13,6 +13,7 @@
     <!-- <link rel="stylesheet" href="./css/element.css"> -->
     <link rel="stylesheet" href="{{ url_for('static',filename='css/element.css') }}"></link>
     <link rel="stylesheet" href="https://unpkg.com/element-ui/lib/theme-chalk/index.css">
+    <script src="/static/live2d/autoload.js"></script>
 
     <title>自动商品介绍控制器</title>
 
@@ -129,7 +130,7 @@
                     </div>
                 </div>
                 <div class="left_box">
-                    <p>接收来源：</p>
+                    <p>&nbsp;</p>
                     <div class="source">
                         <ul>
                             <li class="url">
@@ -154,10 +155,10 @@
                                 <el-input v-model="panel_msg" :disabled="true"></el-input>
                             </li>
                             <li class="but">
-                                <el-button v-if="live_state == 1" type="success" style="width:200px" @click=postStopLive()>关闭（运行中）</el-button>
+                                <el-button v-if="live_state == 1" type="success" class="btn_close" style="width:200px" @click=postStopLive()>关闭（运行中）</el-button>
                                 <el-button v-else-if="live_state == 2" type="primary" plain disabled style="width:200px">正在开启...</el-button>
                                 <el-button v-else-if="live_state == 3" type="success" plain disabled style="width:200px">正在关闭...</el-button>
-                                <el-button v-else type="primary" style="width:200px" @click=postStartLive()>开启</el-button>
+                                <el-button v-else type="primary" style="width:200px" class="btn_open" @click=postStartLive()>开启</el-button>
                                 <el-button type="button" style="width:200px" @click=postData()>保存配置</el-button>
                             </li>
                             <li class="p_red">

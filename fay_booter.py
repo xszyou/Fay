@@ -99,7 +99,7 @@ class DeviceInputListener(Recorder):
 
     def run(self):
         #启动ngork
-        if config_util.key_ngrok_cc_id is not None:
+        if not config_util.key_ngrok_cc_id:
             MyThread(target=self.start_ngrok, args=[config_util.key_ngrok_cc_id]).start()
               
         self.streamCache = stream_util.StreamCache(1024*1024*20)

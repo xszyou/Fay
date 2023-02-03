@@ -180,6 +180,20 @@ new Vue({
                 let panelMsg = data.panelMsg
                 if (panelMsg !== undefined) {
                     _this.panel_msg = panelMsg
+
+                    //Edit by xszyou in 2022/2/3:同步到看板娘
+                    text = panelMsg;
+                    if (panelMsg != ""){
+                        sessionStorage.setItem("waifu-text", 8);
+                        const tips = document.getElementById("waifu-tips");
+                        tips.innerHTML = text;
+                        tips.classList.add("waifu-tips-active");
+                        messageTimer = setTimeout(() => {
+                            sessionStorage.removeItem("waifu-text");
+                            tips.classList.remove("waifu-tips-active");
+                        }, 7000);
+                    }
+
                 }
             }
         },
