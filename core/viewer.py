@@ -41,17 +41,17 @@ class Viewer:
     def __start(self):
         MyThread(target=self.__driver_alive_runnable).start()
         self.chrome_options = Options()
-        self.chrome_options.add_argument('--headless')
-        self.chrome_options.add_argument('--blink-settings=imagesEnabled=false')
+        # self.chrome_options.add_argument('--headless')
+        # self.chrome_options.add_argument('--blink-settings=imagesEnabled=false')
         self.live_driver = webdriver.Chrome(config_util.system_chrome_driver, options=self.chrome_options)
         self.live_driver.get(self.url)
-        self.user_driver = webdriver.Chrome(config_util.system_chrome_driver, options=self.chrome_options)
+        # self.user_driver = webdriver.Chrome(config_util.system_chrome_driver, options=self.chrome_options)#抖音加了验证码，暂时不获取粉丝数
         self.__wait_live_start()
         self.user_sec_uid = self.__get_render_data(self.live_driver)['app']['initialState']['roomStore']['roomInfo']['room']['owner']['sec_uid']
         MyThread(target=self.__live_state_runnable).start()
         MyThread(target=self.__join_runnable).start()
         MyThread(target=self.__interact_runnable).start()
-        MyThread(target=self.__follower_runnable).start()
+        # MyThread(target=self.__follower_runnable).start() #抖音加了验证码，暂时不获取粉丝数
 
     def start(self):
         MyThread(target=self.__start).start()

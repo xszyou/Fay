@@ -183,9 +183,9 @@ new Vue({
 
                     //Edit by xszyou in 2022/2/3:同步到看板娘
                     text = panelMsg;
-                    if (panelMsg != ""){
+                    const tips = document.getElementById("waifu-tips");
+                    if (panelMsg != "" && tips != null){
                         sessionStorage.setItem("waifu-text", 8);
-                        const tips = document.getElementById("waifu-tips");
                         tips.innerHTML = text;
                         tips.classList.add("waifu-tips-active");
                         messageTimer = setTimeout(() => {

@@ -281,20 +281,6 @@ class FeiFei:
                             amount = interact.data["gifts"][i]["amount"]
                             msg += "{}送给我的{}个{}".format(user, amount, gift[1])
                         self.a_msg = '感谢感谢，感谢' + msg
-
-                    # elif index == 5:
-                    #     msg = ""
-                    #     for index in range(1, len(interact), 4):
-                    #         try:
-                    #             gift = interact[index + 2]
-                    #             gift_name = '礼物'
-                    #             if gift[0] != -1:
-                    #                 gift_name = gift[1]
-                    #             msg = msg + "{}送给我的{}个{}，".format(interact[index], interact[index + 3], gift_name)
-                    #         except BaseException as e:
-                    #             print("[System] 礼物处理错误！")
-                    #             print(e)
-                    #     self.a_msg = '感谢感谢，感谢' + msg
                     self.last_speak_data = self.a_msg
                     self.speaking = True
                     MyThread(target=self.__say, args=['interact']).start()
