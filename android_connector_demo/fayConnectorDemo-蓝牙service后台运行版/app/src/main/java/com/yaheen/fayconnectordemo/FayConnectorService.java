@@ -99,8 +99,7 @@ public class FayConnectorService extends Service {
                 int state = intent.getIntExtra(AudioManager.EXTRA_SCO_AUDIO_STATE, -1);
                 if (AudioManager.SCO_AUDIO_STATE_CONNECTED == state) {
                     Log.d("fay", "蓝牙sco连接成功");
-                    mAudioManager.setBluetoothScoOn(true);
-                    mAudioManager.setMode(mAudioManager.MODE_IN_CALL);
+
 
                 }
             }
@@ -133,6 +132,7 @@ public class FayConnectorService extends Service {
                             Log.d("fay", "fay控制器连接成功");
                         } catch (IOException e) {
                             Log.d("fay", "socket连接失败");
+                            running = false;
                             return;
                         }
                         byte[] data = new byte[1024];
@@ -168,7 +168,9 @@ public class FayConnectorService extends Service {
                                 socket.close();
                             } catch (Exception e) {
                             }
-                            Log.d("fay", "结束");
+                            socket = null;
+                            Log.d("fay", "send线程结束");
+
                         }
 
                     }
@@ -191,9 +193,11 @@ public class FayConnectorService extends Service {
                                 Log.d("fay", "开始接收音频文件");
                                 String filedata = "";
                                 data = new byte[1024];
-                                while (data != null && data.length > 0) {
-                                    in.read(data);
-                                    filedata += MainActivity.bytesToHexString(data);
+                                int len = 0;
+                                while ((len = in.read(data)) != -1) {
+                                    byte[] temp = new byte[len];
+                                    System.arraycopy(data, 0, temp, 0, len);
+                                    filedata += MainActivity.bytesToHexString(temp);
                                     int index = filedata.indexOf("080706050403020100");
                                     if (filedata.length() > 9 && index > 0) {//wav文件结束标记
                                         filedata = filedata.substring(0, index).replaceAll("F0F1F2F3F4F5F6F7F8", "");
@@ -234,6 +238,7 @@ public class FayConnectorService extends Service {
                                                     mp.release();
                                                     mAudioManager.startBluetoothSco();
                                                     mAudioManager.setMode(mAudioManager.MODE_IN_CALL);
+                                                    mAudioManager.setBluetoothScoOn(true);
 
 
                                                 }
@@ -268,6 +273,7 @@ public class FayConnectorService extends Service {
                 } catch (Exception e) {//通过异常判断socket已经关闭，退出循环
 
                 } finally {
+                    Log.d("fay", "rece线程结束");
 
                 }
             }
@@ -292,7 +298,7 @@ public class FayConnectorService extends Service {
                 }catch (Exception e){
                     Log.e("fay", e.toString());
                 }finally {
-                    FayConnectorService.this.stopForeground(true);
+                    FayConnectorService.this.stopSelf();
                 }
             }
         }).start();

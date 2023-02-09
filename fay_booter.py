@@ -94,15 +94,15 @@ class DeviceInputListener(Recorder):
         super().__init__(fei)
         self.__running = True
         self.ngrok = None
+        self.streamCache = None
         self.thread = MyThread(target=self.run)
         self.thread.start()  #启动远程音频输入设备监听线程
 
     def run(self):
         #启动ngork
-        if config_util.key_ngrok_cc_id is not None and config_util.key_ngrok_cc_id != "":
-            MyThread(target=self.start_ngrok, args=[config_util.key_ngrok_cc_id]).start()
-              
         self.streamCache = stream_util.StreamCache(1024*1024*20)
+        if config_util.key_ngrok_cc_id and config_util.key_ngrok_cc_id is not None and config_util.key_ngrok_cc_id.strip() != "":
+            MyThread(target=self.start_ngrok, args=[config_util.key_ngrok_cc_id]).start()
         addr = None
         while self.__running:
             try:
@@ -125,15 +125,18 @@ class DeviceInputListener(Recorder):
             feiFei.on_interact(interact)
             time.sleep(2)
 
+    #recorder会等待stream不为空才开始录音
     def get_stream(self):
-        while feiFei.deviceConnect is None:
+        while self.streamCache is None:
+            time.sleep(1)
             pass
         return self.streamCache
 
     def stop(self):
         super().stop()
         self.__running = False
-        self.ngrok.stop()
+        if config_util.key_ngrok_cc_id and config_util.key_ngrok_cc_id is not None and config_util.key_ngrok_cc_id.strip() != "":
+            self.ngrok.stop()
 
     def start_ngrok(self, clientId):
         self.ngrok = ngrok_util.NgrokCilent(clientId)
