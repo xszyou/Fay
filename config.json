@@ -45,8 +45,8 @@
             "url": "https://v.douyin.com/hL6ehu8/"
         },
         "record": {
-            "device": "\u9470\u866b\u6e80 (BT-50 PRO Hands-Free AG Aud",
-            "enabled": false
+            "device": "",
+            "enabled": true
         }
     }
 }

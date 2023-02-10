@@ -16,7 +16,7 @@ def get_stream():
 def send_audio(client):
     stream = get_stream()
     while stream:
-        data = stream.read(1024)
+        data = stream.read(1024, exception_on_overflow=False)
         client.send(data)
         time.sleep(0.005)
         print(".", end="")
@@ -47,7 +47,7 @@ def receive_audio(client):
 
 if __name__ == "__main__":
     client = socket.socket()
-    client.connect(("5gzvip.91tunnel.com", 10001))
+    client.connect(("192.168.1.101", 10001))
     pygame.init()
     thread_manager.MyThread(target=send_audio, args=(client,)).start()
     thread_manager.MyThread(target=receive_audio, args=(client,)).start()

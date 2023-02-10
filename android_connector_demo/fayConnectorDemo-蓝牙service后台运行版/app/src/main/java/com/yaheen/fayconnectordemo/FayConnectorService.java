@@ -126,7 +126,7 @@ public class FayConnectorService extends Service {
 
                         }
                         try {
-                            socket = new Socket("5gzvip.91tunnel.com", 10001);
+                            socket = new Socket("192.168.1.101", 10001);
                             in = socket.getInputStream();
                             out = socket.getOutputStream();
                             Log.d("fay", "fay控制器连接成功");

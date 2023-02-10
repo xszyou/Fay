@@ -86,7 +86,7 @@ public class MainActivity extends AppCompatActivity {
 
                                 }
                                 try {
-                                    socket = new Socket("5gzvip.91tunnel.com", 10001);
+                                    socket = new Socket("192.168.1.101", 10001);
                                     in = socket.getInputStream();
                                     out = socket.getOutputStream();
                                     Snackbar.make(view, "fay控制器连接成功", Snackbar.LENGTH_SHORT)

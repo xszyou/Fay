@@ -37,7 +37,7 @@ class StreamCache:
 
     
     @synchronized
-    def read(self, length):
+    def read(self, length, exception_on_overflow = False):
         if self.idle < length:
             return None
         # print("读:{}".format(length), end=' ')

@@ -10,7 +10,7 @@
 
 ​		使用UE、C4D、DAZ、LIVE2D等三维引擎软件开发的数字形象可以与本“数字人控制器”对接，从而实现虚拟主播、数字导游、数字助手等。我们提供UE4对接的demo，但我们更鼓励用户自行实现喜欢的数字形象。
 
-​		当然，若不考虑外观形象的话，本“数字人控制器”其实也可以独立使用的，可以充当一个语音助理。
+​		当然，若不考虑外观形象的话，本“数字人控制器”其实也可以独立使用的，可以充当一个语音助理。NLP可以自由切换AIUI、ChatGPT及Yuan1.0。
 
 <img src="images/5.png" alt="QA">
 
@@ -30,6 +30,9 @@
 目前最新版本是2.0。在新版本里我们提出一个全新的架构。在这个架构下每个人都可以把Fay控制器搭建在自己个人电脑上（未来，或许我们会提供终端），让你电脑成为你数字助理的载体。你的所有设备（手表、手机、眼镜、笔记本）随时可以与你的数字助理通讯，数字助理将通过电脑为你处理数字世界里的所有事情。（贾维斯？Her?）
 ![](images/20230122074644.png)
 
+2023.02：
+1、提供chatgpt及yuan1.0作为选择。
+
 2023.01：
 1、控制器pc内网穿透，音频输入输出设备远程直连；
 2、提供android 音频输入输出工程示例代码；
@@ -37,7 +40,8 @@
 4、补传1.0语音指令音乐播放模块（暂不支持远程播放）；
 5、重构及补充若干工具模块：websocket、多线程、缓冲器、音频流录制器等；
 6、修复1.x版本的多个bug；
-7、集成看板娘。
+7、集成看板娘;
+
 
 2022.12：
 1、上传bin目录（用于直播互动）；
@@ -68,7 +72,7 @@
   取消静音
   你在哪呢？
   你可以说话了
-- **播放歌曲**
+- **播放歌曲（暂不能用需更换音乐库）**
   播放歌曲
   播放音乐
   唱首歌
@@ -198,9 +202,11 @@ python main.py
 | ------------------------- | -------------------------- | ------------------------------------------------------------ |
 | ./ai_module/ali_nls.py    | 阿里云 实时语音识别        | https://ai.aliyun.com/nls/trans                              |
 | ./ai_module/ms_tts_sdk.py | 微软 文本转语音 基于SDK    | https://azure.microsoft.com/zh-cn/services/cognitive-services/text-to-speech/ |
-| ./ai_module/xf_aiui.py    | 讯飞 人机交互-自然语言处理 | https://aiui.xfyun.cn/solution/webapi                        |
 | ./ai_module/xf_ltp.py     | 讯飞 情感分析              | https://www.xfyun.cn/service/emotion-analysis                |
-| ./utils/ngrok_util.py     | ngrok.cc 外网穿透          | http://ngrok.cc                                              |
+| ./utils/ngrok_util.py     | ngrok.cc 外网穿透（可选）  | http://ngrok.cc                                              |
+| ./ai_module/yuan_1_0.py    | 浪潮源大模型（NLP 3选1）  | https://air.inspur.com/                                              |
+| ./ai_module/chatgpt.py     | ChatGPT（NLP 3选1）  | *******                                              |
+| ./ai_module/xf_aiui.py    | 讯飞自然语言处理（NLP 3选1）   | https://aiui.xfyun.cn/solution/webapi                        |
 
 
 

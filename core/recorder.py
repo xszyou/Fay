@@ -97,7 +97,7 @@ class Recorder:
         last_mute_time = time.time()
         last_speaking_time = time.time()
         while self.__running:
-            data = stream.read(1024)
+            data = stream.read(1024, exception_on_overflow=False)
             if not data:
                 continue
             else:

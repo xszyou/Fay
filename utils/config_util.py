@@ -17,6 +17,10 @@ key_xf_aiui_api_key = None
 key_xf_ltp_app_id = None
 key_xf_ltp_api_key = None
 key_ngrok_cc_id = None
+key_yuan_1_0_account = None
+key_yuan_1_0_phone = None
+key_chatgpt_api_key = None
+key_chat_module = None
 
 def load_config():
     global config
@@ -32,6 +36,10 @@ def load_config():
     global key_xf_ltp_app_id
     global key_xf_ltp_api_key
     global key_ngrok_cc_id
+    global key_yuan_1_0_account
+    global key_yuan_1_0_phone
+    global key_chatgpt_api_key
+    global key_chat_module
 
     system_config = ConfigParser()
     system_config.read('system.conf', encoding='UTF-8')
@@ -46,6 +54,10 @@ def load_config():
     key_xf_ltp_app_id = system_config.get('key', 'xf_ltp_app_id')
     key_xf_ltp_api_key = system_config.get('key', 'xf_ltp_api_key')
     key_ngrok_cc_id = system_config.get('key', 'ngrok_cc_id')
+    key_yuan_1_0_account = system_config.get('key', 'yuan_1_0_account')
+    key_yuan_1_0_phone = system_config.get('key', 'yuan_1_0_phone')
+    key_chatgpt_api_key = system_config.get('key', 'chatgpt_api_key')
+    key_chat_module = system_config.get('key', 'chat_module')
 
     config = json.load(codecs.open('config.json', encoding='utf-8'))
 
