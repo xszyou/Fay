@@ -279,6 +279,6 @@ python main.py
 
 技术交流群
 
-<img src="images/20230209125339.jpg" alt="微信群">
+<img src="images/20230217205435.jpg" alt="微信群">
 
 
