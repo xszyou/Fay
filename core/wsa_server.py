@@ -4,9 +4,6 @@ import websockets
 import asyncio
 import json
 from abc import abstractmethod
-import sys
-sys.path.append("E:/3Dproject/feifeibeifen/Projects/FeiFei-22-06-17-2/")
-
 from websockets.legacy.server import Serve
 
 from scheduler.thread_manager import MyThread

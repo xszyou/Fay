@@ -18,8 +18,4 @@ aliyun-python-sdk-core==2.13.3
 scipy~=1.10.0
 openai~=0.26.5
 simhash
-uuid
-hashlib
-datetime
 pytz
-json
