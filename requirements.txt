@@ -19,3 +19,5 @@ scipy~=1.10.0
 openai~=0.26.5
 simhash
 pytz
+gevent~=22.10.1
+edge_tts~=6.1.3

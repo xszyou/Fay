@@ -3,11 +3,6 @@ import math
 import time
 from abc import abstractmethod
 
-
-import pyaudio
-import wave
-
-
 from ai_module.ali_nls import ALiNls
 from core import wsa_server
 from scheduler.thread_manager import MyThread
@@ -89,9 +84,7 @@ class Recorder:
 
    
     def __record(self):
-        self.total = 0
-    
-        stream = self.get_stream()
+        stream = self.get_stream() #把get stream的方式封装出来方便实现麦克风录制及网络流等不同的流录制子类
 
         isSpeaking = False
         last_mute_time = time.time()
@@ -100,8 +93,6 @@ class Recorder:
             data = stream.read(1024, exception_on_overflow=False)
             if not data:
                 continue
-            else:
-                self.total += len(data)
 
             level = audioop.rms(data, 2)
             if len(self.__history_data) >= 5:

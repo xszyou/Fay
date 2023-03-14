@@ -492,9 +492,9 @@ class FeiFei:
 
     def __send_audio(self, file_url, say_type):
         try:
-            # audio_length = eyed3.load(file_url).info.time_secs mp3音频长度
-            with wave.open(file_url, 'rb') as wav_file:
-                audio_length = wav_file.getnframes() / float(wav_file.getframerate())
+            audio_length = eyed3.load(file_url).info.time_secs #mp3音频长度
+            # with wave.open(file_url, 'rb') as wav_file: #wav音频长度
+            #     audio_length = wav_file.getnframes() / float(wav_file.getframerate())
             if audio_length <= config_util.config["interact"]["maxInteractTime"] or say_type == "script":
                 if config_util.config["interact"]["playSound"]: # 播放音频
                     self.__play_sound(file_url)

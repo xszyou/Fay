@@ -6,10 +6,12 @@ from flask import Flask, render_template, request
 from flask_cors import CORS
 
 import fay_booter
-from core import wsa_server
+
 from core.tts_voice import EnumVoice
+from gevent import pywsgi
 from scheduler.thread_manager import MyThread
 from utils import config_util
+from core import wsa_server
 
 __app = Flask(__name__)
 CORS(__app, supports_credentials=True)
@@ -78,6 +80,9 @@ def home_get():
 def home_post():
     return __get_template()
 
+def run():
+    server = pywsgi.WSGIServer(('0.0.0.0',5000), __app)
+    server.serve_forever()
 
 def start():
-    MyThread(target=__app.run).start()
+    MyThread(target=run).start()

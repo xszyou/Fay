@@ -6,11 +6,7 @@
 </div>
 
 
-​		本开源项目名为“数字人控制器”。意为，本项目可以充当时下流行的虚拟人、虚拟主播、数字人，等仿人形数字形象的内核部分。
-
-​		使用UE、C4D、DAZ、LIVE2D等三维引擎软件开发的数字形象可以与本“数字人控制器”对接，从而实现虚拟主播、数字导游、数字助手等。我们提供UE4对接的demo，但我们更鼓励用户自行实现喜欢的数字形象。
-
-​		当然，若不考虑外观形象的话，本“数字人控制器”其实也可以独立使用的，可以充当一个语音助理。NLP可以自由切换AIUI、ChatGPT及Yuan1.0。
+​		Fay是一个完整的开源项目，包含Python内核及UE数字人模型。开发人员可以利用该项目简单地构建各种类型的数字人或数字助理。该项目各模块之间耦合度非常低，包括声音来源、语音识别、情绪分析、NLP处理、情绪语音合成、语音输出和表情动作输出等模块。每个模块都可以轻松地更换。其中，NLP可以自由切换AIUI、GPT及Yuan1.0。
 
 <img src="images/5.png" alt="QA">
 
@@ -29,6 +25,10 @@
 
 目前最新版本是2.0。在新版本里我们提出一个全新的架构。在这个架构下每个人都可以把Fay控制器搭建在自己个人电脑上（未来，或许我们会提供终端），让你电脑成为你数字助理的载体。你的所有设备（手表、手机、眼镜、笔记本）随时可以与你的数字助理通讯，数字助理将通过电脑为你处理数字世界里的所有事情。（贾维斯？Her?）
 ![](images/20230122074644.png)
+
+2023.03：
+1、增加edge-tts语音合成（免费）可替换azure-tts(支持情绪化语音)；
+2、替换flask发行版运行方式。
 
 2023.02：
 1、提供chatgpt及yuan1.0作为选择。
@@ -201,7 +201,7 @@ python main.py
 | 代码模块                  | 描述                       | 链接                                                         |
 | ------------------------- | -------------------------- | ------------------------------------------------------------ |
 | ./ai_module/ali_nls.py    | 阿里云 实时语音识别        | https://ai.aliyun.com/nls/trans                              |
-| ./ai_module/ms_tts_sdk.py | 微软 文本转语音 基于SDK    | https://azure.microsoft.com/zh-cn/services/cognitive-services/text-to-speech/ |
+| ./ai_module/ms_tts_sdk.py | 微软 文本转情绪语音（可选）   | https://azure.microsoft.com/zh-cn/services/cognitive-services/text-to-speech/ |
 | ./ai_module/xf_ltp.py     | 讯飞 情感分析              | https://www.xfyun.cn/service/emotion-analysis                |
 | ./utils/ngrok_util.py     | ngrok.cc 外网穿透（可选）  | http://ngrok.cc                                              |
 | ./ai_module/yuan_1_0.py    | 浪潮源大模型（NLP 3选1）  | https://air.inspur.com/                                              |
@@ -279,6 +279,6 @@ python main.py
 
 技术交流群
 
-<img src="images/20230217205435.jpg" alt="微信群">
+<img src="images/20230315021425.jpg" alt="微信群">
 
 
