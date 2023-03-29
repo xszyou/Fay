@@ -28,7 +28,10 @@
 
 2023.03：
 1、增加edge-tts语音合成（免费）可替换azure-tts(支持情绪化语音)；
-2、替换flask发行版运行方式。
+2、替换flask发行版运行方式；
+4、web socket接口增加数字人文字内容同步，以便数人字可以远程运行；
+5、优化数字人数据web socket同步逻辑；
+6、更改gpt 3.5对接方式。
 
 2023.02：
 1、提供chatgpt及yuan1.0作为选择。
@@ -279,6 +282,6 @@ python main.py
 
 技术交流群
 
-<img src="images/20230315021425.jpg" alt="微信群">
+<img src="images/20230329172514.jpg" alt="微信群">
 
 

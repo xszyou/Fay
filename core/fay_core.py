@@ -29,7 +29,7 @@ from utils import config_util as cfg
 
 class FeiFei:
     def __init__(self):
-        pygame.init()
+        pygame.mixer.init()
         self.q_msg = '你叫什么名字？'
         self.a_msg = 'hi,我叫菲菲，英文名是fay'
         self.mood = 0.0  # 情绪值
@@ -255,6 +255,10 @@ class FeiFei:
                                 else:
                                     raise RuntimeError('讯飞key、yuan key、chatgpt key都没有配置！')    
                                 util.log(1, '自然语言处理完成. 耗时: {} ms'.format(math.floor((time.time() - tm) * 1000)))
+                                #同步文字内容给ue5
+                                if text is not None and not config_util.config["interact"]["playSound"]: # 非展板播放
+                                    content = {'Topic': 'Unreal', 'Data': {'Key': 'text', 'Value': text}}
+                                    wsa_server.get_instance().add_cmd(content)
                                 if text == '哎呀，你这么说我也不懂，详细点呗' or text == '':
                                     util.log(1, '[!] 自然语言无语了！')
                                     wsa_server.get_web_instance().add_cmd({"panelMsg": ""})
@@ -411,7 +415,7 @@ class FeiFei:
     def __send_mood(self):
         while self.__running:
             time.sleep(3)
-            if not self.sleep:
+            if not self.sleep and not config_util.config["interact"]["playSound"]:
                 content = {'Topic': 'Unreal', 'Data': {'Key': 'mood', 'Value': self.mood}}
                 wsa_server.get_instance().add_cmd(content)
 
@@ -496,9 +500,9 @@ class FeiFei:
             # with wave.open(file_url, 'rb') as wav_file: #wav音频长度
             #     audio_length = wav_file.getnframes() / float(wav_file.getframerate())
             if audio_length <= config_util.config["interact"]["maxInteractTime"] or say_type == "script":
-                if config_util.config["interact"]["playSound"]: # 播放音频
+                if config_util.config["interact"]["playSound"]: # 展板播放
                     self.__play_sound(file_url)
-                else:#TODO 发送音频给ue和socket
+                else:#发送音频给ue和socket
                     content = {'Topic': 'Unreal', 'Data': {'Key': 'audio', 'Value': os.path.abspath(file_url), 'Time': audio_length, 'Type': say_type}}
                     wsa_server.get_instance().add_cmd(content)
                     if self.deviceConnect is not None:
