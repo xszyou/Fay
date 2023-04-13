@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+message WssResponse{
+  uint64 seqid = 1;
+  uint64 logid = 2;
+  uint64 service = 3;
+  uint64 method = 4;
+  map<string,string> headers = 5;
+  string payloadEncoding = 6;
+  string payloadType = 7;
+  bytes payload = 8;
+}

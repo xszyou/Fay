@@ -255,10 +255,6 @@ class FeiFei:
                                 else:
                                     raise RuntimeError('讯飞key、yuan key、chatgpt key都没有配置！')    
                                 util.log(1, '自然语言处理完成. 耗时: {} ms'.format(math.floor((time.time() - tm) * 1000)))
-                                #同步文字内容给ue5
-                                if text is not None and not config_util.config["interact"]["playSound"]: # 非展板播放
-                                    content = {'Topic': 'Unreal', 'Data': {'Key': 'text', 'Value': text}}
-                                    wsa_server.get_instance().add_cmd(content)
                                 if text == '哎呀，你这么说我也不懂，详细点呗' or text == '':
                                     util.log(1, '[!] 自然语言无语了！')
                                     wsa_server.get_web_instance().add_cmd({"panelMsg": ""})
@@ -477,6 +473,10 @@ class FeiFei:
                 MyThread(target=storer.storage_live_interact, args=[Interact('Fay', 0, {'user': 'Fay', 'msg': self.a_msg})]).start()
                 util.log(1, '合成音频...')
                 tm = time.time()
+                #文字也推送出去，为了ue5
+                if not config_util.config["interact"]["playSound"]: # 非展板播放
+                    content = {'Topic': 'Unreal', 'Data': {'Key': 'text', 'Value': self.a_msg}}
+                    wsa_server.get_instance().add_cmd(content)
                 result = self.sp.to_sample(self.a_msg, self.__get_mood())
                 util.log(1, '合成音频完成. 耗时: {} ms 文件:{}'.format(math.floor((time.time() - tm) * 1000), result))
                 if result is not None:            

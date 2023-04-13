@@ -21,7 +21,7 @@
             "indifferent": 10,
             "join": 10
         },
-        "playSound": false
+        "playSound": true
     },
     "items": [
         {
@@ -42,11 +42,11 @@
     "source": {
         "liveRoom": {
             "enabled": false,
-            "url": "https://v.douyin.com/hL6ehu8/"
+            "url": "\u65b0\u7248\u672c\u4e0d\u7528\u586b\u5199"
         },
         "record": {
             "device": "",
-            "enabled": true
+            "enabled": false
         }
     }
 }

@@ -8,12 +8,63 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support.expected_conditions import presence_of_element_located
+import websocket
+import ssl
+import subprocess
+import os
+import winreg
 
 from core.interact import Interact
 from scheduler.thread_manager import MyThread
 from utils import config_util, util
 
 USER_URL = 'https://www.douyin.com/user/'
+
+interact_datas = []
+class WS_Client:
+    def __init__(self, host):
+        self.__ws = None
+        self.__host = host
+        self.__connect(host)
+ 
+
+    # 收到websocket消息的处理
+    def on_message(self, ws, message):
+        try:
+            
+            data = json.loads(message)
+            if data["Type"] == 1:#留言
+                if len(interact_datas) >= 5:
+                    interact_datas.pop()
+                interact = Interact("live", 1, {"user": json.loads(data["Data"])["User"]["Nickname"], "msg": json.loads(data["Data"])["Content"]})
+                interact_datas.append(interact)
+            if data["Type"] == 3:#进入
+                if len(interact_datas) >= 5:
+                    interact_datas.pop()
+                interact_datas.append(Interact("live", 2, {"user": json.loads(data["Data"])["User"]["Nickname"], "msg": "来了"}))
+            #...
+        except Exception as e:
+            pass
+
+    # 收到websocket错误的处理
+    def on_close(self, ws, code, msg):
+        pass
+
+    # 收到websocket错误的处理
+    def on_error(self, ws, error):
+        time.sleep(5)
+        self.__connect(self.__host)
+
+    # 收到websocket连接建立的处理
+    def on_open(self, ws):
+        pass
+    def __connect(self, host):
+        websocket.enableTrace(False)
+        self.__ws = websocket.WebSocketApp(host, on_message=self.on_message)
+        self.__ws.on_open = self.on_open
+        self.__ws.run_forever(sslopt={"cert_reqs": ssl.CERT_NONE})
+    def close(self):
+        self.__ws.close()
 
 
 class Viewer:
@@ -37,21 +88,53 @@ class Viewer:
         self.last_interact_datas = []
         self.live_started = False
         self.last_chat_item_index = 0
+        self.dy_msg_ws = None
+        self.exe_process = None
 
     def __start(self):
-        MyThread(target=self.__driver_alive_runnable).start()
+        MyThread(target=self.__run_dy_msg_ws).start() #获取抖音监听内容
+        # MyThread(target=self.__driver_alive_runnable).start()#直播浏览器运行
         self.chrome_options = Options()
+        chrome_profile_path = "C:/Users/Administrator/AppData/Local/Google/Chrome/User Data"#视实际情况修改
+        self.chrome_options.add_argument(f"user-data-dir={chrome_profile_path}")
+        self.chrome_options.add_argument('--ignore-certificate-errors')
+        self.chrome_options.add_argument('--allow-insecure-localhost')
+        self.chrome_options.add_argument('--no-sandbox')  # 解决沙箱模式下的限制问题
+        self.chrome_options.add_argument('--disable-dev-shm-usage')  # 解决共享内存不足的问题
+        self.chrome_options.add_argument('--disable-gpu')  # 禁用GPU加速
+        self.chrome_options.add_argument('--disable-extensions')  # 禁用扩展程序
+        self.chrome_options.add_argument('--disable-notifications')
+        self.chrome_options.add_argument('--disable-popup-blocking')
+        self.chrome_options.add_argument('--disable-infobars')
+        self.chrome_options.add_argument("--log-level=3")  # 只记录错误级别的消息
+
+        
+        #隐藏浏览器
         # self.chrome_options.add_argument('--headless')
         # self.chrome_options.add_argument('--blink-settings=imagesEnabled=false')
-        self.live_driver = webdriver.Chrome(config_util.system_chrome_driver, options=self.chrome_options)
-        self.live_driver.get(self.url)
+        # self.live_driver = webdriver.Chrome(config_util.system_chrome_driver, options=self.chrome_options)
+        # self.live_driver.set_page_load_timeout(60)
+        # self.live_driver.get(self.url)
         # self.user_driver = webdriver.Chrome(config_util.system_chrome_driver, options=self.chrome_options)#抖音加了验证码，暂时不获取粉丝数
-        self.__wait_live_start()
-        self.user_sec_uid = self.__get_render_data(self.live_driver)['app']['initialState']['roomStore']['roomInfo']['room']['owner']['sec_uid']
-        MyThread(target=self.__live_state_runnable).start()
-        MyThread(target=self.__join_runnable).start()
-        MyThread(target=self.__interact_runnable).start()
-        # MyThread(target=self.__follower_runnable).start() #抖音加了验证码，暂时不获取粉丝数
+        # self.__wait_live_start()#等待开播
+        # self.user_sec_uid = self.__get_render_data(self.live_driver)['app']['initialState']['roomStore']['roomInfo']['room']['owner']['sec_uid']
+        # MyThread(target=self.__live_state_runnable).start()#监测直播状态
+        # MyThread(target=self.__join_runnable).start()#selenium监测粉丝进入
+        # MyThread(target=self.__interact_runnable).start()#selenium监测直播间互动：留言、送礼
+        # MyThread(target=self.__follower_runnable).start() #selenium监测粉丝变化
+        self.live_started = True
+        MyThread(target=self.__get_package_listen_interact_runnable).start()
+
+    def __run_dy_msg_ws(self):
+        exe_path = "./bin/Release_2.85/v2.85.exe"
+        self.exe_process = subprocess.Popen([exe_path]) 
+        while self.__running:
+            try:
+                self.dy_msg_ws = WS_Client('ws://127.0.0.1:8888')
+            except Exception as e:
+                print(e)
+                time.sleep(5)
+
 
     def start(self):
         MyThread(target=self.__start).start()
@@ -60,6 +143,7 @@ class Viewer:
         return self.live_started
 
     def __wait_live_start(self):
+        time.sleep(30)
         if self.__is_live():
             return
         util.log(1, '等待直播开始...')
@@ -255,6 +339,16 @@ class Viewer:
             for interact in self.__get_interact_data():
                 MyThread(target=self.on_interact, args=[interact, time.time()]).start()
                 # self.on_interact(interact, time.time())
+    
+    #TODO Add by xszyou on 20230412.通过抓包监测互动数据
+    def __get_package_listen_interact_runnable(self):
+        while self.__running:
+            if not self.live_started:
+                continue
+            
+            for interact in interact_datas:
+                MyThread(target=self.on_interact, args=[interact, time.time()]).start()
+            interact_datas.clear()
 
     def __follower_runnable(self):
         followers = -1
@@ -292,6 +386,33 @@ class Viewer:
             self.live_driver.quit()
         if self.user_driver:
             self.user_driver.quit()
+        if self.dy_msg_ws:
+            self.dy_msg_ws.close()
+            self.dy_msg_ws = None
+            self.disable_windows_proxy()
+            subprocess.run(["taskkill", "/F", "/PID", str(self.exe_process.pid)])
+            
+    
+    #关闭系统代理
+    def disable_windows_proxy(self):
+        settings_key = r'Software\Microsoft\Windows\CurrentVersion\Internet Settings'
+        try:
+            registry = winreg.ConnectRegistry(None, winreg.HKEY_CURRENT_USER)
+            settings = winreg.OpenKey(registry, settings_key, 0, winreg.KEY_WRITE)
+            
+            # 设置代理启用值为0（禁用）
+            winreg.SetValueEx(settings, 'ProxyEnable', 0, winreg.REG_DWORD, 0)
+            
+            # 清空代理服务器和代理覆盖设置
+            winreg.SetValueEx(settings, 'ProxyServer', 0, winreg.REG_SZ, '')
+            winreg.SetValueEx(settings, 'ProxyOverride', 0, winreg.REG_SZ, '')
+            
+            winreg.CloseKey(settings)
+            winreg.CloseKey(registry)
+            
+            util.log(1, '系统代理已关闭。')
+        except Exception as e:
+            util.log(1, '关闭系统代理时出错:', e)
 
     @abstractmethod
     def on_interact(self, interact, event_time):

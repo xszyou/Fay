@@ -48,3 +48,24 @@
 | Data.Time  | 音频时长 (秒)    | float |                 |
 | Data.Type  | 发言类型         | str   | interact/script |
 
+
+
+
+
+### 发送回复文字
+
+```json
+{
+    "Topic": "Unreal",
+    "Data": {
+        "Key": "text",
+        "Value": "很高兴见到你"
+    }
+}
+```
+
+
+
+| 参数       | 描述             | 类型  | 范围            |
+| ---------- | ---------------- | ----- | --------------- |
+| Data.text | 文本 | str   |                 |

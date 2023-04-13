@@ -25,7 +25,6 @@ key_chat_module = None
 def load_config():
     global config
     global system_config
-    global system_chrome_driver
     global key_ali_nls_key_id
     global key_ali_nls_key_secret
     global key_ali_nls_app_key
@@ -43,7 +42,6 @@ def load_config():
 
     system_config = ConfigParser()
     system_config.read('system.conf', encoding='UTF-8')
-    system_chrome_driver = os.path.abspath(system_config.get('system', 'chrome_driver'))
     key_ali_nls_key_id = system_config.get('key', 'ali_nls_key_id')
     key_ali_nls_key_secret = system_config.get('key', 'ali_nls_key_secret')
     key_ali_nls_app_key = system_config.get('key', 'ali_nls_app_key')
