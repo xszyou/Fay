@@ -10,9 +10,6 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support.expected_conditions import presence_of_element_located
 import websocket
 import ssl
-import subprocess
-import os
-import winreg
 
 from core.interact import Interact
 from scheduler.thread_manager import MyThread
@@ -21,15 +18,19 @@ from utils import config_util, util
 USER_URL = 'https://www.douyin.com/user/'
 
 interact_datas = []
+import json
+import time
+import ssl
+import websocket
+
 class WS_Client:
     def __init__(self, host):
         self.__ws = None
         self.__host = host
         self.__connect(host)
- 
 
-    # 收到websocket消息的处理
     def on_message(self, ws, message):
+        global interact_datas
         try:
             
             data = json.loads(message)
@@ -46,23 +47,33 @@ class WS_Client:
         except Exception as e:
             pass
 
-    # 收到websocket错误的处理
     def on_close(self, ws, code, msg):
         pass
 
-    # 收到websocket错误的处理
     def on_error(self, ws, error):
+        util.log(1, "弹幕监听WebSocket error. Reconnecting...")
         time.sleep(5)
         self.__connect(self.__host)
 
-    # 收到websocket连接建立的处理
     def on_open(self, ws):
         pass
+
     def __connect(self, host):
         websocket.enableTrace(False)
-        self.__ws = websocket.WebSocketApp(host, on_message=self.on_message)
-        self.__ws.on_open = self.on_open
-        self.__ws.run_forever(sslopt={"cert_reqs": ssl.CERT_NONE})
+        while True:
+            try:
+                self.__ws = websocket.WebSocketApp(host,
+                                                   on_message=self.on_message,
+                                                   on_error=self.on_error,
+                                                   on_close=self.on_close)
+                self.__ws.on_open = self.on_open
+                self.__ws.run_forever(sslopt={"cert_reqs": ssl.CERT_NONE})
+                util.log(1, "弹幕监听WebSocket success.")
+                break
+            except Exception as e:
+                util.log(1, f"Error connecting: {e}. Retrying in 5 seconds...")
+                time.sleep(5)
+
     def close(self):
         self.__ws.close()
 
@@ -126,15 +137,9 @@ class Viewer:
         MyThread(target=self.__get_package_listen_interact_runnable).start()
 
     def __run_dy_msg_ws(self):
-        exe_path = "./bin/Release_2.85/v2.85.exe"
-        self.exe_process = subprocess.Popen([exe_path]) 
-        while self.__running:
-            try:
-                self.dy_msg_ws = WS_Client('ws://127.0.0.1:8888')
-            except Exception as e:
-                print(e)
-                time.sleep(5)
-
+        # exe_path = "./bin/Release_2.85/v2.85.exe"
+        # self.exe_process = subprocess.Popen([exe_path]) 
+        self.dy_msg_ws = WS_Client('ws://127.0.0.1:8888')
 
     def start(self):
         MyThread(target=self.__start).start()
@@ -342,6 +347,7 @@ class Viewer:
     
     #TODO Add by xszyou on 20230412.通过抓包监测互动数据
     def __get_package_listen_interact_runnable(self):
+        global interact_datas
         while self.__running:
             if not self.live_started:
                 continue
@@ -389,30 +395,31 @@ class Viewer:
         if self.dy_msg_ws:
             self.dy_msg_ws.close()
             self.dy_msg_ws = None
-            self.disable_windows_proxy()
-            subprocess.run(["taskkill", "/F", "/PID", str(self.exe_process.pid)])
+            # self.disable_windows_proxy()
+            # subprocess.run(["taskkill", "/F", "/PID", str(self.exe_process.pid)])
             
     
     #关闭系统代理
-    def disable_windows_proxy(self):
-        settings_key = r'Software\Microsoft\Windows\CurrentVersion\Internet Settings'
-        try:
-            registry = winreg.ConnectRegistry(None, winreg.HKEY_CURRENT_USER)
-            settings = winreg.OpenKey(registry, settings_key, 0, winreg.KEY_WRITE)
+    # def disable_windows_proxy(self):
+    #     settings_key = r'Software\Microsoft\Windows\CurrentVersion\Internet Settings'
+    #     try:
+    #         registry = winreg.ConnectRegistry(None, winreg.HKEY_CURRENT_USER)
+    #         settings = winreg.OpenKey(registry, settings_key, 0, winreg.KEY_WRITE)
             
-            # 设置代理启用值为0（禁用）
-            winreg.SetValueEx(settings, 'ProxyEnable', 0, winreg.REG_DWORD, 0)
+    #         # 设置代理启用值为0（禁用）
+    #         winreg.SetValueEx(settings, 'ProxyEnable', 0, winreg.REG_DWORD, 0)
             
-            # 清空代理服务器和代理覆盖设置
-            winreg.SetValueEx(settings, 'ProxyServer', 0, winreg.REG_SZ, '')
-            winreg.SetValueEx(settings, 'ProxyOverride', 0, winreg.REG_SZ, '')
+    #         # 清空代理服务器和代理覆盖设置
+    #         winreg.SetValueEx(settings, 'ProxyServer', 0, winreg.REG_SZ, '')
+    #         winreg.SetValueEx(settings, 'ProxyOverride', 0, winreg.REG_SZ, '')
             
-            winreg.CloseKey(settings)
-            winreg.CloseKey(registry)
+    #         winreg.CloseKey(settings)
+    #         winreg.CloseKey(registry)
             
-            util.log(1, '系统代理已关闭。')
-        except Exception as e:
-            util.log(1, '关闭系统代理时出错:', e)
+    #         util.log(1, '系统代理已关闭。')
+    #     except Exception as e:
+    #         print(e)
+    #         util.log(1, '关闭系统代理时出错:', e)
 
     @abstractmethod
     def on_interact(self, interact, event_time):
