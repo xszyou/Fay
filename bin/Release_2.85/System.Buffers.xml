@@ -15,7 +15,7 @@
       <returns>A new instance of the <see cref="System.Buffers.ArrayPool`1"></see> class.</returns>
     </member>
     <member name="M:System.Buffers.ArrayPool`1.Create(System.Int32,System.Int32)">
-      <summary>Creates a new instance of the <see cref="T:System.Buffers.ArrayPool`1"></see> class using the specifed configuration.</summary>
+      <summary>Creates a new instance of the <see cref="T:System.Buffers.ArrayPool`1"></see> class using the specified configuration.</summary>
       <param name="maxArrayLength">The maximum length of an array instance that may be stored in the pool.</param>
       <param name="maxArraysPerBucket">The maximum number of array instances that may be stored in each bucket in the pool. The pool groups arrays of similar lengths into buckets for faster access.</param>
       <returns>A new instance of the <see cref="System.Buffers.ArrayPool`1"></see> class with the specified configuration.</returns>
