@@ -26,8 +26,8 @@ __running = True
 
 class ViewerListener(Viewer):
 
-    def __init__(self, url):
-        super().__init__(url)
+    def __init__(self):
+        super().__init__()
 
     def on_interact(self, interact: Interact, event_time):
         type_names = {
@@ -88,7 +88,7 @@ class RecorderListener(Recorder):
         self.paudio.terminate()
 
 
-#TODO Edit by xszyou on 20230113:录制远程设备音频输入并传给aliyun
+#Edit by xszyou on 20230113:录制远程设备音频输入并传给aliyun
 class DeviceInputListener(Recorder):
     def __init__(self, fei):
         super().__init__(fei)
@@ -247,7 +247,7 @@ def start():
 
     if liveRoom['enabled']:
         util.log(1, '开启直播服务...')
-        viewerListener = ViewerListener(liveRoom['url'])  # 监听直播间
+        viewerListener = ViewerListener()  # 监听直播间
         viewerListener.start()
 
     if record['enabled']:
@@ -255,7 +255,7 @@ def start():
         recorderListener = RecorderListener(record['device'], feiFei)  # 监听麦克风
         recorderListener.start()
 
-    #TODO edit by xszyou on 20230113:通过此服务来连接k210、手机等音频输入设备
+    #edit by xszyou on 20230113:通过此服务来连接k210、手机等音频输入设备
     util.log(1,'开启远程设备音频输入服务...')
     deviceInputListener = DeviceInputListener(feiFei)  # 设备音频输入输出麦克风
     deviceInputListener.start()
@@ -268,10 +268,9 @@ def start():
 
     
 
-# if __name__ == '__main__':
-#     ws_server: MyServer = None
-#     feiFei: FeiFei = None
-#     viewerListener: Viewer = None
-#     recorderListener: Recorder = None
-#     start()
-# config_util.save_config()
+if __name__ == '__main__':
+    ws_server: MyServer = None
+    feiFei: FeiFei = None
+    viewerListener: Viewer = None
+    recorderListener: Recorder = None
+    start()

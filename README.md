@@ -66,7 +66,7 @@ Fay是一个完整的开源项目，包含Fay控制器及数字人模型，可�
 
 2、以上每个模块可轻易替换成自家核心产品。
 
-3、本地nlp（rasa+chatglm）的替换方法：
+3、本地nlp（rasa+chatglm）的替换方法（https://m.bilibili.com/video/BV1D14y1f7pr?wxfid=o7omF0Vs6RIQFUGAzB6LXOBHa6Yg）：
 1、安装启动chatglm(github)
 2、安装rasa 包：rasa、rasa-sdk
 3、进入test/rasa目录启动actions：rasa run actions
@@ -115,8 +115,9 @@ Fay是一个完整的开源项目，包含Fay控制器及数字人模型，可�
 **2023.04：**
 
 + 抖音直播互动数据对接更换成系统代理抓包pd解码的方式（运行直播伴侣即可）；
-+ 提供本地nlp的对接代码(rasa+chatglm)。
-+ 修复若干逻辑及说明错误。
++ 提供本地nlp的对接代码(rasa+chatglm)；
++ 修复若干逻辑及说明错误；
++ 提高抖音字幕监听的稳定性及包兼容性。
 
 
 **2023.03：**
