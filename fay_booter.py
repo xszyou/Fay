@@ -189,7 +189,8 @@ def console_listener():
             util.printInfo(1, type_names[i], '{}: {}'.format('控制台', msg))
             if i == 1:
                 feiFei.last_quest_time = time.time()
-            thr = MyThread(target=feiFei.on_interact, args=[("console", i, '', msg)])
+            interact = Interact("console", i, {'user': '', 'msg': msg})
+            thr = MyThread(target=feiFei.on_interact, args=[interact])
             thr.start()
             thr.join()
 
