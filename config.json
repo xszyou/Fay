@@ -41,8 +41,8 @@
     ],
     "source": {
         "liveRoom": {
-            "enabled": false,
-            "url": "\u65b0\u7248\u672c\u4e0d\u7528\u586b\u5199"
+            "enabled": true,
+            "url": "https://live.douyin.com/631930039382"
         },
         "record": {
             "device": "",

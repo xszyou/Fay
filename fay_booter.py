@@ -249,7 +249,7 @@ def start():
     if liveRoom['enabled']:
         util.log(1, '开启直播服务...')
         viewerListener = ViewerListener()  # 监听直播间
-        viewerListener.start()
+        viewerListener.start(config_util.config['source']['liveRoom']['url'])
 
     if record['enabled']:
         util.log(1, '开启录音服务...')
