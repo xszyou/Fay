@@ -10,8 +10,12 @@ Fay是一个完整的开源项目，包含Fay控制器及数字人模型，可�
 
 ## **推荐集成的开源仓库**
 
-消费级pc大模型：https://github.com/THUDM/ChatGLM-6B
+消费级pc大模型：https://github.com/THUDM/ChatGLM-6B 
+
 全平台抖音抓包：https://github.com/wwengg/douyin
+
+UE5工程：https://github.com/xszyou/fay-ue5
+
 
 
 ## **一、Fay控制器用途**
@@ -39,6 +43,8 @@ Fay是一个完整的开源项目，包含Fay控制器及数字人模型，可�
 下载windows运行包: [https://pan.baidu.com/s/1CsJ647uV5rS2NjQH3QT0Iw?pwd=s9s8](https://pan.baidu.com/s/1CsJ647uV5rS2NjQH3QT0Iw?pwd=s9s8)
 
 ![](images/UElucky.png)
+
+工程及运行包：https://github.com/xszyou/fay-ue5
 
 **发您的Fay运行效果视频至公众号领取最新的UE5模型哦**
 

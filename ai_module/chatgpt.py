@@ -7,8 +7,8 @@ import requests
 import time
 
 from utils import config_util as cfg
-
-chatgpt_api_key = cfg.key_chatgpt_api_key
+from urllib3.exceptions import InsecureRequestWarning
+requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
 
 #代理服务器的配置方式，参考链接https://blog.csdn.net/qq_30865917/article/details/106492549
 #httpproxy此处填写你代理服务器的地址，可以把配置文件放到config_util里面，二选一
@@ -21,13 +21,13 @@ def question(cont):
     url= "https://api.openai.com/v1/chat/completions"
        
     session = requests.Session()
+    session.verify = False
 
     if proxy_flag == '1':
             session.proxies = {
                 "https": "https://" + httpproxy,
                 "http": "http://" + httpproxy
             }
-            print(session.proxies)
 
 
     model_engine = "gpt-3.5-turbo" 
@@ -48,12 +48,12 @@ def question(cont):
         "user":"live-virtual-digital-person"
     }
 
-    headers = {'content-type': 'application/json', 'Authorization': 'Bearer ' + chatgpt_api_key}
+    headers = {'content-type': 'application/json', 'Authorization': 'Bearer ' + cfg.key_chatgpt_api_key}
 
     starttime = time.time()
 
     try:
-        response = session.post(url, json=data, headers=headers)
+        response = session.post(url, json=data, headers=headers, verify=False)
         response.raise_for_status()  # 检查响应状态码是否为200
 
         result = eval(response.text)
