@@ -25,17 +25,17 @@ def receive_audio(client):
     while True:
         data = client.recv(9)
         filedata = b''
-        if b"\x00\x01\x02\x03\x04\x05\x06\x07\x08" == data: #wav文件开始传输标志
+        if b"\x00\x01\x02\x03\x04\x05\x06\x07\x08" == data: #mp3文件开始传输标志
             while True:
                 data = client.recv(1024)
                 filedata += data
                 filedata = filedata.replace(b'\xf0\xf1\xf2\xf3\xf4\xf5\xf6\xf7\xf8', b"") #去除心跳信息
-                if b"\x08\x07\x06\x05\x04\x03\x02\x01\x00" == filedata[-9:]:#wav文件结束传输标志
+                if b"\x08\x07\x06\x05\x04\x03\x02\x01\x00" == filedata[-9:]:#mp3文件结束传输标志
                     filedata = filedata[:-9]
                     break
             print("receive audio end:{}".format(len(filedata)), end="")
 
-            filename = "sample/recv_{}.wav".format(time.time())
+            filename = "sample/recv_{}.mp3".format(time.time())
             with open(filename, "wb") as f:
                 f.write(filedata)
                 f.close()

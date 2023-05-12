@@ -6,6 +6,7 @@ intents:
   - ask_time
   - ask_date
   - out_of_scope
+  - ask_problem
 
 responses:
   utter_greet:
@@ -23,3 +24,5 @@ actions:
   - action_ask_time
   - action_ask_date
   - action_gpt_response
+  - action_ask_problem
+

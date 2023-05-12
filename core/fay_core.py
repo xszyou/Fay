@@ -25,8 +25,9 @@ from ai_module import yuan_1_0
 from ai_module import chatgpt
 import pygame
 from utils import config_util as cfg
-
-
+from core.content_db import Content_Db
+from datetime import datetime
+from ai_module import nlp_rasa
 class FeiFei:
     def __init__(self):
         pygame.mixer.init()
@@ -240,6 +241,7 @@ class FeiFei:
                         if self.muting:
                             continue
                         text = ''
+                        textlist = []
                         if answer is None:
                             try:
                                 wsa_server.get_web_instance().add_cmd({"panelMsg": "思考中..."})
@@ -252,6 +254,9 @@ class FeiFei:
                                     text = yuan_1_0.question(self.q_msg)
                                 elif cfg.key_chat_module == 'chatgpt':
                                     text = chatgpt.question(self.q_msg)
+                                elif cfg.key_chat_module == 'rasa':
+                                    textlist = nlp_rasa.question(self.q_msg)
+                                    text = textlist[0]['text']
                                 else:
                                     raise RuntimeError('讯飞key、yuan key、chatgpt key都没有配置！')    
                                 util.log(1, '自然语言处理完成. 耗时: {} ms'.format(math.floor((time.time() - tm) * 1000)))
@@ -271,6 +276,16 @@ class FeiFei:
                             self.a_msg = text
                         else:
                             self.a_msg = user_name + '，' + text
+                        contentdb = Content_Db()    
+                        contentdb.add_content('member','speak',self.q_msg)
+                        contentdb.add_content('fay','speak',self.a_msg)
+                        wsa_server.get_web_instance().add_cmd({"panelReply": {"type":"fay","content":self.a_msg}})
+                        if len(textlist) > 1:
+                            i = 1
+                            while i < len(textlist):
+                                contentdb.add_content('fay','speak',textlist[i]['text'])
+                                wsa_server.get_web_instance().add_cmd({"panelReply": {"type":"fay","content":textlist[i]['text']}})
+                                i+= 1
 
                     elif index == 2:
                         self.a_msg = ['我们的直播间越来越多人咯', '感谢{}的到来'.format(user_name), '欢印{}来到我们的直播间'.format(user_name)][
@@ -572,6 +587,60 @@ class FeiFei:
         except:
             self.last_interact_time = time.time()
             self.speaking = False
+
+    def send_for_answer(self,msg):
+        contentdb = Content_Db()
+        contentdb.add_content('member','send',msg)
+        answer = self.__get_answer('send', msg)
+        
+        text = ''
+        textlist = []
+        if answer is None:
+            try:
+                #wsa_server.get_web_instance().add_cmd({"panelMsg": "思考中..."})
+                util.log(1, '自然语言处理...')
+                tm = time.time()
+                cfg.load_config()
+                if cfg.key_chat_module == 'xfaiui':
+                    text = xf_aiui.question(msg)
+                elif cfg.key_chat_module == 'yuan':
+                    text = yuan_1_0.question(msg)
+                elif cfg.key_chat_module == 'chatgpt':
+                    text = chatgpt.question(msg)
+                elif cfg.key_chat_module == 'rasa':
+                    textlist = nlp_rasa.question(msg)
+                    text = textlist[0]['text']    
+                   
+
+                else:
+                    raise RuntimeError('讯飞key、yuan key、chatgpt key都没有配置！')    
+                util.log(1, '自然语言处理完成. 耗时: {} ms'.format(math.floor((time.time() - tm) * 1000)))
+                if text == '哎呀，你这么说我也不懂，详细点呗' or text == '':
+                    util.log(1, '[!] 自然语言无语了！')
+                    text = '哎呀，你这么说我也不懂，详细点呗'
+                    # wsa_server.get_web_instance().add_cmd({"panelMsg": ""})
+                    
+            except BaseException as e:
+                print(e)
+                util.log(1, '自然语言处理错误！')
+                text = '哎呀，你这么说我也不懂，详细点呗'
+                # wsa_server.get_web_instance().add_cmd({"panelMsg": ""})
+                
+        elif answer != 'NO_ANSWER':
+            text = answer
+        now = datetime.now()
+        timetext = str(now.strftime("%Y-%m-%d %H:%M:%S"))
+        contentdb.add_content('fay','send',text)
+        wsa_server.get_web_instance().add_cmd({"panelReply": {"type":"fay","content":text}})
+        if len(textlist) > 1:
+            i = 1
+            while i < len(textlist):
+                  contentdb.add_content('fay','send',textlist[i]['text'])
+                  wsa_server.get_web_instance().add_cmd({"panelReply": {"type":"fay","content":textlist[i]['text']}})
+                  i+= 1
+        return text
+
+
 
     # 冷场情绪更新
     def __update_mood_runnable(self):

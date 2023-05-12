@@ -27,4 +27,9 @@ rules:
   - intent: ask_time
   - action: action_ask_time
 
+- rule: 用户咨询
+  steps:
+  - intent: ask_problem
+  - action: action_ask_problem
+
 

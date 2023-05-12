@@ -135,7 +135,6 @@ class ALiNls:
         self.finalResults = ""
         self.done = False
         self.__frames.clear()
-        websocket.enableTrace(False)
         self.__ws = websocket.WebSocketApp(self.__URL + '?token=' + _token, on_message=self.on_message)
         self.__ws.on_open = self.on_open
         self.__ws.run_forever(sslopt={"cert_reqs": ssl.CERT_NONE})

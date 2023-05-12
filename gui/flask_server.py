@@ -12,6 +12,8 @@ from gevent import pywsgi
 from scheduler.thread_manager import MyThread
 from utils import config_util
 from core import wsa_server
+from core.fay_core import FeiFei
+from core.content_db import Content_Db
 
 __app = Flask(__name__)
 CORS(__app, supports_credentials=True)
@@ -70,6 +72,26 @@ def api_stop_live():
     wsa_server.get_web_instance().add_cmd({"liveState": 0})
     return '{"result":"successful"}'
 
+@__app.route('/api/send', methods=['post'])
+def api_send():
+    data = request.values.get('data')
+    print(data)
+    info = json.loads(data)
+    feiFei = FeiFei()
+    text = feiFei.send_for_answer(info['msg'])
+    return '{"result":"successful","msg":"'+text+'"}'
+
+@__app.route('/api/get-msg', methods=['post'])
+def api_get_Msg():
+    contentdb = Content_Db()
+    list = contentdb.get_list('all','desc',1000)
+    relist = []
+    i = len(list)-1
+    while i >= 0:
+        relist.append(dict(type=list[i][0],way=list[i][1],content=list[i][2],createtime=list[i][3],timetext=list[i][4]))
+        i -= 1
+
+    return json.dumps({'list': relist})
 
 @__app.route('/', methods=['get'])
 def home_get():

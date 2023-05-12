@@ -7,228 +7,362 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <!-- index.css -->
-    <link rel="stylesheet" href="{{ url_for('static',filename='css/index.css') }}"></link>
+    <link rel="stylesheet" href="{{ url_for('static',filename='css/index.css') }}">
+    </link>
     <!-- <link rel="stylesheet" href="./css/index.css"> -->
     <!-- 引入element-ui样式 -->
     <!-- <link rel="stylesheet" href="./css/element.css"> -->
-    <link rel="stylesheet" href="{{ url_for('static',filename='css/element.css') }}"></link>
+    <link rel="stylesheet" href="{{ url_for('static',filename='css/element.css') }}">
+    </link>
     <link rel="stylesheet" href="https://unpkg.com/element-ui/lib/theme-chalk/index.css">
     <script src="/static/live2d/autoload.js"></script>
 
-    <title>自动商品介绍控制器</title>
+    <title>Fay</title>
+    <style>
+        .container {
+            max-height: calc(100vh - 55px);
+            min-height: 953px;
+            width: 913px;
+            border-radius: 4px;
+            border: 0.5px solid #e0e0e0;
+            background-color: #f5f5f5;
+            display: flex;
+            flex-flow: column;
+            overflow: hidden;
+        }
+
+        .content {
+            width: calc(100% - 20px);
+            padding: 20px;
+            overflow-y: scroll;
+            flex: 1;
+        }
+
+        .content:hover::-webkit-scrollbar-thumb {
+            background: rgba(0, 0, 0, 0.1);
+        }
+
+        .bubble {
+            /* max-width: 400px; */
+            max-width: 60%;
+            padding: 10px;
+            border-radius: 5px;
+            position: relative;
+            color: #000;
+            word-wrap: break-word;
+            word-break: normal;
+        }
+
+        .item-left .bubble {
+            margin-left: 15px;
+            background-color: #fff;
+        }
+
+        .item-left .bubble:before {
+            content: "";
+            position: absolute;
+            width: 0;
+            height: 0;
+            border-left: 10px solid transparent;
+            border-top: 10px solid transparent;
+            border-right: 10px solid #fff;
+            border-bottom: 10px solid transparent;
+            left: -20px;
+        }
+
+        .item-right .bubble {
+            margin-right: 15px;
+            background-color: #63f5a1;
+        }
+
+        .item-right .bubble:before {
+            content: "";
+            position: absolute;
+            width: 0;
+            height: 0;
+            border-left: 10px solid #63f5a1;
+            border-top: 10px solid transparent;
+            border-right: 10px solid transparent;
+            border-bottom: 10px solid transparent;
+            right: -20px;
+        }
+
+        .item {
+            margin-top: 15px;
+            display: flex;
+            width: 100%;
+        }
+
+        .item.item-right {
+            justify-content: flex-end;
+        }
+
+        .item.item-center {
+            justify-content: center;
+        }
+
+        .item.item-center span {
+            font-size: 12px;
+            padding: 2px 4px;
+            color: #fff;
+            background-color: #dadada;
+            border-radius: 3px;
+            -moz-user-select: none;
+            /*火狐*/
+            -webkit-user-select: none;
+            /*webkit浏览器*/
+            -ms-user-select: none;
+            /*IE10*/
+            -khtml-user-select: none;
+            /*早期浏览器*/
+            user-select: none;
+        }
+
+        .avatar img {
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+        }
+
+        .input-area {
+            border-top: 0.5px solid #e0e0e0;
+            height: 150px;
+            display: flex;
+            flex-flow: column;
+            background-color: #fff;
+        }
+
+        textarea {
+            flex: 1;
+            padding: 5px;
+            font-size: 14px;
+            border: none;
+            cursor: pointer;
+            overflow-y: auto;
+            overflow-x: hidden;
+            outline: none;
+            resize: none;
+        }
+
+        .button-area {
+            display: flex;
+            height: 40px;
+            margin-right: 10px;
+            line-height: 40px;
+            padding: 5px;
+            justify-content: flex-end;
+        }
+
+        .button-area button {
+            width: 80px;
+            border: none;
+            outline: none;
+            border-radius: 4px;
+            float: right;
+            cursor: pointer;
+        }
+
+        /* 设置滚动条的样式 */
+        ::-webkit-scrollbar {
+            width: 10px;
+        }
+
+        /* 滚动槽 */
+        ::-webkit-scrollbar-track {
+            -webkit-box-shadow: inset006pxrgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+        }
+
+        /* 滚动条滑块 */
+        ::-webkit-scrollbar-thumb {
+            border-radius: 10px;
+            background: rgba(0, 0, 0, 0);
+            -webkit-box-shadow: inset006pxrgba(0, 0, 0, 0.5);
+        }
+    </style>
 
 </head>
 
 <body>
-<div id="app">
-    <div class="main">
-        <div class="title">
-            <h2>Fay控制器2.0</h2>
-        </div>
-        <div class="main_box">
-            <div class="left">
-                <div class="left_top">
-                    <p class="left_top_p">人设：</p>
-                    <div class="character">
-                        <div class="character_top">
-                            <div class="character_left">
-                                <ul>
-                                    <li>
-                                        <p>姓名：</p>
-                                        <el-input v-model="attribute_name" placeholder="请输入内容"></el-input>
-                                    </li>
-                                    <li>
-                                        <p>性别：</p>
-                                        <el-input v-model="attribute_gender" placeholder="请输入内容"></el-input>
-                                    </li>
-                                    <li>
-                                        <p>年龄：</p>
-                                        <el-input v-model="attribute_age" placeholder="请输入内容"></el-input>
-                                    </li>
-
-                                    <li>
-                                        <p>出生地：</p>
-                                        <el-input v-model="attribute_birth" placeholder="请输入内容"></el-input>
-                                    </li>
-                                    <li>
-                                        <p>生肖：</p>
-                                        <el-input v-model="attribute_zodiac" placeholder="请输入内容"></el-input>
-                                    </li>
-                                    <li>
-                                        <p>星座：</p>
-                                        <el-input v-model="attribute_constellation" placeholder="请输入内容"></el-input>
-                                    </li>
-                                    <li>
-                                        <p>职业：</p>
-                                        <el-input v-model="attribute_job" placeholder="请输入内容"></el-input>
-                                    </li>
-                                    <li>
-                                        <p>喜好：</p>
-                                        <el-input v-model="attribute_hobby" placeholder="请输入内容"></el-input>
-                                    </li>
-
-                                    <li>
-                                        <p>联系方式：</p>
-                                        <el-input v-model="attribute_contact" placeholder="请输入内容"></el-input>
-                                    </li>
-                                </ul>
-                            </div>
-                            <div class="character_right">
-                                <ul>
-                                    <li>
-                                        <p>送礼敏感度：</p>
-
-                                        <el-slider v-model="interact_perception_gift"></el-slider>
-
-                                    </li>
-                                    <li>
-                                        <p>关注敏感度：</p>
-                                        <el-slider v-model="interact_perception_follow"></el-slider>
-                                    </li>
-                                    <li>
-                                        <p>进入敏感度：</p>
-                                        <el-slider v-model="interact_perception_join"></el-slider>
-                                    </li>
-                                    <li>
-                                        <p>留言敏感度：</p>
-                                        <el-slider v-model="interact_perception_chat"></el-slider>
-                                    </li>
-                                    <li>
-                                        <p>冷场敏感度：</p>
-                                        <el-slider v-model="interact_perception_indifferent"></el-slider>
-                                    </li>
-                                    <li>
-                                        <p>单次互动时长：</p>
-                                        <el-input-number v-model="interact_maxInteractTime" @change="handleChange" :min="1" :max="60" label="描述文字"></el-input-number>
-                                        <span style="    padding-left: 10px;
-                                                line-height: 40px;">秒</span>
-                                    </li>
-                                    <li>
-                                        <p>声音选择：{{attribute_voice}}</p>
-                                        <el-select v-model="attribute_voice" placeholder="请选择">
-                                            <el-option v-for="item in voice_list" :key="item.value" :label="item.label" :value="item.value">
-                                            </el-option>
-                                        </el-select>
-                                    </li>
-                                    <br>
-                                    <li>
-                                        <p>使用面板播放：</p>
-                                        <el-switch v-model="play_sound_enabled" active-color="#13ce66" inactive-color="#ff4949">
-                                        </el-switch>
-                                    </li>
-                                </ul>
-                            </div>
-                        </div>
-                        <div class="character_box">
-                            <p>Q&A文件：</p>
-                            <el-input v-model="interact_QnA" placeholder="请输入内容"></el-input>
-                            <!--                            <el-upload class="upload-demo" action="http://127.0.0.1:5000/"-->
-                            <!--                                       :on-success="handlePreview">-->
-                            <!--                                <el-input v-model="interact_QnA" placeholder="请输入内容"></el-input>-->
-                            <!--                            </el-upload>-->
-                        </div>
-                    </div>
-                </div>
-                <div class="left_box">
-                    <p>&nbsp;</p>
-                    <div class="source">
-                        <ul>
-                            <li class="url">
-                                <el-switch v-model="source_liveRoom_enabled" active-color="#13ce66" inactive-color="#ff4949">
-                                </el-switch>
-                                <p>抖  音</p>
-                                <el-input v-model="source_liveRoom_url" placeholder="请输入内容"></el-input>
-                            </li>
-                            <li class="url">
-                                <el-switch v-model="source_record_enabled" active-color="#13ce66" inactive-color="#ff4949">
-                                </el-switch>
-                                <p>麦克风</p>
-                                <el-select v-model="source_record_device" placeholder="请选择">
-                                    <el-option v-for="item in device_list" :key="item.value" :label="item.label"
-                                               :value="item.value">
-                                    </el-option>
-                                </el-select>
-                            </li>
-                            <li class="url">
-
-                                <p style="margin-left: 40px">消  息</p>
-                                <el-input v-model="panel_msg" :disabled="true"></el-input>
-                            </li>
-                            <li class="but">
-                                <el-button v-if="live_state == 1" type="success" class="btn_close" style="width:200px" @click=postStopLive()>关闭（运行中）</el-button>
-                                <el-button v-else-if="live_state == 2" type="primary" plain disabled style="width:200px">正在开启...</el-button>
-                                <el-button v-else-if="live_state == 3" type="success" plain disabled style="width:200px">正在关闭...</el-button>
-                                <el-button v-else type="primary" style="width:200px" class="btn_open" @click=postStartLive()>开启</el-button>
-                                <el-button type="button" style="width:200px" @click=postData()>保存配置</el-button>
-                            </li>
-                            <li class="p_red">
-                                <p>注：启动后请选中场景客户端，让其前端运行，否则可能会卡顿，或者无声音。</p>
-                            </li>
-                        </ul>
-                    </div>
-                </div>
+    <div id="app">
+        <div class="main">
+            <div class="title">
+                <h2>Fay数字人助理版</h2>
             </div>
-            <div class="right">
-                <div class="right_main">
-                    <el-tabs v-model="activeName" type="card" @tab-click="handleClick" editable @edit="handleTabsEdit">
-                        <el-tab-pane :label="'商品'+(index+1)" :name="itme.tab_name" v-for="(itme, index) in items_data" :key="index">
+            <div class="main_box">
+                <div class="left">
+                    <div class="left_top">
+                        <p class="left_top_p">人设：</p>
+                        <div class="character">
+                            <div class="character_top">
+                                <div class="character_left">
+                                    <ul>
+                                        <li>
+                                            <p>姓名：</p>
+                                            <el-input v-model="attribute_name" placeholder="请输入内容"></el-input>
+                                        </li>
+                                        <li>
+                                            <p>性别：</p>
+                                            <el-input v-model="attribute_gender" placeholder="请输入内容"></el-input>
+                                        </li>
+                                        <li>
+                                            <p>年龄：</p>
+                                            <el-input v-model="attribute_age" placeholder="请输入内容"></el-input>
+                                        </li>
+
+                                        <li>
+                                            <p>出生地：</p>
+                                            <el-input v-model="attribute_birth" placeholder="请输入内容"></el-input>
+                                        </li>
+                                        <li>
+                                            <p>生肖：</p>
+                                            <el-input v-model="attribute_zodiac" placeholder="请输入内容"></el-input>
+                                        </li>
+                                        <li>
+                                            <p>星座：</p>
+                                            <el-input v-model="attribute_constellation" placeholder="请输入内容"></el-input>
+                                        </li>
+                                        <li>
+                                            <p>职业：</p>
+                                            <el-input v-model="attribute_job" placeholder="请输入内容"></el-input>
+                                        </li>
+                                        <li>
+                                            <p>喜好：</p>
+                                            <el-input v-model="attribute_hobby" placeholder="请输入内容"></el-input>
+                                        </li>
+
+                                        <li>
+                                            <p>联系方式：</p>
+                                            <el-input v-model="attribute_contact" placeholder="请输入内容"></el-input>
+                                        </li>
+                                    </ul>
+                                </div>
+                                <div class="character_right">
+                                    <ul>
+                                       
+                                        <li>
+                                            <p>敏感度：</p>
+                                            <el-slider v-model="interact_perception_follow"></el-slider>
+                                        </li>
+                                       
+                                        <br>
+                                        <li>
+                                            <p>使用面板播放：</p>
+                                            <el-switch v-model="play_sound_enabled" active-color="#13ce66"
+                                                inactive-color="#ff4949">
+                                            </el-switch>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                            <div class="character_box">
+                                <p>Q&A文件：</p>
+                                <el-input v-model="interact_QnA" placeholder="请输入内容"></el-input>
+                                <!--                            <el-upload class="upload-demo" action="http://127.0.0.1:5000/"-->
+                                <!--                                       :on-success="handlePreview">-->
+                                <!--                                <el-input v-model="interact_QnA" placeholder="请输入内容"></el-input>-->
+                                <!--                            </el-upload>-->
+                            </div>
+                        </div>
+                    </div>
+                    <div class="left_box">
+                        <p>&nbsp;</p>
+                        <div class="source">
                             <ul>
-                                <li>
-                                    <p>名称：</p>
-                                    <el-input v-model='itme.name' placeholder="请输入内容"></el-input>
-                                </li>
-                                <li>
-                                    <p>商品简介：</p>
-                                    <el-input type="textarea" :rows="3" placeholder="请输入内容" v-model='itme.explain.intro'>
-                                    </el-input>
-                                </li>
-                                <li>
-                                    <p>使用场景：</p>
-                                    <el-input type="textarea" :rows="3" placeholder="请输入内容" v-model='itme.explain.usage'>
-                                    </el-input>
-                                </li>
-                                <li>
-                                    <p>售价说明：</p>
-                                    <el-input type="textarea" :rows="3" placeholder="请输入内容" v-model='itme.explain.price'>
-                                    </el-input>
-                                </li>
-                                <li>
-                                    <p>促销：</p>
-                                    <el-input type="textarea" :rows="3" placeholder="请输入内容" v-model='itme.explain.discount'>
-                                    </el-input>
-                                </li>
-                                <li>
-                                    <p>主播担保：</p>
-                                    <el-input type="textarea" :rows="3" placeholder="请输入内容" v-model='itme.explain.promise'>
-                                    </el-input>
-                                </li>
-                                <li>
-                                    <p>商品特点：</p>
-                                    <el-input type="textarea" :rows="3" placeholder="请输入内容" v-model='itme.explain.character'>
-                                    </el-input>
-                                </li>
-                                <li>
-                                    <p>展示视频：</p>
-                                    <el-input v-model="itme.demoVideo" placeholder="请输入内容"></el-input>
-                                </li>
-                                <li>
-                                    <p>Q&A文件：</p>
-                                    <el-input v-model="itme.QnA" placeholder="请输入内容"></el-input>
-                                </li>
-                                <li>
-                                    <p>是否启用：</p>
-                                    <el-switch v-model='itme.enabled' active-color="#13ce66" inactive-color="#ff4949">
+                                
+                                <li class="url">
+                                    <el-switch v-model="source_record_enabled" active-color="#13ce66"
+                                        inactive-color="#ff4949">
                                     </el-switch>
+                                    <p>麦克风</p>
+                                    <el-select v-model="source_record_device" placeholder="请选择">
+                                        <el-option v-for="item in device_list" :key="item.value" :label="item.label"
+                                            :value="item.value">
+                                        </el-option>
+                                    </el-select>
+                                </li>
+                                <li class="url">
+
+                                    <p style="margin-left: 40px">消 息</p>
+                                    <el-input v-model="panel_msg" :disabled="true"></el-input>
+                                </li>
+                                <li class="but">
+                                    <el-button v-if="live_state == 1" type="success" class="btn_close"
+                                        style="width:200px" @click=postStopLive()>关闭（运行中）</el-button>
+                                    <el-button v-else-if="live_state == 2" type="primary" plain disabled
+                                        style="width:200px">正在开启...</el-button>
+                                    <el-button v-else-if="live_state == 3" type="success" plain disabled
+                                        style="width:200px">正在关闭...</el-button>
+                                    <el-button v-else type="primary" style="width:200px" class="btn_open"
+                                        @click=postStartLive()>开启</el-button>
+                                    <el-button type="button" style="width:200px" @click=postData()>保存配置</el-button>
+                                </li>
+                                <li class="p_red">
+                                    <p>注：启动后请选中场景客户端，让其前端运行，否则可能会卡顿，或者无声音。</p>
                                 </li>
                             </ul>
-                        </el-tab-pane>
-                    </el-tabs>
-                    <br v-if="items_data.length==0">
+                        </div>
+                    </div>
+                </div>
+                <div class="right">
+                    <div class="right_main">
+                        <div class="container">
+                            <div class="content">
+                       
+                                <div v-for="item in msg_list">
+                                <div class="item item-center"><span>[[item.timetext]]</span></div>
+
+                                <div class="item item-left" v-if="item.type == 'fay'">
+                                    <div class="avatar"><img src="{{ url_for('static',filename='to.jpg') }}" />
+                                    </div>
+                                    <div class="bubble bubble-left">[[item.content]]
+                                    </div>
+                                </div>
+                                <div class="item item-right" v-else>
+                                    <div class="bubble bubble-right">[[item.content]]</div>
+                                    <div class="avatar"><img src="{{ url_for('static',filename='from.jpg') }}" />
+                                    </div>
+                                </div>
+                            </div>
+                                
+                          
+
+                             
+                              
+                            </div>
+                            <div class="input-area">
+                                <textarea v-model="send_msg" name="text" id="textarea" placeholder="发送些内容给Fay..."></textarea>
+                                <div class="button-area">
+                                    <button id="send-btn" @click="send()">发 送</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
-</div>
+    <script>
+        // function send() {
+        //     let text = document.querySelector('#textarea').value;
+        //     if (!text) {
+        //         alert('请输入内容');
+        //         return;
+        //     }
+        //     // text = text.replace(/\s/g, "<br/>");
+        //     text = text.replace(/\n/g, "<br/>");
+        //     text = text.replace(/\r\n/g, "<br/>");
+        //     let item = document.createElement('div');
+        //     item.className = 'item item-right';
+        //     item.innerHTML = `<div class="bubble bubble-right">${text}</div><div class="avatar"><img src="{{ url_for('static',filename='from.jpg') }}" /></div>`;
+        //     document.querySelector('.content').appendChild(item);
+        //     document.querySelector('#textarea').value = '';
+        //     document.querySelector('#textarea').focus();
+        //     //滚动条置底
+        //     let height = document.querySelector('.content').scrollHeight;
+        //     document.querySelector(".content").scrollTop = height;
+        // }
+    </script>
 </body>
 <!-- 开发环境vue.js -->
 <script src="{{ url_for('static',filename='js/vue.js') }}"></script>

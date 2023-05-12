@@ -14,16 +14,32 @@ nlu:
     - 回头说
     - 先这样
 
-- intent: ask_time
+- intent: ask_problem
   examples: |
-    - 现在几点钟了？
-    - 请告诉我现在的时间
-    - 你知道现在是几点吗？
+    - 请帮我写一篇文章
+    - 请问一下这个问题为什么这样？
+    - 我想写一篇文章
+    - 我想咨询一下这个问题
+    - 我想问问这里是什么错误
+    - 这个错误是怎么导致的
+    - 可以详细说说吗
+    - 详细一点说
+    - 详细
+    - 文章
+    - 继续
+    - 请教
+    - 请问
 
 - intent: ask_date
   examples: |
     - 今天是几号？
     - 今天星期几？
+
+- intent: ask_time
+  examples: |
+    - 现在几点钟了？
+    - 请告诉我现在的时间
+    - 你知道现在是几点吗？
 
 - intent: out_of_scope
   examples: |
