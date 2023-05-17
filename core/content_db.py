@@ -50,11 +50,11 @@ class Content_Db:
         conn = sqlite3.connect("fay.db")
         cur = conn.cursor()
         if(way == 'all'):
-            cur.execute("select type,way,content,createtime,datetime(createtime, 'unixepoch', 'localtime') as timetext from T_Msg  order by createtime "+order+" limit ?",(limit,))
+            cur.execute("select type,way,content,createtime,datetime(createtime, 'unixepoch', 'localtime') as timetext from T_Msg  order by id "+order+" limit ?",(limit,))
         elif(way == 'notappended'):
-            cur.execute("select type,way,content,createtime,datetime(createtime, 'unixepoch', 'localtime') as timetext from T_Msg where way != 'appended' order by createtime "+order+" limit ?",(limit,))
+            cur.execute("select type,way,content,createtime,datetime(createtime, 'unixepoch', 'localtime') as timetext from T_Msg where way != 'appended' order by id "+order+" limit ?",(limit,))
         else:
-            cur.execute("select type,way,content,createtime,datetime(createtime, 'unixepoch', 'localtime') as timetext from T_Msg where way = ? order by createtime "+order+" limit ?",(way,limit,))
+            cur.execute("select type,way,content,createtime,datetime(createtime, 'unixepoch', 'localtime') as timetext from T_Msg where way = ? order by id "+order+" limit ?",(way,limit,))
 
         list = cur.fetchall()
         conn.close()

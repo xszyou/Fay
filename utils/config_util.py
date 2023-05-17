@@ -22,6 +22,10 @@ key_yuan_1_0_phone = None
 key_chatgpt_api_key = None
 key_chat_module = None
 
+ASR_mode = None
+local_asr_ip = None 
+local_asr_port = None 
+
 def load_config():
     global config
     global system_config
@@ -40,6 +44,10 @@ def load_config():
     global key_chatgpt_api_key
     global key_chat_module
 
+    global ASR_mode
+    global local_asr_ip 
+    global local_asr_port
+
     system_config = ConfigParser()
     system_config.read('system.conf', encoding='UTF-8')
     key_ali_nls_key_id = system_config.get('key', 'ali_nls_key_id')
@@ -56,6 +64,10 @@ def load_config():
     key_yuan_1_0_phone = system_config.get('key', 'yuan_1_0_phone')
     key_chatgpt_api_key = system_config.get('key', 'chatgpt_api_key')
     key_chat_module = system_config.get('key', 'chat_module')
+
+    ASR_mode = system_config.get('key', 'ASR_mode')
+    local_asr_ip = system_config.get('key', 'local_asr_ip')
+    local_asr_port = system_config.get('key', 'local_asr_port')
 
     config = json.load(codecs.open('config.json', encoding='utf-8'))
 

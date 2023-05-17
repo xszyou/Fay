@@ -4,9 +4,11 @@ import time
 from abc import abstractmethod
 
 from ai_module.ali_nls import ALiNls
+from ai_module.funasr import FunASR
 from core import wsa_server
 from scheduler.thread_manager import MyThread
 from utils import util
+from utils import config_util as cfg
 
 
 # 启动时间 (秒)
@@ -31,8 +33,18 @@ class Recorder:
 
         self.__MAX_LEVEL = 25000
         self.__MAX_BLOCK = 100
+        
+        #Edit by xszyou in 20230516:增加本地asr
+        self.ASRMode = cfg.ASR_mode
+        self.__aLiNls = self.asrclient()
 
-        self.__aLiNls = ALiNls()
+
+    def asrclient(self):
+        if self.ASRMode == "ali":
+            asrcli = ALiNls()
+        elif self.ASRMode == "funasr":
+            asrcli = FunASR()
+        return asrcli
 
     
 
@@ -62,7 +74,7 @@ class Recorder:
             text += "-"
         print(text + " [" + str(int(per * 100)) + "%]")
 
-    def __waitingResult(self, iat: ALiNls):
+    def __waitingResult(self, iat):
         if self.__fay.playing:
             return
         self.processing = True
@@ -117,7 +129,7 @@ class Recorder:
                     soon = True  #
                     isSpeaking = True  #用户正在说话
                     util.log(3, "聆听中...")
-                    self.__aLiNls = ALiNls()
+                    self.__aLiNls = self.asrclient()
                     try:
                         self.__aLiNls.start()
                     except Exception as e:
@@ -158,4 +170,3 @@ class Recorder:
     @abstractmethod
     def get_stream(self):
         pass
-

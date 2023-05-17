@@ -10,6 +10,8 @@ Fay数字人助理版是fay开源项目的重要分支，专注于构建智能�
 
 ## **推荐集成**
 
+给Fay加上本地免费语音识别（达摩院funaar）: https://www.bilibili.com/video/BV1qs4y1g74e/?share_source=copy_web&vd_source=64cd9062f5046acba398177b62bea9ad
+
 消费级pc大模型（ChatGLM-6B的基础上前置Rasa会话管理）：https://m.bilibili.com/video/BV1D14y1f7pr 
 
 UE5工程：https://github.com/xszyou/fay-ue5
@@ -153,7 +155,8 @@ python main.py
 
 | 代码模块                  | 描述                       | 链接                                                         |
 | ------------------------- | -------------------------- | ------------------------------------------------------------ |
-| ./ai_module/ali_nls.py    | 阿里云 实时语音识别        | https://ai.aliyun.com/nls/trans                              |
+| ./ai_module/ali_nls.py    | 实时语音识别（免费3个月,asr二选一）        | https://ai.aliyun.com/nls/trans                              |
+| ./ai_module/funasr.py    | 达摩院开源免费本地asr （asr二选一）       | fay/test/funasr/README.MD                           |
 | ./ai_module/ms_tts_sdk.py | 微软 文本转情绪语音（可选）   | https://azure.microsoft.com/zh-cn/services/cognitive-services/text-to-speech/ |
 | ./ai_module/xf_ltp.py     | 讯飞 情感分析              | https://www.xfyun.cn/service/emotion-analysis                |
 | ./utils/ngrok_util.py     | ngrok.cc 外网穿透（可选）  | http://ngrok.cc                                              |

@@ -237,6 +237,9 @@ class FeiFei:
                     # self.__isExecute = True #!!!!
 
                     if index == 1:
+                        contentdb = Content_Db()    
+                        contentdb.add_content('member','speak',self.q_msg)
+                        wsa_server.get_web_instance().add_cmd({"panelReply": {"type":"member","content":self.q_msg}})
                         answer = self.__get_answer(interact.interleaver, self.q_msg)
                         if self.muting:
                             continue
@@ -276,8 +279,7 @@ class FeiFei:
                             self.a_msg = text
                         else:
                             self.a_msg = user_name + '，' + text
-                        contentdb = Content_Db()    
-                        contentdb.add_content('member','speak',self.q_msg)
+                        
                         contentdb.add_content('fay','speak',self.a_msg)
                         wsa_server.get_web_instance().add_cmd({"panelReply": {"type":"fay","content":self.a_msg}})
                         if len(textlist) > 1:
