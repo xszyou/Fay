@@ -333,7 +333,10 @@
                             <div class="input-area">
                                 <textarea v-model="send_msg" name="text" id="textarea" placeholder="发送些内容给Fay..."></textarea>
                                 <div class="button-area">
-                                    <button id="send-btn" @click="send()">发 送</button>
+                                    <button id="send-btn" @click="send(1)">发 送</button>
+                                    <!--删除注释打开彩蛋
+                                    <button id="send-btn" @click="send(2)" style="margin-left: 25px;">发送gpt</button>
+                                    -->
                                 </div>
                             </div>
                         </div>

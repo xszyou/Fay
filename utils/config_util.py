@@ -21,6 +21,8 @@ key_yuan_1_0_account = None
 key_yuan_1_0_phone = None
 key_chatgpt_api_key = None
 key_chat_module = None
+key_gpt_access_token = None
+key_gpt_conversation_id = None
 
 ASR_mode = None
 local_asr_ip = None 
@@ -43,6 +45,8 @@ def load_config():
     global key_yuan_1_0_phone
     global key_chatgpt_api_key
     global key_chat_module
+    global key_gpt_access_token
+    global key_gpt_conversation_id
 
     global ASR_mode
     global local_asr_ip 
@@ -64,6 +68,8 @@ def load_config():
     key_yuan_1_0_phone = system_config.get('key', 'yuan_1_0_phone')
     key_chatgpt_api_key = system_config.get('key', 'chatgpt_api_key')
     key_chat_module = system_config.get('key', 'chat_module')
+    key_gpt_access_token = system_config.get('key', 'gpt_access_token')
+    key_gpt_conversation_id = system_config.get('key', 'gpt_conversation_id')
 
     ASR_mode = system_config.get('key', 'ASR_mode')
     local_asr_ip = system_config.get('key', 'local_asr_ip')

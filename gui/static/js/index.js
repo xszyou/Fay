@@ -82,8 +82,8 @@ new Vue({
     methods: {
          // 回车和空格键提交右侧信息
         handkeyCode(e) {
-        if(e.keyCode === 13){
-            this.send()
+        if(e.keyCode === 13 && e.keyCode === 18){
+            this.send(1)
         }
         },
         handleTabsEdit(targetName, action) {
@@ -452,7 +452,7 @@ new Vue({
                 type: 'success'
             });
         },
-        send() {
+        send(sendto) {
             let _this = this;
             let text = _this.send_msg;
             if (!text) {
@@ -474,7 +474,8 @@ new Vue({
             _this.send_msg = ''
             let url = "http://127.0.0.1:5000/api/send";
             let send_data = {
-                "msg": text
+                "msg": text,
+                "sendto" : sendto
             };
       
             let xhr = new XMLHttpRequest()

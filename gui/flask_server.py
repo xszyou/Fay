@@ -78,7 +78,7 @@ def api_send():
     print(data)
     info = json.loads(data)
     feiFei = FeiFei()
-    text = feiFei.send_for_answer(info['msg'])
+    text = feiFei.send_for_answer(info['msg'],info['sendto'])
     return '{"result":"successful","msg":"'+text+'"}'
 
 @__app.route('/api/get-msg', methods=['post'])
