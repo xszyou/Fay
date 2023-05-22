@@ -20,8 +20,11 @@ def question(cont):
     try:
         chatbot = Chatbot(config={
         "access_token": cfg.key_gpt_access_token,
-        "conversation_id": cfg.key_gpt_conversation_id
-        })
+        "paid": False,
+        "collect_analytics": True,
+        "conversation_id":cfg.key_gpt_conversation_id
+        },conversation_id=cfg.key_gpt_conversation_id,
+        parent_id=None)
 
         prompt = text + ' 现在想咨询的问题是：'+cont
         response = ""
