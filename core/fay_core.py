@@ -593,10 +593,11 @@ class FeiFei:
 
                     
                 wsa_server.get_web_instance().add_cmd({"panelMsg": self.a_msg})
-                time.sleep(audio_length + 0.5)
+                
                 wsa_server.get_web_instance().add_cmd({"panelMsg": ""})
                 if config_util.config["interact"]["playSound"]:
                     util.log(1, '结束播放！')
+            time.sleep(audio_length + 0.5)
             self.speaking = False
         except Exception as e:
             print(e)
