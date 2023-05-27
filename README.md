@@ -10,6 +10,8 @@ Fay数字人助理版是fay开源项目的重要分支，专注于构建智能�
 
 ## **推荐集成**
 
+集成VisualGLM：B站视频
+
 给Fay加上本地免费语音识别（达摩院funaar）: https://www.bilibili.com/video/BV1qs4y1g74e/?share_source=copy_web&vd_source=64cd9062f5046acba398177b62bea9ad
 
 消费级pc大模型（ChatGLM-6B的基础上前置Rasa会话管理）：https://m.bilibili.com/video/BV1D14y1f7pr 
@@ -39,7 +41,7 @@ UE5工程：https://github.com/xszyou/fay-ue5
 
 控制器与采用 WebSocket 方式与 UE 通讯
 
-![](images/cs.png)
+![](images/UE.png)
 
 下载工程: [https://pan.baidu.com/s/1RBo2Pie6A5yTrCf1cn_Tuw?pwd=ck99](https://pan.baidu.com/s/1RBo2Pie6A5yTrCf1cn_Tuw?pwd=ck99)
 
@@ -92,8 +94,11 @@ UE5工程：https://github.com/xszyou/fay-ue5
 │   ├── ms_tts_sdk.py       # 微软 文本转语音
 │   ├── xf_aiui.py          # 讯飞 人机交互-自然语言处理
 │   ├── chatgpt.py          # gpt3.5对接
-│   ├── yuan_1_0.py          # 浪潮.源大模型对接
-│   ├── nlp_rasa.py          # ChatGLM-6B的基础上前置Rasa会话管理(强烈推荐)
+│   ├── nlp_gpt.py          # 对接chat.openai.com(免key)
+│   ├── yuan_1_0.py         # 浪潮.源大模型对接
+│   ├── nlp_rasa.py         # ChatGLM-6B的基础上前置Rasa会话管理(强烈推荐)
+│   ├── nlp_VisualGLM.py    # 对接多模态大语言模型VisualGLM-6B
+│   ├── yolov8.py           # yolov8资态识别
 │   └── xf_ltp.py           # 讯飞 情感分析
 ├── bin                     # 可执行文件目录
 ├── core                    # 数字人核心
@@ -109,28 +114,36 @@ UE5工程：https://github.com/xszyou/fay-ue5
 │   └── window.py           # 窗口模块
 ├── scheduler
 │   └── thread_manager.py   # 调度管理器
-└── utils                   # 工具模块
+├── utils                   # 工具模块
     ├── config_util.py      
     ├── storer.py
     └── util.py
+└── test                    # 都是惊喜
 ```
 
 
 ## **三、升级日志**
+
+**2023.05.27：**
+
++ 修复多个bug：消息框换行及空格问题、语音识别优化；
++ 彩蛋转正，Fay沟通与ChatGPT并行；
++ 加入yolov8姿态识别；
++ 加入VisualGLM-6B多模态单机离线大语言模型。
 
 **2023.05.12：**
 
 + 打出Fay数字人助理版作为主分支（带货版移到分支[`fay-sales-edition`](https://github.com/TheRamU/Fay/tree/fay-sales-edition)）；
 + 添加Fay助理的文字沟通窗口（文字与语音同步）；
 + 添加沟通记录本地保存功能；
-+ 升级ChatGLM-6B的应用逻辑，长文本与语音回复分享；
++ 升级ChatGLM-6B的应用逻辑，长文本与语音回复分离。
 
 
 ## **四、安装说明**
 
 
 ### **环境** 
-- Python 3.8、3.9、3.10
+- Python 3.9、3.10
 - Windows、macos、linux
 
 ### **安装依赖**
@@ -155,15 +168,16 @@ python main.py
 
 | 代码模块                  | 描述                       | 链接                                                         |
 | ------------------------- | -------------------------- | ------------------------------------------------------------ |
-| ./ai_module/ali_nls.py    | 实时语音识别（免费3个月,asr二选一）        | https://ai.aliyun.com/nls/trans                              |
-| ./ai_module/funasr.py    | 达摩院开源免费本地asr （asr二选一）       | fay/test/funasr/README.MD                           |
-| ./ai_module/ms_tts_sdk.py | 微软 文本转情绪语音（可选）   | https://azure.microsoft.com/zh-cn/services/cognitive-services/text-to-speech/ |
+| ./ai_module/ali_nls.py    | 实时语音识别（非必须，免费3个月,asr二选一）    | https://ai.aliyun.com/nls/trans                              |
+| ./ai_module/funasr.py    | 达摩院开源免费本地asr （非必须，asr二选一）   | fay/test/funasr/README.MD                           |
+| ./ai_module/ms_tts_sdk.py | 微软 文本转情绪语音（非必须，不配置时使用免费的edge-tts） | https://azure.microsoft.com/zh-cn/services/cognitive-services/text-to-speech/ |
 | ./ai_module/xf_ltp.py     | 讯飞 情感分析              | https://www.xfyun.cn/service/emotion-analysis                |
 | ./utils/ngrok_util.py     | ngrok.cc 外网穿透（可选）  | http://ngrok.cc                                              |
-| ./ai_module/yuan_1_0.py    | 浪潮源大模型（NLP 4选1）  | https://air.inspur.com/                                              |
-| ./ai_module/chatgpt.py     | ChatGPT（NLP 4选1）  | *******                                              |
-| ./ai_module/xf_aiui.py    | 讯飞自然语言处理（NLP 4选1）   | https://aiui.xfyun.cn/solution/webapi                        |
-| ./ai_module/nlp_rasa.py    | ChatGLM-6B的基础上前置Rasa会话管理（NLP 4选1）   | https://m.bilibili.com/video/BV1D14y1f7pr |
+| ./ai_module/yuan_1_0.py    | 浪潮源大模型（NLP 多选1） | https://air.inspur.com/                                              |
+| ./ai_module/chatgpt.py     | ChatGPT（NLP多选1） | *******                                              |
+| ./ai_module/xf_aiui.py    | 讯飞自然语言处理（NLP多选1）  | https://aiui.xfyun.cn/solution/webapi                        |
+| ./ai_module/nlp_rasa.py    | ChatGLM-6B的基础上前置Rasa会话管理（NLP 多选1）  | https://m.bilibili.com/video/BV1D14y1f7pr |
+| ./ai_module/nlp_VisualGLM.py | 对接VisualGLM-6B多模态单机离线大语言模型（NLP 多选1） | B站视频 |
 
 
 
@@ -228,7 +242,7 @@ python main.py
 商务联系QQ 467665317，我们提供：开发顾问、数字人模型定制及高校教学资源实施服务
 http://yafrm.com/forum.php?mod=viewthread&tid=302
 
-关注公众号获取最新微信技术交流群二维码（**请先star本仓库**）
+关注公众号(fay数字人)获取最新微信技术交流群二维码（**请先star本仓库**）
 
 ![](images/gzh.jpg)
 

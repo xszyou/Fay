@@ -29,11 +29,13 @@ from core.content_db import Content_Db
 from datetime import datetime
 from ai_module import nlp_rasa
 from ai_module import nlp_gpt
+from ai_module import yolov8
+from ai_module import nlp_VisualGLM as VisualGLM
 
 #文本消息处理
 def send_for_answer(msg,sendto):
         contentdb = Content_Db()
-        contentdb.add_content('member','send',msg)       
+        contentdb.add_content('member','send', msg)       
         text = ''
         textlist = []
         try:
@@ -53,7 +55,8 @@ def send_for_answer(msg,sendto):
                 elif cfg.key_chat_module == 'rasa':
                     textlist = nlp_rasa.question(msg)
                     text = textlist[0]['text']    
-                
+                elif cfg.key_chat_module == "VisualGLM":
+                    text = VisualGLM.question(msg)
 
                 else:
                     raise RuntimeError('讯飞key、yuan key、chatgpt key都没有配置！')    
@@ -289,12 +292,22 @@ class FeiFei:
                     # self.__isExecute = True #!!!!
 
                     if index == 1:
+                        fay_eyes = yolov8.new_instance()            
+                        if fay_eyes.get_status():#YOLO正在运行
+                            person_count, stand_count, sit_count = fay_eyes.get_counts()
+                            if person_count != 1: #不是有且只有一个人，不互动
+                                 wsa_server.get_web_instance().add_cmd({"panelMsg": "不是有且只有一个人，不互动"})
+                                 continue
+
+                        answer = self.__get_answer(interact.interleaver, self.q_msg)
+                        if(self.muting): #静音指令正在执行
+                            wsa_server.get_web_instance().add_cmd({"panelMsg": "静音指令正在执行，不互动"})
+                            continue
+                        
                         contentdb = Content_Db()    
                         contentdb.add_content('member','speak',self.q_msg)
                         wsa_server.get_web_instance().add_cmd({"panelReply": {"type":"member","content":self.q_msg}})
-                        answer = self.__get_answer(interact.interleaver, self.q_msg)
-                        if self.muting:
-                            continue
+
                         text = ''
                         textlist = []
                         if answer is None:
@@ -312,6 +325,9 @@ class FeiFei:
                                 elif cfg.key_chat_module == 'rasa':
                                     textlist = nlp_rasa.question(self.q_msg)
                                     text = textlist[0]['text']
+                                elif cfg.key_chat_module == "VisualGLM":
+                                    text = VisualGLM.question(self.q_msg)
+
                                 else:
                                     raise RuntimeError('讯飞key、yuan key、chatgpt key都没有配置！')    
                                 util.log(1, '自然语言处理完成. 耗时: {} ms'.format(math.floor((time.time() - tm) * 1000)))
@@ -593,11 +609,10 @@ class FeiFei:
 
                     
                 wsa_server.get_web_instance().add_cmd({"panelMsg": self.a_msg})
-                
+                time.sleep(audio_length + 0.5)
                 wsa_server.get_web_instance().add_cmd({"panelMsg": ""})
                 if config_util.config["interact"]["playSound"]:
                     util.log(1, '结束播放！')
-            time.sleep(audio_length + 0.5)
             self.speaking = False
         except Exception as e:
             print(e)

@@ -1,3 +1,4 @@
+import imp
 import json
 import time
 
@@ -10,10 +11,12 @@ import fay_booter
 from core.tts_voice import EnumVoice
 from gevent import pywsgi
 from scheduler.thread_manager import MyThread
-from utils import config_util
+from utils import config_util, util
 from core import wsa_server
 from core import fay_core
 from core.content_db import Content_Db
+from ai_module import yolov8
+
 
 __app = Flask(__name__)
 CORS(__app, supports_credentials=True)
@@ -40,6 +43,19 @@ def api_submit():
     # print(data)
     config_data = json.loads(data)
     config_util.save_config(config_data['config'])
+
+
+    return '{"result":"successful"}'
+
+@__app.route('/api/control-eyes', methods=['post'])
+def control_eyes():
+    eyes = yolov8.new_instance()
+    if(not eyes.get_status()):
+       eyes.start()
+       util.log(1, "YOLO v8正在启动...")
+    else:
+       eyes.stop()
+       util.log(1, "YOLO v8正在关闭...")
     return '{"result":"successful"}'
 
 

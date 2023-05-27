@@ -213,9 +213,9 @@ def stop():
     if recorderListener is not None:
         util.log(1, '正在关闭录音服务...')
         recorderListener.stop()
-    if deviceInputListener is not None:
-        util.log(1, '正在关闭远程音频输入输出服务...')
-        deviceInputListener.stop()
+    # if deviceInputListener is not None:
+    #     util.log(1, '正在关闭远程音频输入输出服务...')
+    #     deviceInputListener.stop()
     util.log(1, '正在关闭核心服务...')
     feiFei.stop()
     util.log(1, '服务已关闭！')
@@ -244,22 +244,15 @@ def start():
     liveRoom = config_util.config['source']['liveRoom']
     record = config_util.config['source']['record']
 
-    
-
-    if liveRoom['enabled']:
-        util.log(1, '开启直播服务...')
-        viewerListener = ViewerListener()  # 监听直播间
-        viewerListener.start()
-
     if record['enabled']:
         util.log(1, '开启录音服务...')
         recorderListener = RecorderListener(record['device'], feiFei)  # 监听麦克风
         recorderListener.start()
 
     #edit by xszyou on 20230113:通过此服务来连接k210、手机等音频输入设备
-    util.log(1,'开启远程设备音频输入服务...')
-    deviceInputListener = DeviceInputListener(feiFei)  # 设备音频输入输出麦克风
-    deviceInputListener.start()
+    # util.log(1,'开启远程设备音频输入服务...')
+    # deviceInputListener = DeviceInputListener(feiFei)  # 设备音频输入输出麦克风
+    # deviceInputListener.start()
 
     util.log(1, '注册命令...')
     MyThread(target=console_listener).start()  # 监听控制台

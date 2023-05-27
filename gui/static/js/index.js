@@ -20,6 +20,7 @@ new Vue({
             fileList: {},
             panel_msg: "",
             play_sound_enabled: false,
+            visualization_detection_enabled: false,
             source_liveRoom_enabled: false,
             source_liveRoom_url: '',
             source_record_enabled: false,
@@ -233,6 +234,7 @@ new Vue({
                             let perception = interact["perception"]
                             let items = config["items"]
                             _this.play_sound_enabled = interact["playSound"]
+                            _this.visualization_detection_enabled = interact["visualization"]
                             _this.source_liveRoom_enabled = source["liveRoom"]["enabled"]
                             _this.source_liveRoom_url = source["liveRoom"]["url"]
                             _this.source_record_enabled = source["record"]["enabled"]
@@ -315,6 +317,7 @@ new Vue({
                     },
                     "interact": {
                         "playSound": this.play_sound_enabled,
+                        "visualization": this.visualization_detection_enabled,
                         "QnA": this.interact_QnA,
                         "maxInteractTime": this.interact_maxInteractTime,
                         "perception": {
@@ -378,6 +381,19 @@ new Vue({
             xhr.open("post", url)
             xhr.setRequestHeader("Content-type", "application/x-www-form-urlencoded")
             xhr.send()
+            
+        },
+        postControlEyes() {
+            let url = "http://127.0.0.1:5000/api/control-eyes";
+            let xhr = new XMLHttpRequest()
+            xhr.open("post", url)
+            xhr.setRequestHeader("Content-type", "application/x-www-form-urlencoded")
+            xhr.send()
+            if(this.visualization_detection_enabled){
+                this.visualization_detection_enabled = false
+            }else{
+                this.visualization_detection_enabled = true
+            }
         },
         isEmptyItem(data) {
             let isEmpty = true
@@ -481,7 +497,7 @@ new Vue({
             let xhr = new XMLHttpRequest()
             xhr.open("post", url)
             xhr.setRequestHeader("Content-type", "application/x-www-form-urlencoded")
-            xhr.send('data=' + JSON.stringify(send_data))
+            xhr.send('data=' + encodeURIComponent(JSON.stringify(send_data)))
             let executed = false
             xhr.onreadystatechange = async function () {
                 if (!executed && xhr.status === 200) {

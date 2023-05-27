@@ -36,6 +36,7 @@
             padding: 20px;
             overflow-y: scroll;
             flex: 1;
+            white-space: pre-wrap;
         }
 
         .content:hover::-webkit-scrollbar-thumb {
@@ -252,6 +253,10 @@
                                                 inactive-color="#ff4949">
                                             </el-switch>
                                         </li>
+                                        <li>
+                                             <el-button  type="delete"  class="btn_open"
+                                             @click=postControlEyes()>Fay Eyes</el-button>
+                                        </li>
                                     </ul>
                                 </div>
                             </div>
@@ -333,10 +338,10 @@
                             <div class="input-area">
                                 <textarea v-model="send_msg" name="text" id="textarea" placeholder="发送些内容给Fay..."></textarea>
                                 <div class="button-area">
-                                    <button id="send-btn" @click="send(1)">发 送</button>
-                                    <!--删除注释打开彩蛋
-                                    <button id="send-btn" @click="send(2)" style="margin-left: 25px;">发送gpt</button>
-                                    -->
+                                    <button id="send-btn" @click="send(1)">Fay</button>
+                                    
+                                    <button id="send-btn" @click="send(2)" style="margin-left: 25px;">ChatGPT</button>
+                                    
                                 </div>
                             </div>
                         </div>
