@@ -1,13 +1,13 @@
 {
     "attribute": {
         "age": "\u6210\u5e74",
-        "birth": "\u4e2d\u56fd",
+        "birth": "Github",
         "constellation": "\u6c34\u74f6\u5ea7",
         "contact": "qq467665317",
-        "gender": "\u7537",
+        "gender": "\u5973",
         "hobby": "\u53d1\u5446",
-        "job": "\u4ea7\u54c1\u5e03\u9053\u8005",
-        "name": "\u9648\u5347",
+        "job": "\u52a9\u7406",
+        "name": "\u83f2\u83f2",
         "voice": "XIAO_XIAO",
         "zodiac": "\u86c7"
     },
@@ -15,18 +15,19 @@
         "QnA": "qa_demo.xlsx",
         "maxInteractTime": 15,
         "perception": {
-            "chat": 7,
+            "chat": 10,
             "follow": 10,
-            "gift": 50,
+            "gift": 10,
             "indifferent": 10,
             "join": 10
         },
-        "playSound": true
+        "playSound": true,
+        "visualization": false
     },
     "items": [
         {
-            "QnA": "qa_demo.xlsx",
-            "demoVideo": "C:/Demo.mp4",
+            "QnA": "",
+            "demoVideo": "",
             "enabled": false,
             "explain": {
                 "character": "",

@@ -42,6 +42,14 @@ def api_submit():
     data = request.values.get('data')
     # print(data)
     config_data = json.loads(data)
+    if(config_data['config']['source']['record']['enabled']):
+        config_data['config']['source']['record']['channels'] = 0
+        audio = pyaudio.PyAudio()
+        for i in range(audio.get_device_count()):
+            devInfo = audio.get_device_info_by_index(i)
+            if devInfo['name'].find(config_data['config']['source']['record']['device']) >= 0 and devInfo['hostApi'] == 0:
+                 config_data['config']['source']['record']['channels'] = devInfo['maxInputChannels']
+
     config_util.save_config(config_data['config'])
 
 

@@ -9,8 +9,7 @@ from core import wsa_server
 from scheduler.thread_manager import MyThread
 from utils import util
 from utils import config_util as cfg
-
-
+import numpy as np
 # 启动时间 (秒)
 _ATTACK = 0.2
 
@@ -105,6 +104,11 @@ class Recorder:
             data = stream.read(1024, exception_on_overflow=False)
             if not data:
                 continue
+            #只获取第一声道
+            data = np.frombuffer(data, dtype=np.int16)
+            data = np.reshape(data, (-1, cfg.config['source']['record']['channels']))  # reshaping the array to split the channels
+            mono = data[:, 0]  # taking the first channel
+            data = mono.tobytes()  
 
             level = audioop.rms(data, 2)
             if len(self.__history_data) >= 5:
@@ -147,10 +151,7 @@ class Recorder:
                         self.__waitingResult(self.__aLiNls)
             if not soon and isSpeaking:
                 self.__aLiNls.send(data)
-
-        
-        
-        
+     
 
     def set_processing(self, processing):
         self.__processing = processing

@@ -28,6 +28,8 @@ UE5工程：https://github.com/xszyou/fay-ue5
 
 ![](images/controller.png)
 
+助理版Fay控制器使用：语音沟通，语音和文字回复；文字沟通，文字回复。
+
 
 
 ### **PC远程助理**   [`PC demo`](https://github.com/TheRamU/Fay/tree/main/python_connector_demo)
@@ -45,8 +47,11 @@ UE5工程：https://github.com/xszyou/fay-ue5
 
 下载工程: [https://pan.baidu.com/s/1RBo2Pie6A5yTrCf1cn_Tuw?pwd=ck99](https://pan.baidu.com/s/1RBo2Pie6A5yTrCf1cn_Tuw?pwd=ck99)
 
-
 下载windows运行包: [https://pan.baidu.com/s/1CsJ647uV5rS2NjQH3QT0Iw?pwd=s9s8](https://pan.baidu.com/s/1CsJ647uV5rS2NjQH3QT0Iw?pwd=s9s8)
+
+
+
+
 
 ![](images/UElucky.png)
 
@@ -105,7 +110,6 @@ UE5工程：https://github.com/xszyou/fay-ue5
 │   ├── fay_core.py         # 数字人核心模块
 │   ├── recorder.py         # 录音器
 │   ├── tts_voice.py        # 语音生源枚举
-│   ├── viewer.py           # 抖音直播间接入模块
 │   └── wsa_server.py       # WebSocket 服务端
 ├── gui                     # 图形界面
 │   ├── flask_server.py     # Flask 服务端
@@ -123,6 +127,14 @@ UE5工程：https://github.com/xszyou/fay-ue5
 
 
 ## **三、升级日志**
+
+**2023.06.14：**
+
++ 解决多声道麦克风兼容问题；
++ 重构fay_core.py及fay_booter.py代码；
++ ui适应布局调整；
++ 恢复声音选择；
++ ”思考中...“显示逻辑修复。
 
 **2023.05.27：**
 

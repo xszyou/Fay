@@ -12,6 +12,8 @@ from gui.window import MainWindow
 from utils import config_util
 from scheduler.thread_manager import MyThread
 from core.content_db import Content_Db
+import sys
+sys.setrecursionlimit(sys.getrecursionlimit() * 5)
 
 def __clear_samples():
     if not os.path.exists("./samples"):
@@ -27,8 +29,6 @@ def __clear_songs():
     for file_name in os.listdir('./songs'):
         if file_name.endswith('.mp3'):
             os.remove('./songs/' + file_name)
-
-
 
 
 if __name__ == '__main__':

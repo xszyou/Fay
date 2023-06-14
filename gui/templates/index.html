@@ -20,8 +20,7 @@
     <title>Fay</title>
     <style>
         .container {
-            max-height: calc(100vh - 55px);
-            min-height: 953px;
+            height: 953px;
             width: 913px;
             border-radius: 4px;
             border: 0.5px solid #e0e0e0;
@@ -240,7 +239,15 @@
                                 </div>
                                 <div class="character_right">
                                     <ul>
-                                       
+                                        <li>
+                                            <p>声音选择：{{attribute_voice}}</p>
+                                            <el-select v-model="attribute_voice" placeholder="请选择">
+                                                <el-option v-for="item in voice_list" :key="item.value"
+                                                    :label="item.label" :value="item.value">
+                                                </el-option>
+                                            </el-select>
+                                        </li>
+                                        <br>
                                         <li>
                                             <p>敏感度：</p>
                                             <el-slider v-model="interact_perception_follow"></el-slider>
@@ -263,10 +270,7 @@
                             <div class="character_box">
                                 <p>Q&A文件：</p>
                                 <el-input v-model="interact_QnA" placeholder="请输入内容"></el-input>
-                                <!--                            <el-upload class="upload-demo" action="http://127.0.0.1:5000/"-->
-                                <!--                                       :on-success="handlePreview">-->
-                                <!--                                <el-input v-model="interact_QnA" placeholder="请输入内容"></el-input>-->
-                                <!--                            </el-upload>-->
+      
                             </div>
                         </div>
                     </div>
@@ -350,31 +354,10 @@
             </div>
         </div>
     </div>
-    <script>
-        // function send() {
-        //     let text = document.querySelector('#textarea').value;
-        //     if (!text) {
-        //         alert('请输入内容');
-        //         return;
-        //     }
-        //     // text = text.replace(/\s/g, "<br/>");
-        //     text = text.replace(/\n/g, "<br/>");
-        //     text = text.replace(/\r\n/g, "<br/>");
-        //     let item = document.createElement('div');
-        //     item.className = 'item item-right';
-        //     item.innerHTML = `<div class="bubble bubble-right">${text}</div><div class="avatar"><img src="{{ url_for('static',filename='from.jpg') }}" /></div>`;
-        //     document.querySelector('.content').appendChild(item);
-        //     document.querySelector('#textarea').value = '';
-        //     document.querySelector('#textarea').focus();
-        //     //滚动条置底
-        //     let height = document.querySelector('.content').scrollHeight;
-        //     document.querySelector(".content").scrollTop = height;
-        // }
-    </script>
+
 </body>
 <!-- 开发环境vue.js -->
 <script src="{{ url_for('static',filename='js/vue.js') }}"></script>
-<!--<script src="https://cdn.jsdelivr.net/npm/vue@2/dist/vue.js"></script>-->
 <!-- 发行环境vue.js -->
 <!-- <script src="https://cdn.jsdelivr.net/npm/vue@2"></script> -->
 <!-- 引入element-ui组件库 -->

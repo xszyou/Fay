@@ -1,51 +1,16 @@
 import time
-from io import BytesIO
-import socket
 import pyaudio
-import numpy as np
-import scipy.io.wavfile as wav
-import wave
-
 from core.interact import Interact
 from core.recorder import Recorder
 from core.fay_core import FeiFei
-from core.viewer import Viewer
 from scheduler.thread_manager import MyThread
 from utils import util, config_util, stream_util, ngrok_util
 from core.wsa_server import MyServer
 
-
-
-
 feiFei: FeiFei = None
-viewerListener: Viewer = None
 recorderListener: Recorder = None
 
 __running = True
-
-
-class ViewerListener(Viewer):
-
-    def __init__(self):
-        super().__init__()
-
-    def on_interact(self, interact: Interact, event_time):
-        type_names = {
-            1: '发言',
-            2: '进入',
-            3: '送礼',
-            4: '关注'
-        }
-        util.printInfo(1, type_names[interact.interact_type], '{}: {}'.format(interact.data["user"], interact.data["msg"]), event_time)
-        if interact.interact_type == 1:
-            feiFei.last_quest_time = time.time()
-        thr = MyThread(target=feiFei.on_interact, args=[interact])
-        thr.start()
-        thr.join()
-
-    def on_change_state(self, is_live_started):
-        feiFei.set_sleep(not is_live_started)
-        pass
 
 #录制麦克风音频输入并传给aliyun
 class RecorderListener(Recorder):
@@ -54,7 +19,6 @@ class RecorderListener(Recorder):
         self.__device = device
         self.__RATE = 16000
         self.__FORMAT = pyaudio.paInt16
-        self.__CHANNELS = 1
 
         super().__init__(fei)
 
@@ -67,19 +31,23 @@ class RecorderListener(Recorder):
 
     def get_stream(self):
         self.paudio = pyaudio.PyAudio()
-        device_id = self.__findInternalRecordingDevice(self.paudio)
+        device_id,devInfo = self.__findInternalRecordingDevice(self.paudio)
         if device_id < 0:
             return
-        self.stream = self.paudio.open(input_device_index=device_id, rate=self.__RATE, format=self.__FORMAT, channels=self.__CHANNELS, input=True)
+        rate = int(devInfo['defaultSampleRate'])
+        channels = int(devInfo['maxInputChannels'])
+        self.stream = self.paudio.open(input_device_index=device_id, rate=self.__RATE, format=self.__FORMAT, channels=channels, input=True)
         return self.stream
 
     def __findInternalRecordingDevice(self, p):
         for i in range(p.get_device_count()):
             devInfo = p.get_device_info_by_index(i)
             if devInfo['name'].find(self.__device) >= 0 and devInfo['hostApi'] == 0:
-                return i
+                config_util.config['source']['record']['channels'] = devInfo['maxInputChannels']
+                config_util.save_config(config_util.config)
+                return i, devInfo
         util.log(1, '[!] 无法找到内录设备!')
-        return -1
+        return -1, None
     
     def stop(self):
         super().stop()
@@ -119,6 +87,8 @@ class DeviceInputListener(Recorder):
             time.sleep(1)
 
     def on_speaking(self, text):
+        global feiFei
+
         if len(text) > 1:
             interact = Interact("mic", 1, {'user': '', 'msg': text})
             util.printInfo(3, "语音", '{}'.format(interact.data["msg"]), time.time())
@@ -146,12 +116,7 @@ class DeviceInputListener(Recorder):
 
 
 def console_listener():
-    type_names = {
-        1: '发言',
-        2: '进入',
-        3: '送礼',
-        4: '关注'
-    }
+    global feiFei
     while __running:
         text = input()
         args = text.split(' ')
@@ -177,19 +142,9 @@ def console_listener():
             if len(args) == 1:
                 util.log(1, '错误的参数！')
             msg = text[3:len(text)]
-            i = 1
-            try:
-                i = int(msg)
-            except:
-                pass
-            if i < 1:
-                i = 1
-            if i > 4:
-                i = 4
-            util.printInfo(1, type_names[i], '{}: {}'.format('控制台', msg))
-            if i == 1:
-                feiFei.last_quest_time = time.time()
-            interact = Interact("console", i, {'user': '', 'msg': msg})
+            util.printInfo(3, "控制台", '{}: {}'.format('控制台', msg))
+            feiFei.last_quest_time = time.time()
+            interact = Interact("console", 1, {'user': '', 'msg': msg})
             thr = MyThread(target=feiFei.on_interact, args=[interact])
             thr.start()
             thr.join()
@@ -200,16 +155,12 @@ def console_listener():
 #停止服务
 def stop():
     global feiFei
-    global viewerListener
     global recorderListener
     global __running
     global deviceInputListener
 
     util.log(1, '正在关闭服务...')
     __running = False
-    if viewerListener is not None:
-        util.log(1, '正在关闭直播服务...')
-        viewerListener.stop()
     if recorderListener is not None:
         util.log(1, '正在关闭录音服务...')
         recorderListener.stop()
@@ -222,26 +173,21 @@ def stop():
 
 
 def start():
-    # global ws_server
     global feiFei
-    global viewerListener
     global recorderListener
     global __running
     global deviceInputListener
 
     util.log(1, '开启服务...')
     __running = True
+
     util.log(1, '读取配置...')
     config_util.load_config()
-
-
-    
 
     util.log(1, '开启核心服务...')
     feiFei = FeiFei()
     feiFei.start()
 
-    liveRoom = config_util.config['source']['liveRoom']
     record = config_util.config['source']['record']
 
     if record['enabled']:
@@ -265,6 +211,5 @@ def start():
 if __name__ == '__main__':
     ws_server: MyServer = None
     feiFei: FeiFei = None
-    viewerListener: Viewer = None
     recorderListener: Recorder = None
     start()

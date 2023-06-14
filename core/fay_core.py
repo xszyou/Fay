@@ -35,11 +35,10 @@ from ai_module import nlp_VisualGLM as VisualGLM
 #文本消息处理
 def send_for_answer(msg,sendto):
         contentdb = Content_Db()
-        contentdb.add_content('member','send', msg)       
+        contentdb.add_content('member','send',msg)       
         text = ''
         textlist = []
         try:
-            #wsa_server.get_web_instance().add_cmd({"panelMsg": "思考中..."})
             util.log(1, '自然语言处理...')
             tm = time.time()
             cfg.load_config()
@@ -54,23 +53,21 @@ def send_for_answer(msg,sendto):
                     text = chatgpt.question(msg)
                 elif cfg.key_chat_module == 'rasa':
                     textlist = nlp_rasa.question(msg)
-                    text = textlist[0]['text']    
+                    text = textlist[0]['text']  
                 elif cfg.key_chat_module == "VisualGLM":
-                    text = VisualGLM.question(msg)
+                    text = VisualGLM.question(msg)  
+                
 
                 else:
                     raise RuntimeError('讯飞key、yuan key、chatgpt key都没有配置！')    
                 util.log(1, '自然语言处理完成. 耗时: {} ms'.format(math.floor((time.time() - tm) * 1000)))
                 if text == '哎呀，你这么说我也不懂，详细点呗' or text == '':
                     util.log(1, '[!] 自然语言无语了！')
-                    text = '哎呀，你这么说我也不懂，详细点呗'
-                    # wsa_server.get_web_instance().add_cmd({"panelMsg": ""})
-                    
+                    text = '哎呀，你这么说我也不懂，详细点呗'                    
         except BaseException as e:
             print(e)
             util.log(1, '自然语言处理错误！')
             text = '哎呀，你这么说我也不懂，详细点呗'
-            # wsa_server.get_web_instance().add_cmd({"panelMsg": ""})
                 
         now = datetime.now()
         timetext = str(now.strftime("%Y-%m-%d %H:%M:%S"))
@@ -183,10 +180,10 @@ class FeiFei:
         self.playing = False
         wsa_server.get_web_instance().add_cmd({"panelMsg": ""})
 
+    #检查是否命中指令或q&a
     def __get_answer(self, interleaver, text):
-
         if interleaver == "mic":
-            # 命令
+            #指令
             keyword = self.__get_keyword(self.command_keyword, text)
             if keyword is not None:
                 if keyword == "playSong":
@@ -225,34 +222,7 @@ class FeiFei:
         answer = self.__get_keyword(self.__read_qna(config_util.config['interact']['QnA']), text)
         if answer is not None:
             return answer
-
-        items = self.__get_item_list()
-
-        if len(items) > 0:
-            item = items[self.item_index]
-
-            # 跨商品物品问答匹配
-            for ite in items:
-                name = ite["name"]
-                if name != item["name"]:
-                    if name in text or self.__string_similar(text, name) > 0.6:
-                        item = ite
-                        break
-
-            # 商品介绍问答
-            keyword = self.__get_keyword(self.explain_keyword, text)
-            if keyword is not None:
-                try:
-                    return item["explain"][keyword]
-                except BaseException as e:
-                    print(e)
-
-            # 商品问答
-            answer = self.__get_keyword(self.__read_qna(item["QnA"]), text)
-            if answer is not None:
-                return answer
-
-            return None
+        
 
     def __get_list_answer(self, answers, text):
         last_similar = 0
@@ -272,26 +242,19 @@ class FeiFei:
         return None
 
     def __auto_speak(self):
-        i = 0
-        script_index = 0
         while self.__running:
             time.sleep(0.8)
             if self.speaking or self.sleep:
                 continue
 
             try:
-                # 简化逻辑：默认执行带货脚本，带货脚本执行其间有人互动，则执行完当前脚本就回应最后三条互动，回应完继续执行带货脚本
-                if i <= 3 and len(self.interactive) > i:
-                    i += 1
-                    interact: Interact = self.interactive[0 - i]
-                    if interact.interact_type == 1:
-                        self.q_msg = interact.data["msg"]
+                if len(self.interactive) > 0:
+                    interact: Interact = self.interactive.pop()
                     index = interact.interact_type
-                    # print("index:{0}".format(index))
-                    user_name = interact.data["user"]
-                    # self.__isExecute = True #!!!!
-
                     if index == 1:
+                        self.q_msg = interact.data["msg"]
+
+                        #fay eyes
                         fay_eyes = yolov8.new_instance()            
                         if fay_eyes.get_status():#YOLO正在运行
                             person_count, stand_count, sit_count = fay_eyes.get_counts()
@@ -299,15 +262,14 @@ class FeiFei:
                                  wsa_server.get_web_instance().add_cmd({"panelMsg": "不是有且只有一个人，不互动"})
                                  continue
 
-                        answer = self.__get_answer(interact.interleaver, self.q_msg)
+                        answer = self.__get_answer(interact.interleaver, self.q_msg)#确定是否命中指令或q&a
                         if(self.muting): #静音指令正在执行
                             wsa_server.get_web_instance().add_cmd({"panelMsg": "静音指令正在执行，不互动"})
                             continue
-                        
+
                         contentdb = Content_Db()    
                         contentdb.add_content('member','speak',self.q_msg)
                         wsa_server.get_web_instance().add_cmd({"panelReply": {"type":"member","content":self.q_msg}})
-
                         text = ''
                         textlist = []
                         if answer is None:
@@ -327,7 +289,6 @@ class FeiFei:
                                     text = textlist[0]['text']
                                 elif cfg.key_chat_module == "VisualGLM":
                                     text = VisualGLM.question(self.q_msg)
-
                                 else:
                                     raise RuntimeError('讯飞key、yuan key、chatgpt key都没有配置！')    
                                 util.log(1, '自然语言处理完成. 耗时: {} ms'.format(math.floor((time.time() - tm) * 1000)))
@@ -340,14 +301,9 @@ class FeiFei:
                                 util.log(1, '自然语言处理错误！')
                                 wsa_server.get_web_instance().add_cmd({"panelMsg": ""})
                                 continue
-                        elif answer != 'NO_ANSWER':
+                        elif answer != 'NO_ANSWER': #语音内容没有命中指令,回复q&a内容
                             text = answer
-
-                        if len(user_name) == 0:
-                            self.a_msg = text
-                        else:
-                            self.a_msg = user_name + '，' + text
-                        
+                        self.a_msg = text
                         contentdb.add_content('fay','speak',self.a_msg)
                         wsa_server.get_web_instance().add_cmd({"panelReply": {"type":"fay","content":self.a_msg}})
                         if len(textlist) > 1:
@@ -356,130 +312,19 @@ class FeiFei:
                                 contentdb.add_content('fay','speak',textlist[i]['text'])
                                 wsa_server.get_web_instance().add_cmd({"panelReply": {"type":"fay","content":textlist[i]['text']}})
                                 i+= 1
-
-                    elif index == 2:
-                        self.a_msg = ['我们的直播间越来越多人咯', '感谢{}的到来'.format(user_name), '欢印{}来到我们的直播间'.format(user_name)][
-                            random.randint(0, 2)]
-
-                    elif index == 3:
-                        gift = interact.data["gift"]
-                        self.a_msg = '感谢感谢，感谢 {}送给我的{}个{}'.format(interact.data["user"], interact.data["amount"], gift[1])
-
-                    elif index == 4:
-                        self.a_msg = '感谢关注'
-
-                    elif index == 5:
-                        msg = ""
-                        for i in range(0, len(interact.data["gifts"])):
-                            user = interact.data["gifts"][i]["user"]
-                            gift = interact.data["gifts"][i]["gift"]
-                            amount = interact.data["gifts"][i]["amount"]
-                            msg += "{}送给我的{}个{}".format(user, amount, gift[1])
-                        self.a_msg = '感谢感谢，感谢' + msg
+                    wsa_server.get_web_instance().add_cmd({"panelMsg": self.a_msg})
                     self.last_speak_data = self.a_msg
                     self.speaking = True
                     MyThread(target=self.__say, args=['interact']).start()
-                else:
-                    i = 0
-                    self.interactive.clear()
-                    config_items = config_util.config["items"]
-                    items = []
-                    for item in config_items:
-                        if item["enabled"]:
-                            items.append(item)
-                    if len(items) > 0:
-                        if self.item_index >= len(items):
-                            self.item_index = 0
-                            script_index = 0
-                        item = items[self.item_index]
-                        script_index = script_index + 1
-                        explain_key = self.__get_explain_from_index(script_index)
-                        if explain_key is None:
-                            self.item_index = self.item_index + 1
-                            script_index = 0
-                            if self.item_index >= len(items):
-                                self.item_index = 0
-                            explain_key = self.__get_explain_from_index(script_index)
-                        explain = item["explain"][explain_key]
-                        if len(explain) > 0:
-                            self.a_msg = explain
-                            self.last_speak_data = self.a_msg
-                            self.speaking = True
-                            MyThread(target=self.__say, args=['script']).start()
+
             except BaseException as e:
                 print(e)
 
-    def __get_item_list(self) -> list:
-        items = []
-        for item in config_util.config["items"]:
-            if item["enabled"]:
-                items.append(item)
-        return items
-
-    def __get_explain_from_index(self, index: int):
-        if index == 0:
-            return "character"
-        if index == 1:
-            return "discount"
-        if index == 2:
-            return "intro"
-        if index == 3:
-            return "price"
-        if index == 4:
-            return "promise"
-        if index == 5:
-            return "usage"
-        return None
-
     def on_interact(self, interact: Interact):
-
-        # 合并同类交互
-        # 进入
-        if interact.interact_type == 2:
-            itr = self.__get_interactive(2)
-            if itr is None:
-                self.interactive.append(interact)
-            else:
-                newItr = (2, itr.data["user"] + ', ' + interact.data["user"], itr.data["msg"])
-                self.interactive.remove(itr)
-                self.interactive.append(newItr)
-
-        # 送礼
-        elif interact.interact_type == 3:
-            gifts = []
-            rm_list = []
-            for itr in self.interactive:
-                if itr.interact_type == 3:
-                    gifts.append({
-                        "user": itr.data["user"],
-                        "gift": itr.data["gift"],
-                        "amount": itr.data["amount"]
-                    })
-                    rm_list.append(itr)
-                elif itr.interact_type == 5:
-                    for gift in itr.data["gifts"]:
-                        gifts.append(gift)
-                    rm_list.append(itr)
-            if len(rm_list) > 0:
-                for itr in rm_list:
-                    self.interactive.remove(itr)
-                self.interactive.append(Interact("live", 5, {"gifts": gifts}))
-
-        # 关注
-        elif interact.interact_type == 4:
-            if self.__get_interactive(2) is None:
-                self.interactive.append(interact)
-
-        else:
-            self.interactive.append(interact)
+        self.interactive.append(interact)
         MyThread(target=self.__update_mood, args=[interact.interact_type]).start()
         MyThread(target=storer.storage_live_interact, args=[interact]).start()
 
-    def __get_interactive(self, interactType) -> Interact:
-        for interact in self.interactive:
-            if interact is Interact and interact.interact_type == interactType:
-                return interact
-        return None
 
     # 适应模型计算
     def __fay(self, index):
@@ -529,7 +374,7 @@ class FeiFei:
         if self.mood <= -1:
             self.mood = -1
 
-    def __get_mood(self):
+    def __get_mood_voice(self):
         voice = tts_voice.get_voice_of(config_util.config["attribute"]["voice"])
         if voice is None:
             voice = EnumVoice.XIAO_XIAO
@@ -547,14 +392,13 @@ class FeiFei:
             sayType = styleList["cheerful"]
         return sayType
 
-    # 合成声音，加上type代表是脚本还是互动
+    # 合成声音
     def __say(self, styleType):
         try:
             if len(self.a_msg) < 1:
                 self.speaking = False
             else:
-                # print(self.__get_mood().name + self.a_msg)
-                util.printInfo(1, '菲菲', '({}) {}'.format(self.__get_mood(), self.a_msg))
+                util.printInfo(1, '菲菲', '({}) {}'.format(self.__get_mood_voice(), self.a_msg))
                 MyThread(target=storer.storage_live_interact, args=[Interact('Fay', 0, {'user': 'Fay', 'msg': self.a_msg})]).start()
                 util.log(1, '合成音频...')
                 tm = time.time()
@@ -562,14 +406,13 @@ class FeiFei:
                 if not config_util.config["interact"]["playSound"]: # 非展板播放
                     content = {'Topic': 'Unreal', 'Data': {'Key': 'text', 'Value': self.a_msg}}
                     wsa_server.get_instance().add_cmd(content)
-                result = self.sp.to_sample(self.a_msg, self.__get_mood())
+                result = self.sp.to_sample(self.a_msg, self.__get_mood_voice())
                 util.log(1, '合成音频完成. 耗时: {} ms 文件:{}'.format(math.floor((time.time() - tm) * 1000), result))
                 if result is not None:            
-                    MyThread(target=self.__send_audio, args=[result, styleType]).start()
+                    MyThread(target=self.__send_or_play_audio, args=[result, styleType]).start()
                     return result
         except BaseException as e:
             print(e)
-        # print("tts失败！！！！！！！！！！！！！")
         self.speaking = False
         return None
 
@@ -579,7 +422,8 @@ class FeiFei:
         pygame.mixer.music.load(file_url)
         pygame.mixer.music.play()
 
-    def __send_audio(self, file_url, say_type):
+
+    def __send_or_play_audio(self, file_url, say_type):
         try:
             audio_length = eyed3.load(file_url).info.time_secs #mp3音频长度
             # with wave.open(file_url, 'rb') as wav_file: #wav音频长度
@@ -605,14 +449,11 @@ class FeiFei:
                         util.log(1, "远程音频发送完成：{}".format(total))
                     except socket.error as serr:
                         util.log(1,"远程音频输入输出设备已经断开：{}".format(serr))
-
-
                     
-                wsa_server.get_web_instance().add_cmd({"panelMsg": self.a_msg})
-                time.sleep(audio_length + 0.5)
-                wsa_server.get_web_instance().add_cmd({"panelMsg": ""})
-                if config_util.config["interact"]["playSound"]:
-                    util.log(1, '结束播放！')
+            time.sleep(audio_length + 0.5)
+            wsa_server.get_web_instance().add_cmd({"panelMsg": ""})
+            if config_util.config["interact"]["playSound"]:
+                util.log(1, '结束播放！')
             self.speaking = False
         except Exception as e:
             print(e)
@@ -642,50 +483,12 @@ class FeiFei:
         except Exception as err:
             pass
 
-    def __waiting_speaking(self, file_url):
-        try:
-            time.sleep(5)
-            print('[' + str(int(time.time())) + '][菲菲] [S] [开始发言]')
-            with wave.open(file_url, 'rb') as wav_file:
-                wav_length = wav_file.getnframes() / float(wav_file.getframerate())
-            time.sleep(wav_length)
-            self.last_interact_time = time.time()
-            self.speaking = False
-            print('[' + str(int(time.time())) + '][菲菲] [E] [结束发言]')
-            time.sleep(30)
-            os.remove(file_url)
-        except:
-            self.last_interact_time = time.time()
-            self.speaking = False
-
-    
-
-
-
-    # 冷场情绪更新
-    def __update_mood_runnable(self):
-        while self.__running:
-            time.sleep(10)
-            update = config_util.config["interact"]["perception"]["indifferent"] / 100
-            if len(self.interactive) < 1:
-                if self.mood > 0:
-                    if self.mood > update:
-                        self.mood = self.mood - update
-                    else:
-                        self.mood = 0
-                elif self.mood < 0:
-                    if self.mood < -update:
-                        self.mood = self.mood + update
-                    else:
-                        self.mood = 0
-
     def set_sleep(self, sleep):
         self.sleep = sleep
 
     def start(self):
         MyThread(target=self.__send_mood).start()
         MyThread(target=self.__auto_speak).start()
-        MyThread(target=self.__update_mood_runnable).start()
 
     def stop(self):
         self.__running = False

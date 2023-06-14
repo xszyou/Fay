@@ -540,6 +540,11 @@ new Vue({
                             //滚动条置底
                             let height = document.querySelector('.content').scrollHeight;
                             document.querySelector(".content").scrollTop = height;
+                            this.timer = setTimeout(()=>{   //设置延迟执行
+                                //滚动条置底
+                               let height = document.querySelector('.content').scrollHeight;
+                               document.querySelector(".content").scrollTop = height;
+                           },1000)
                         }
                     } catch (e) {
                         console.log(e);
