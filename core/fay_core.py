@@ -5,6 +5,7 @@ import random
 import time
 import wave
 import socket
+import json 
 
 import eyed3
 from openpyxl import load_workbook
@@ -31,6 +32,12 @@ from ai_module import nlp_rasa
 from ai_module import nlp_gpt
 from ai_module import yolov8
 from ai_module import nlp_VisualGLM as VisualGLM
+
+import platform
+if platform.system() == "Windows":
+    import sys
+    sys.path.append("test/ovr_lipsync")
+    from test_olipsync import LipSyncGenerator
 
 #文本消息处理
 def send_for_answer(msg,sendto):
@@ -326,7 +333,7 @@ class FeiFei:
         MyThread(target=storer.storage_live_interact, args=[interact]).start()
 
 
-    # 适应模型计算
+    # 适应模型计算(用于学习真人的性格特质，开源版本暂不使用)
     def __fay(self, index):
         if 0 < index < 8:
             self.X[0][index] += 1
@@ -432,8 +439,17 @@ class FeiFei:
             if config_util.config["interact"]["playSound"]: # 展板播放
                 self.__play_sound(file_url)
             else:#发送音频给ue和socket
+                #推送ue
                 content = {'Topic': 'Unreal', 'Data': {'Key': 'audio', 'Value': os.path.abspath(file_url), 'Time': audio_length, 'Type': say_type}}
+                #计算lips
+                if platform.system() == "Windows":
+                    lip_sync_generator = LipSyncGenerator()
+                    viseme_list = lip_sync_generator.generate_visemes(os.path.abspath(file_url))
+                    consolidated_visemes = lip_sync_generator.consolidate_visemes(viseme_list)
+                    content["Data"]["Lips"] = consolidated_visemes
                 wsa_server.get_instance().add_cmd(content)
+
+                #推送远程音频
                 if self.deviceConnect is not None:
                     try:
                         self.deviceConnect.send(b'\x00\x01\x02\x03\x04\x05\x06\x07\x08') # 发送音频开始标志，同时也检查设备是否在线

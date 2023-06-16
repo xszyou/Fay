@@ -1,0 +1,6 @@
+# ninja log v5
+0	447	7067027683402536	CMakeFiles/ProcessWAV.dir/ProcessWAV.cpp.obj	b28391b2cb7a7212
+449	1330	7067027691806813	ProcessWAV.exe	3ecd2b805f4edc42
+0	19	0	clean	f0859c636203ad58
+0	915	7067031389568287	CMakeFiles/ProcessWAV.dir/ProcessWAV.cpp.obj	b28391b2cb7a7212
+915	1344	7067031392674182	ProcessWAV.exe	3ecd2b805f4edc42
