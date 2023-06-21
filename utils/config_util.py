@@ -47,6 +47,8 @@ def load_config():
     global key_chat_module
     global key_gpt_access_token
     global key_gpt_conversation_id
+    global key_lingju_api_key
+    global key_lingju_api_authcode
 
     global ASR_mode
     global local_asr_ip 
@@ -70,6 +72,8 @@ def load_config():
     key_chat_module = system_config.get('key', 'chat_module')
     key_gpt_access_token = system_config.get('key', 'gpt_access_token')
     key_gpt_conversation_id = system_config.get('key', 'gpt_conversation_id')
+    key_lingju_api_key = system_config.get('key', 'lingju_api_key')
+    key_lingju_api_authcode = system_config.get('key', 'lingju_api_authcode')
 
     ASR_mode = system_config.get('key', 'ASR_mode')
     local_asr_ip = system_config.get('key', 'local_asr_ip')
