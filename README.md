@@ -12,7 +12,7 @@ Fay数字人助理版是fay开源项目的重要分支，专注于构建智能�
 
 
 
-灵聚NLP api(支持GPT3.5及多应用)：b站"Fay数字人集成灵聚NLP api(支持GPT3.5及多应用)"
+灵聚NLP api(支持GPT3.5及多应用)：https://m.bilibili.com/video/BV1NW4y1D76a
 
 集成本地唇型算法：https://www.bilibili.com/video/BV1Zh4y1g7o7/?buvid=XXDD0B5DD6C43C070DF9E7E67930FC48B24DF&is_story_h5=false&mid=Pvwl%2Ft1ahPM726k1L4%2FnRA%3D%3D&plat_id=202&share_from=ugc&share_medium=android&share_plat=android&share_source=WEIXIN&share_tag=s_i&timestamp=1686926382&unique_k=Jdqazy3&up_id=2111554564
 
