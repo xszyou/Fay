@@ -109,8 +109,9 @@ Fay（服务端）与数字人的通讯接口: [`ws://127.0.0.1:10002`](ws://127
 │   ├── ms_tts_sdk.py       # 微软 文本转语音
 │   ├── nlp_lingju.py       # 灵聚 人机交互-自然语言处理
 │   ├── xf_aiui.py          # 讯飞 人机交互-自然语言处理
-│   ├── chatgpt.py          # gpt3.5对接
-│   ├── yuan_1_0.py         # 浪潮.源大模型对接
+│   ├── nlp_gpt.py          # gpt api对接
+│   ├── nlp_chatgpt.py      # chat.openai.com逆向对接
+│   ├── nlp_yuan.py         # 浪潮.源大模型对接
 │   ├── nlp_rasa.py         # ChatGLM-6B的基础上前置Rasa会话管理(强烈推荐)
 │   ├── nlp_VisualGLM.py    # 对接多模态大语言模型VisualGLM-6B
 │   ├── yolov8.py           # yolov8资态识别
@@ -141,6 +142,12 @@ Fay（服务端）与数字人的通讯接口: [`ws://127.0.0.1:10002`](ws://127
 
 
 ## **三、升级日志**
+**2023.06.28：**
+
++ 重构NLP模块管理逻辑，便于自由扩展；
++ gpt：拆分为ChatGPT及GPT、更换新的GPT接口、可单独配置代理服务器；
++ 指定yolov8包版本，解决yolo不兼容问题；
++ 修复：自言自语bug、接收多个待处理消息bug。
 
 **2023.06.21：**
 

@@ -21,6 +21,7 @@ key_chatgpt_api_key = None
 key_chat_module = None
 key_gpt_access_token = None
 key_gpt_conversation_id = None
+proxy_config = None
 
 ASR_mode = None
 local_asr_ip = None 
@@ -45,6 +46,7 @@ def load_config():
     global key_gpt_conversation_id
     global key_lingju_api_key
     global key_lingju_api_authcode
+    global proxy_config
 
     global ASR_mode
     global local_asr_ip 
@@ -72,6 +74,8 @@ def load_config():
     ASR_mode = system_config.get('key', 'ASR_mode')
     local_asr_ip = system_config.get('key', 'local_asr_ip')
     local_asr_port = system_config.get('key', 'local_asr_port')
+
+    proxy_config = system_config.get('key', 'proxy_config')
 
     config = json.load(codecs.open('config.json', encoding='utf-8'))
 

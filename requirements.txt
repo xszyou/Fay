@@ -1,5 +1,5 @@
 requests~=2.26.0    
-numpy~=1.22.0
+numpy
 pyaudio~=0.2.11
 websockets~=10.2
 ws4py~=0.5.1

@@ -1,5 +1,4 @@
-from revChatGPT.V1 import Chatbot
-from core.content_db import Content_Db
+from revChatGPT.V3 import Chatbot
 from utils import config_util as cfg
 import time 
 
@@ -7,19 +6,8 @@ count = 0
 def question(cont):
     global count
     try:
-        chatbot = Chatbot(config={
-            "access_token": cfg.key_gpt_access_token,
-            "paid": False,
-            "collect_analytics": True,
-            "model": "gpt-4",
-            "conversation_id":cfg.key_gpt_conversation_id
-            },conversation_id=cfg.key_gpt_conversation_id,
-            parent_id=None)
-
-        prompt = cont
-        response = ""
-        for data in chatbot.ask(prompt):
-            response = data["message"]
+        chatbot = Chatbot(proxy = cfg.proxy_config, api_key = cfg.key_chatgpt_api_key)
+        response = chatbot.ask(cont)
         count = 0
         return response
     except Exception as e:

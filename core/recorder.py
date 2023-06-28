@@ -28,7 +28,7 @@ class Recorder:
         self.__processing = False
         self.__history_level = []
         self.__history_data = []
-        self.__dynamic_threshold = 0.35 # 声音识别的音量阈值
+        self.__dynamic_threshold = 0.7 # 声音识别的音量阈值
 
         self.__MAX_LEVEL = 25000
         self.__MAX_BLOCK = 100

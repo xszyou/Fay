@@ -21,64 +21,77 @@ from core.interact import Interact
 from core.tts_voice import EnumVoice
 from scheduler.thread_manager import MyThread
 from utils import util, storer, config_util
-from ai_module import yuan_1_0
-from ai_module import chatgpt
+
+
 import pygame
 from utils import config_util as cfg
 from core.content_db import Content_Db
 from datetime import datetime
 from ai_module import nlp_rasa
+from ai_module import nlp_chatgpt
 from ai_module import nlp_gpt
+from ai_module import nlp_yuan
 from ai_module import yolov8
-from ai_module import nlp_VisualGLM as VisualGLM
+from ai_module import nlp_VisualGLM
 
 import platform
 if platform.system() == "Windows":
     import sys
     sys.path.append("test/ovr_lipsync")
     from test_olipsync import LipSyncGenerator
+    
 from ai_module import nlp_lingju
+
+modules = {
+    "nlp_yuan": nlp_yuan, 
+    "nlp_gpt": nlp_gpt,
+    "nlp_chatgpt": nlp_chatgpt,
+    "nlp_rasa": nlp_rasa,
+    "nlp_VisualGLM": nlp_VisualGLM,
+    "nlp_lingju": nlp_lingju
+}
+
+
+def determine_nlp_strategy(sendto,msg):
+    text = ''
+    textlist = []
+    try:
+        util.log(1, '自然语言处理...')
+        tm = time.time()
+        cfg.load_config()
+        if sendto == 2:
+            text = nlp_chatgpt.question(msg)
+        else:
+            module_name = "nlp_" + cfg.key_chat_module
+            selected_module = modules.get(module_name)
+            if selected_module is None:
+                raise RuntimeError('灵聚key、yuan key、gpt key都没有配置！')   
+            if cfg.key_chat_module == 'rasa':
+                textlist = selected_module.question(msg)
+                text = textlist[0]['text'] 
+            else:
+                text = selected_module.question(msg)  
+            util.log(1, '自然语言处理完成. 耗时: {} ms'.format(math.floor((time.time() - tm) * 1000)))
+            if text == '哎呀，你这么说我也不懂，详细点呗' or text == '':
+                util.log(1, '[!] 自然语言无语了！')
+                text = '哎呀，你这么说我也不懂，详细点呗'  
+    except BaseException as e:
+        print(e)
+        util.log(1, '自然语言处理错误！')
+        text = '哎呀，你这么说我也不懂，详细点呗'   
+
+    return text,textlist
+    
+    
+
+
 
 #文本消息处理
 def send_for_answer(msg,sendto):
         contentdb = Content_Db()
         contentdb.add_content('member','send',msg)       
-        text = ''
-        textlist = []
-        try:
-            util.log(1, '自然语言处理...')
-            tm = time.time()
-            cfg.load_config()
-            if sendto == 2:
-                text = nlp_gpt.question(msg)
-            else:
-
-                if cfg.key_chat_module == 'yuan':
-                    text = yuan_1_0.question(msg)
-                elif cfg.key_chat_module == 'chatgpt':
-                    text = chatgpt.question(msg)
-                elif cfg.key_chat_module == 'rasa':
-                    textlist = nlp_rasa.question(msg)
-                    text = textlist[0]['text']  
-                elif cfg.key_chat_module == "VisualGLM":
-                    text = VisualGLM.question(msg)  
-                elif cfg.key_chat_module == "lingju":
-                    text = nlp_lingju.question(msg)  
+        text,textlist = determine_nlp_strategy(sendto,msg)
                 
-
-                else:
-                    raise RuntimeError('灵聚key、yuan key、gpt key都没有配置！')    
-                util.log(1, '自然语言处理完成. 耗时: {} ms'.format(math.floor((time.time() - tm) * 1000)))
-                if text == '哎呀，你这么说我也不懂，详细点呗' or text == '':
-                    util.log(1, '[!] 自然语言无语了！')
-                    text = '哎呀，你这么说我也不懂，详细点呗'                    
-        except BaseException as e:
-            print(e)
-            util.log(1, '自然语言处理错误！')
-            text = '哎呀，你这么说我也不懂，详细点呗'
-                
-        now = datetime.now()
-        timetext = str(now.strftime("%Y-%m-%d %H:%M:%S"))
         contentdb.add_content('fay','send',text)
         wsa_server.get_web_instance().add_cmd({"panelReply": {"type":"fay","content":text}})
         if len(textlist) > 1:
@@ -88,6 +101,8 @@ def send_for_answer(msg,sendto):
                   wsa_server.get_web_instance().add_cmd({"panelReply": {"type":"fay","content":textlist[i]['text']}})
                   i+= 1
         return text
+
+
 class FeiFei:
     def __init__(self):
         pygame.mixer.init()
@@ -238,8 +253,8 @@ class FeiFei:
                         fay_eyes = yolov8.new_instance()            
                         if fay_eyes.get_status():#YOLO正在运行
                             person_count, stand_count, sit_count = fay_eyes.get_counts()
-                            if person_count != 1: #不是有且只有一个人，不互动
-                                 wsa_server.get_web_instance().add_cmd({"panelMsg": "不是有且只有一个人，不互动"})
+                            if person_count < 1: #看不到人，不互动
+                                 wsa_server.get_web_instance().add_cmd({"panelMsg": "看不到人，不互动"})
                                  continue
 
                         answer = self.__get_answer(interact.interleaver, self.q_msg)#确定是否命中指令或q&a
@@ -252,35 +267,10 @@ class FeiFei:
                         wsa_server.get_web_instance().add_cmd({"panelReply": {"type":"member","content":self.q_msg}})
                         text = ''
                         textlist = []
+                        self.speaking = True
                         if answer is None:
-                            try:
-                                wsa_server.get_web_instance().add_cmd({"panelMsg": "思考中..."})
-                                util.log(1, '自然语言处理...')
-                                tm = time.time()
-                                cfg.load_config()
-                                if cfg.key_chat_module == 'yuan':
-                                    text = yuan_1_0.question(self.q_msg)
-                                elif cfg.key_chat_module == 'chatgpt':
-                                    text = chatgpt.question(self.q_msg)
-                                elif cfg.key_chat_module == 'rasa':
-                                    textlist = nlp_rasa.question(self.q_msg)
-                                    text = textlist[0]['text']
-                                elif cfg.key_chat_module == "VisualGLM":
-                                    text = VisualGLM.question(self.q_msg)
-                                elif cfg.key_chat_module == "lingju":
-                                    text = nlp_lingju.question(self.q_msg) 
-                                else:
-                                    raise RuntimeError('灵聚key、yuan key、gpt key都没有配置！')    
-                                util.log(1, '自然语言处理完成. 耗时: {} ms'.format(math.floor((time.time() - tm) * 1000)))
-                                if text == '哎呀，你这么说我也不懂，详细点呗' or text == '':
-                                    util.log(1, '[!] 自然语言无语了！')
-                                    wsa_server.get_web_instance().add_cmd({"panelMsg": ""})
-                                    continue
-                            except BaseException as e:
-                                print(e)
-                                util.log(1, '自然语言处理错误！')
-                                wsa_server.get_web_instance().add_cmd({"panelMsg": ""})
-                                continue
+                            wsa_server.get_web_instance().add_cmd({"panelMsg": "思考中..."})
+                            text,textlist = determine_nlp_strategy(1,self.q_msg)
                         elif answer != 'NO_ANSWER': #语音内容没有命中指令,回复q&a内容
                             text = answer
                         self.a_msg = text
@@ -293,8 +283,7 @@ class FeiFei:
                                 wsa_server.get_web_instance().add_cmd({"panelReply": {"type":"fay","content":textlist[i]['text']}})
                                 i+= 1
                     wsa_server.get_web_instance().add_cmd({"panelMsg": self.a_msg})
-                    self.last_speak_data = self.a_msg
-                    self.speaking = True
+                    self.last_speak_data = self.a_msg               
                     MyThread(target=self.__say, args=['interact']).start()
 
             except BaseException as e:

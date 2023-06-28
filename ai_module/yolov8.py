@@ -100,10 +100,6 @@ class FeiEyes:
                     cv2.putText(operated_frame, f"{res.names[int(cls.item())]}", (int(x1.item()), int(y1.item()) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)        
                 if res.keypoints is not None and res.keypoints.size(0) > 0:  # check if keypoints exist
                     keypoints = res.keypoints[0]
-
-                    #TODO人脸相似性的比较，待优化
-                    keypoints_np = keypoints[0:5].cpu().numpy()
-                    mtx1, mtx2, disparity = procrustes(keypoints_np[:, :2], self.my_face)
                     #总人数
                     person_count += 1
                     #坐着的人数
@@ -140,6 +136,7 @@ def new_instance():
     if __fei_eyes is None:
         __fei_eyes = FeiEyes()
     return __fei_eyes
+
 
 
         
