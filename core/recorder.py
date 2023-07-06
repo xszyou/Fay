@@ -73,7 +73,7 @@ class Recorder:
             text += "-"
         print(text + " [" + str(int(per * 100)) + "%]")
 
-    def __waitingResult(self, iat):
+    def __waitingResult(self, iat:asrclient):
         if self.__fay.playing:
             return
         self.processing = True
