@@ -73,7 +73,7 @@ class Recorder:
             text += "-"
         print(text + " [" + str(int(per * 100)) + "%]")
 
-    def __waitingResult(self, iat):
+    def __waitingResult(self, iat:asrclient):
         if self.__fay.playing:
             return
         self.processing = True
@@ -95,20 +95,37 @@ class Recorder:
 
    
     def __record(self):
-        stream = self.get_stream() #把get stream的方式封装出来方便实现麦克风录制及网络流等不同的流录制子类
-
+        try:
+            stream = self.get_stream() #把get stream的方式封装出来方便实现麦克风录制及网络流等不同的流录制子类
+        except Exception as e:
+                print(e)
+                util.log(1, "请检查设备是否有误，再重新启动!")
+                return
         isSpeaking = False
         last_mute_time = time.time()
         last_speaking_time = time.time()
+        data = None
         while self.__running:
-            data = stream.read(1024, exception_on_overflow=False)
-            if not data:
+            try:
+                data = stream.read(1024, exception_on_overflow=False)
+            except Exception as e:
+                data = None
+                print(e)
+                util.log(1, "请检查设备是否有误，再重新启动!")
+                return
+
+            if data is None:
                 continue
-            
-            if cfg.config['source']['record'].get("channels"):
+
+            if  cfg.config['source']['record']['enabled']:
+                if len(cfg.config['source']['record'])<3:
+                    channels = 1
+                else:
+                    channels = int(cfg.config['source']['record']['channels'])
+
                 #只获取第一声道
                 data = np.frombuffer(data, dtype=np.int16)
-                data = np.reshape(data, (-1, cfg.config['source']['record']['channels']))  # reshaping the array to split the channels
+                data = np.reshape(data, (-1, channels))  # reshaping the array to split the channels
                 mono = data[:, 0]  # taking the first channel
                 data = mono.tobytes()  
 

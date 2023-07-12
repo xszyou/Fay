@@ -34,8 +34,10 @@ class RecorderListener(Recorder):
         device_id,devInfo = self.__findInternalRecordingDevice(self.paudio)
         if device_id < 0:
             return
-        rate = int(devInfo['defaultSampleRate'])
         channels = int(devInfo['maxInputChannels'])
+        if channels == 0:
+            util.log(1, '请检查设备是否有误，再重新启动!')
+            return
         self.stream = self.paudio.open(input_device_index=device_id, rate=self.__RATE, format=self.__FORMAT, channels=channels, input=True)
         return self.stream
 
@@ -51,9 +53,15 @@ class RecorderListener(Recorder):
     
     def stop(self):
         super().stop()
-        self.stream.stop_stream()
-        self.stream.close()
-        self.paudio.terminate()
+        try:
+            self.stream.stop_stream()
+            self.stream.close()
+            self.paudio.terminate()
+        except Exception as e:
+                print(e)
+                util.log(1, "请检查设备是否有误，再重新启动!")
+                    
+        
 
 
 #Edit by xszyou on 20230113:录制远程设备音频输入并传给aliyun

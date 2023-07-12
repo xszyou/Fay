@@ -1,4 +1,5 @@
 import difflib
+import imp
 import math
 import os
 import random
@@ -21,18 +22,20 @@ from core.interact import Interact
 from core.tts_voice import EnumVoice
 from scheduler.thread_manager import MyThread
 from utils import util, storer, config_util
-
+from core import qa_service
 
 import pygame
 from utils import config_util as cfg
 from core.content_db import Content_Db
 from datetime import datetime
+
 from ai_module import nlp_rasa
 from ai_module import nlp_chatgpt
 from ai_module import nlp_gpt
 from ai_module import nlp_yuan
 from ai_module import yolov8
 from ai_module import nlp_VisualGLM
+
 
 import platform
 if platform.system() == "Windows":
@@ -89,8 +92,21 @@ def determine_nlp_strategy(sendto,msg):
 #文本消息处理
 def send_for_answer(msg,sendto):
         contentdb = Content_Db()
-        contentdb.add_content('member','send',msg)       
-        text,textlist = determine_nlp_strategy(sendto,msg)
+        contentdb.add_content('member','send',msg)
+        textlist = []
+        text = None
+        # 人设问答
+        keyword = qa_service.question('Persona',msg)
+        if keyword is not None:
+            text = config_util.config["attribute"][keyword]
+
+        # 全局问答
+        if text is None:
+            answer = qa_service.question('qa',msg)
+            if answer is not None:
+                text = answer       
+            else:
+                text,textlist = determine_nlp_strategy(sendto,msg)
                 
         contentdb.add_content('fay','send',text)
         wsa_server.get_web_instance().add_cmd({"panelReply": {"type":"fay","content":text}})
@@ -121,27 +137,6 @@ class FeiFei:
         # self.W = np.array([0.01577594,1.16119452,0.75828,0.207746,1.25017864,0.1044121,0.4294899,0.2770932]).reshape(-1,1) #适应模型变量矩阵
         self.W = np.array([0.0, 0.6, 0.1, 0.7, 0.3, 0.0, 0.0, 0.0]).reshape(-1, 1)  # 适应模型变量矩阵
 
-        self.command_keyword = [
-            [['播放歌曲', '播放音乐', '唱首歌', '放首歌', '听音乐', '你会唱歌吗', '我想首听歌'], 'playSong'],
-            [['关闭', '再见', '你走吧'], 'stop'],
-            [['静音', '闭嘴', '我想静静'], 'mute'],
-            [['取消静音', '你在哪呢', '你可以说话了'], 'unmute'],
-            [['换个性别', '换个声音'], 'changeVoice']
-        ]
-
-        # 人设提问关键字
-        self.attribute_keyword = [
-            [['你叫什么名字', '你的名字是什么'], 'name'],
-            [['你是男的还是女的', '你是男生还是女生', '你的性别是什么', '你是男生吗', '你是女生吗', '你是男的吗', '你是女的吗', '你是男孩子吗', '你是女孩子吗', ], 'gender', ],
-            [['你今年多大了', '你多大了', '你今年多少岁', '你几岁了', '你今年几岁了', '你今年几岁了', '你什么时候出生', '你的生日是什么', '你的年龄'], 'age', ],
-            [['你的家乡在哪', '你的家乡是什么', '你家在哪', '你住在哪', '你出生在哪', '你的出生地在哪', '你的出生地是什么', ], 'birth', ],
-            [['你的生肖是什么', '你属什么', ], 'zodiac', ],
-            [['你是什么座', '你是什么星座', '你的星座是什么', ], 'constellation', ],
-            [['你是做什么的', '你的职业是什么', '你是干什么的', '你的职位是什么', '你的工作是什么', '你是做什么工作的'], 'job', ],
-            [['你的爱好是什么', '你有爱好吗', '你喜欢什么', '你喜欢做什么'], 'hobby'],
-            [['联系方式', '联系你们', '怎么联系客服', '有没有客服'], 'contact']
-        ]
-
         self.wsParam = None
         self.wss = None
         self.sp = Speech()
@@ -156,36 +151,6 @@ class FeiFei:
         self.playing = False
         self.muting = False
 
-    def __string_similar(self, s1, s2):
-        return difflib.SequenceMatcher(None, s1, s2).quick_ratio()
-
-    def __read_qna(self, filename) -> list:
-        qna = []
-        try:
-            wb = load_workbook(filename)
-            sheets = wb.worksheets  # 获取当前所有的sheet
-            sheet = sheets[0]
-            for row in sheet.rows:
-                if len(row) >= 2:
-                    qna.append([row[0].value.split(";"), row[1].value])
-        except BaseException as e:
-            print("无法读取Q&A文件 {} -> ".format(filename) + str(e))
-        return qna
-
-    def __get_keyword(self, keyword_dict, text):
-        last_similar = 0
-        last_answer = ''
-        for qa in keyword_dict:
-            for quest in qa[0]:
-                similar = self.__string_similar(text, quest)
-                if quest in text:
-                    similar += 0.3
-                if similar > last_similar:
-                    last_similar = similar
-                    last_answer = qa[1]
-        if last_similar >= 0.6:
-            return last_answer
-        return None
 
     def __play_song(self):
         self.playing = True
@@ -197,7 +162,7 @@ class FeiFei:
     def __get_answer(self, interleaver, text):
         if interleaver == "mic":
             #指令
-            keyword = self.__get_keyword(self.command_keyword, text)
+            keyword = qa_service.question('command',text)
             if keyword is not None:
                 if keyword == "playSong":
                     MyThread(target=self.__play_song).start()
@@ -225,14 +190,14 @@ class FeiFei:
                     config_util.save_config(config_util.config)
                     wsa_server.get_web_instance().add_cmd({"panelMsg": ""})
                 return "NO_ANSWER"
-
+        
         # 人设问答
-        keyword = self.__get_keyword(self.attribute_keyword, text)
+        keyword = qa_service.question('Persona',text)
         if keyword is not None:
             return config_util.config["attribute"][keyword]
-
+        answer = None
         # 全局问答
-        answer = self.__get_keyword(self.__read_qna(config_util.config['interact']['QnA']), text)
+        answer = qa_service.question('qa',text)
         if answer is not None:
             return answer
 
