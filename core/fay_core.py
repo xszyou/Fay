@@ -371,10 +371,13 @@ class FeiFei:
                 content = {'Topic': 'Unreal', 'Data': {'Key': 'audio', 'Value': os.path.abspath(file_url), 'Time': audio_length, 'Type': say_type}}
                 #计算lips
                 if platform.system() == "Windows":
-                    lip_sync_generator = LipSyncGenerator()
-                    viseme_list = lip_sync_generator.generate_visemes(os.path.abspath(file_url))
-                    consolidated_visemes = lip_sync_generator.consolidate_visemes(viseme_list)
-                    content["Data"]["Lips"] = consolidated_visemes
+                    try:
+                        lip_sync_generator = LipSyncGenerator()
+                        viseme_list = lip_sync_generator.generate_visemes(os.path.abspath(file_url))
+                        consolidated_visemes = lip_sync_generator.consolidate_visemes(viseme_list)
+                        content["Data"]["Lips"] = consolidated_visemes
+                    except e:
+                        util.log(1, "唇型数字生成失败，无法使用新版ue5工程")
                 wsa_server.get_instance().add_cmd(content)
 
                 #推送远程音频

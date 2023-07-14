@@ -1,9 +1,6 @@
 
-from winreg import QueryInfoKey
 from openpyxl import load_workbook
 import difflib
-import shlex
-import subprocess
 from utils import config_util as cfg
 
 def question(query_type,text):
