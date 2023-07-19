@@ -105,7 +105,7 @@ class DeviceInputListener(Recorder):
 
     #recorder会等待stream不为空才开始录音
     def get_stream(self):
-        while self.streamCache is None:
+        while not feiFei.deviceConnect:
             time.sleep(1)
             pass
         return self.streamCache

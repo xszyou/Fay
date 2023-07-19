@@ -25,7 +25,6 @@ class QAService:
         ]
 
         self.command_keyword = [
-            [['播放歌曲', '播放音乐', '唱首歌', '放首歌', '听音乐', '你会唱歌吗', '我想首听歌'], 'playSong'],
             [['关闭', '再见', '你走吧'], 'stop'],
             [['静音', '闭嘴', '我想静静'], 'mute'],
             [['取消静音', '你在哪呢', '你可以说话了'], 'unmute'],
@@ -41,7 +40,6 @@ class QAService:
             answer = self.__get_keyword(answer_dict, text)
         elif query_type == 'command':
             answer = self.__get_keyword(self.command_keyword, text)
-        print(answer)
         return answer
     
 

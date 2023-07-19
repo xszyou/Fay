@@ -164,10 +164,7 @@ class FeiFei:
             #指令
             keyword = qa_service.question('command',text)
             if keyword is not None:
-                if keyword == "playSong":
-                    MyThread(target=self.__play_song).start()
-                    wsa_server.get_web_instance().add_cmd({"panelMsg": ""})
-                elif keyword == "stop":
+                if keyword == "stop":
                     fay_booter.stop()
                     wsa_server.get_web_instance().add_cmd({"panelMsg": ""})
                     wsa_server.get_web_instance().add_cmd({"liveState": 0})
