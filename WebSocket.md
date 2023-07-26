@@ -36,6 +36,7 @@
     "Data": {
         "Key": "audio",
         "Value": "C:\samples\sample-1.wav",
+        "Text" : "很高兴见到你"
         "Lips":[{"Lip": "sil", "Time": 180}, {"Lip": "FF", "Time": 144}],
         "Time": 10,
         "Type": "interact"
@@ -51,6 +52,7 @@
 | Data.Time  | 音频时长 (秒)    | float |                 |
 | Data.Type  | 发言类型         | str   | interact/script |
 | Data.Lips  | 视音素           | array |                 |
+| Data.text  | 文本              | str   |                 |
 
 
 
@@ -64,6 +66,42 @@
     "Data": {
         "Key": "text",
         "Value": "很高兴见到你"
+    }
+}
+```
+
+
+
+| 参数       | 描述             | 类型  | 范围            |
+| ---------- | ---------------- | ----- | --------------- |
+| Data.text | 文本 | str   |                 |
+
+### 发送询问文字
+
+```json
+{
+    "Topic": "Unreal",
+    "Data": {
+        "Key": "question",
+        "Value": "很高兴见到你"
+    }
+}
+```
+
+
+
+| 参数       | 描述             | 类型  | 范围            |
+| ---------- | ---------------- | ----- | --------------- |
+| Data.text | 文本 | str   |                 |
+
+### 发送日志文字
+
+```json
+{
+    "Topic": "Unreal",
+    "Data": {
+        "Key": "log",
+        "Value": "很高... "
     }
 }
 ```

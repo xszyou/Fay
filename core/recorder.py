@@ -92,6 +92,9 @@ class Recorder:
             self.processing = False
             self.dynamic_threshold = self.__get_history_percentage(30)
             wsa_server.get_web_instance().add_cmd({"panelMsg": ""})
+            if not cfg.config["interact"]["playSound"]: # 非展板播放
+                content = {'Topic': 'Unreal', 'Data': {'Key': 'log', 'Value': ""}}
+                wsa_server.get_instance().add_cmd(content)
 
    
     def __record(self):

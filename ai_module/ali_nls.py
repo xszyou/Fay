@@ -83,10 +83,16 @@ class ALiNls:
                 self.done = True
                 self.finalResults = data['payload']['result']
                 wsa_server.get_web_instance().add_cmd({"panelMsg": self.finalResults})
+                if not cfg.config["interact"]["playSound"]: # 非展板播放
+                    content = {'Topic': 'Unreal', 'Data': {'Key': 'log', 'Value': self.finalResults}}
+                    wsa_server.get_instance().add_cmd(content)
                 self.__on_msg()
             elif name == 'TranscriptionResultChanged':
                 self.finalResults = data['payload']['result']
                 wsa_server.get_web_instance().add_cmd({"panelMsg": self.finalResults})
+                if not cfg.config["interact"]["playSound"]: # 非展板播放
+                    content = {'Topic': 'Unreal', 'Data': {'Key': 'log', 'Value': self.finalResults}}
+                    wsa_server.get_instance().add_cmd(content)
                 self.__on_msg()
 
         except Exception as e:

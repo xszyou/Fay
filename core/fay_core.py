@@ -35,7 +35,7 @@ from ai_module import nlp_gpt
 from ai_module import nlp_yuan
 from ai_module import yolov8
 from ai_module import nlp_VisualGLM
-
+from ai_module import nlp_lingju
 
 import platform
 if platform.system() == "Windows":
@@ -43,7 +43,7 @@ if platform.system() == "Windows":
     sys.path.append("test/ovr_lipsync")
     from test_olipsync import LipSyncGenerator
     
-from ai_module import nlp_lingju
+
 
 modules = {
     "nlp_yuan": nlp_yuan, 
@@ -157,6 +157,9 @@ class FeiFei:
         song_player.play()
         self.playing = False
         wsa_server.get_web_instance().add_cmd({"panelMsg": ""})
+        if not cfg.config["interact"]["playSound"]: # 非展板播放
+            content = {'Topic': 'Unreal', 'Data': {'Key': 'log', 'Value': ""}}
+            wsa_server.get_instance().add_cmd(content)
 
     #检查是否命中指令或q&a
     def __get_answer(self, interleaver, text):
@@ -164,9 +167,18 @@ class FeiFei:
             #指令
             keyword = qa_service.question('command',text)
             if keyword is not None:
-                if keyword == "stop":
+                if keyword == "playSong":
+                    MyThread(target=self.__play_song).start()
+                    wsa_server.get_web_instance().add_cmd({"panelMsg": ""})
+                    if not cfg.config["interact"]["playSound"]: # 非展板播放
+                        content = {'Topic': 'Unreal', 'Data': {'Key': 'log', 'Value': ""}}
+                        wsa_server.get_instance().add_cmd(content)
+                elif keyword == "stop":
                     fay_booter.stop()
                     wsa_server.get_web_instance().add_cmd({"panelMsg": ""})
+                    if not cfg.config["interact"]["playSound"]: # 非展板播放
+                        content = {'Topic': 'Unreal', 'Data': {'Key': 'log', 'Value': ""}}
+                        wsa_server.get_instance().add_cmd(content)
                     wsa_server.get_web_instance().add_cmd({"liveState": 0})
                 elif keyword == "mute":
                     self.muting = True
@@ -175,6 +187,9 @@ class FeiFei:
                     MyThread(target=self.__say, args=['interact']).start()
                     time.sleep(0.5)
                     wsa_server.get_web_instance().add_cmd({"panelMsg": ""})
+                    if not cfg.config["interact"]["playSound"]: # 非展板播放
+                        content = {'Topic': 'Unreal', 'Data': {'Key': 'log', 'Value': ""}}
+                        wsa_server.get_instance().add_cmd(content)
                 elif keyword == "unmute":
                     self.muting = False
                     return None
@@ -186,6 +201,9 @@ class FeiFei:
                             break
                     config_util.save_config(config_util.config)
                     wsa_server.get_web_instance().add_cmd({"panelMsg": ""})
+                    if not cfg.config["interact"]["playSound"]: # 非展板播放
+                        content = {'Topic': 'Unreal', 'Data': {'Key': 'log', 'Value': ""}}
+                        wsa_server.get_instance().add_cmd(content)
                 return "NO_ANSWER"
         
         # 人设问答
@@ -217,21 +235,34 @@ class FeiFei:
                             person_count, stand_count, sit_count = fay_eyes.get_counts()
                             if person_count < 1: #看不到人，不互动
                                  wsa_server.get_web_instance().add_cmd({"panelMsg": "看不到人，不互动"})
+                                 if not cfg.config["interact"]["playSound"]: # 非展板播放
+                                    content = {'Topic': 'Unreal', 'Data': {'Key': 'log', 'Value': "看不到人，不互动"}}
+                                    wsa_server.get_instance().add_cmd(content)
                                  continue
 
                         answer = self.__get_answer(interact.interleaver, self.q_msg)#确定是否命中指令或q&a
                         if(self.muting): #静音指令正在执行
                             wsa_server.get_web_instance().add_cmd({"panelMsg": "静音指令正在执行，不互动"})
+                            if not cfg.config["interact"]["playSound"]: # 非展板播放
+                                content = {'Topic': 'Unreal', 'Data': {'Key': 'log', 'Value': "静音指令正在执行，不互动"}}
+                                wsa_server.get_instance().add_cmd(content)
                             continue
 
                         contentdb = Content_Db()    
                         contentdb.add_content('member','speak',self.q_msg)
                         wsa_server.get_web_instance().add_cmd({"panelReply": {"type":"member","content":self.q_msg}})
+                        if not config_util.config["interact"]["playSound"]: # 非展板播放
+                            content = {'Topic': 'Unreal', 'Data': {'Key': 'question', 'Value': self.q_msg}}
+                            wsa_server.get_instance().add_cmd(content)
+
                         text = ''
                         textlist = []
                         self.speaking = True
                         if answer is None:
                             wsa_server.get_web_instance().add_cmd({"panelMsg": "思考中..."})
+                            if not cfg.config["interact"]["playSound"]: # 非展板播放
+                                content = {'Topic': 'Unreal', 'Data': {'Key': 'log', 'Value': "思考中..."}}
+                                wsa_server.get_instance().add_cmd(content)
                             text,textlist = determine_nlp_strategy(1,self.q_msg)
                         elif answer != 'NO_ANSWER': #语音内容没有命中指令,回复q&a内容
                             text = answer
@@ -245,6 +276,9 @@ class FeiFei:
                                 wsa_server.get_web_instance().add_cmd({"panelReply": {"type":"fay","content":textlist[i]['text']}})
                                 i+= 1
                     wsa_server.get_web_instance().add_cmd({"panelMsg": self.a_msg})
+                    if not cfg.config["interact"]["playSound"]: # 非展板播放
+                        content = {'Topic': 'Unreal', 'Data': {'Key': 'log', 'Value': self.a_msg}}
+                        wsa_server.get_instance().add_cmd(content)
                     self.last_speak_data = self.a_msg               
                     MyThread(target=self.__say, args=['interact']).start()
 
@@ -272,7 +306,7 @@ class FeiFei:
     def __send_mood(self):
         while self.__running:
             time.sleep(3)
-            if not self.sleep and not config_util.config["interact"]["playSound"]:
+            if not self.sleep and not config_util.config["interact"]["playSound"] and wsa_server.get_instance().isConnect:
                 content = {'Topic': 'Unreal', 'Data': {'Key': 'mood', 'Value': self.mood}}
                 wsa_server.get_instance().add_cmd(content)
 
@@ -365,7 +399,7 @@ class FeiFei:
                 self.__play_sound(file_url)
             else:#发送音频给ue和socket
                 #推送ue
-                content = {'Topic': 'Unreal', 'Data': {'Key': 'audio', 'Value': os.path.abspath(file_url), 'Time': audio_length, 'Type': say_type}}
+                content = {'Topic': 'Unreal', 'Data': {'Key': 'audio', 'Value': os.path.abspath(file_url), 'Text': self.a_msg, 'Time': audio_length, 'Type': say_type}}
                 #计算lips
                 if platform.system() == "Windows":
                     try:
@@ -396,6 +430,9 @@ class FeiFei:
                     
             time.sleep(audio_length + 0.5)
             wsa_server.get_web_instance().add_cmd({"panelMsg": ""})
+            if not cfg.config["interact"]["playSound"]: # 非展板播放
+                content = {'Topic': 'Unreal', 'Data': {'Key': 'log', 'Value': ""}}
+                wsa_server.get_instance().add_cmd(content)
             if config_util.config["interact"]["playSound"]:
                 util.log(1, '结束播放！')
             self.speaking = False
@@ -441,6 +478,9 @@ class FeiFei:
         self.playing = False
         self.sp.close()
         wsa_server.get_web_instance().add_cmd({"panelMsg": ""})
+        if not cfg.config["interact"]["playSound"]: # 非展板播放
+            content = {'Topic': 'Unreal', 'Data': {'Key': 'log', 'Value': ""}}
+            wsa_server.get_instance().add_cmd(content)
         if self.deviceConnect is not None:
             self.deviceConnect.close()
             self.deviceConnect = None

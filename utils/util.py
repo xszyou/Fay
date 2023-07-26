@@ -6,6 +6,7 @@ import time
 
 from core import wsa_server
 from scheduler.thread_manager import MyThread
+from utils import config_util
 
 LOGS_FILE_URL = "logs/log-" + time.strftime("%Y%m%d%H%M%S") + ".log"
 
@@ -33,6 +34,9 @@ def printInfo(level, sender, text, send_time=-1):
     print(logStr)
     if level >= 3:
         wsa_server.get_web_instance().add_cmd({"panelMsg": text})
+        if not config_util.config["interact"]["playSound"]: # 非展板播放
+            content = {'Topic': 'Unreal', 'Data': {'Key': 'log', 'Value': text}}
+            wsa_server.get_instance().add_cmd(content)
     MyThread(target=__write_to_file, args=[logStr]).start()
 
 
