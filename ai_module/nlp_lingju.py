@@ -44,7 +44,7 @@ class Lingju:
                 url="https://dev.lingju.ai/httpapi/ljchat.do"
                 req = json.dumps({"accessToken": token, "lat": lat, "lng": lng, "input": cont})
                 headers = {'Content-Type':'application/json;charset=UTF-8'}
-                r = requests.post(url, headers=headers, data=req)
+                r = requests.post(url, headers=headers, verify=False, data=req)
                 if r.status_code != 200:
                     util.log(1, f"灵聚api对接有误: {r.text}")
                     return "哎呀，出错了！请重新发一下" 
@@ -74,7 +74,7 @@ class Lingju:
             cfg.load_config()
             url=f"https://dev.lingju.ai/httpapi/authorize.do?appkey={cfg.key_lingju_api_key}&userid={self.userid}&authcode={cfg.key_lingju_api_authcode}"            
             headers = {'Content-Type':'application/json;charset=UTF-8'}
-            r = requests.post(url, headers=headers)    
+            r = requests.post(url, headers=headers, verify=False)    
             if r.status_code != 200:
                 util.log(1, f"灵聚api对接有误: {r.text}")
                 return None            

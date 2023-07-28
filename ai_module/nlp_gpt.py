@@ -6,7 +6,10 @@ count = 0
 def question(cont):
     global count
     try:
-        chatbot = Chatbot(model = "gpt-3.5", proxy = cfg.proxy_config, api_key = cfg.key_chatgpt_api_key)
+        if cfg.proxy_config != '' :
+            chatbot = Chatbot(proxy = cfg.proxy_config, api_key = cfg.key_chatgpt_api_key)
+        else:
+            chatbot = Chatbot(api_key = cfg.key_chatgpt_api_key)
         response = chatbot.ask(cont)
         count = 0
         return response

@@ -46,11 +46,11 @@ ProTip:The shopping edition has been moved to a separate branch.[`fay-sales-edit
          
 　　　　　　　　 Azure ─┐　 　 │　　 　 ├─ [VisualGLM](https://www.bilibili.com/video/BV1mP411Q7mj)
             
-　　　　　 　 Edge TTS ─┼──     TTS 　　 └─ [RWKV](https://www.bilibili.com/video/BV1yu41157zB)
+　　　　　 　 Edge TTS ─┼──     TTS 　  　 └─ [RWKV](https://www.bilibili.com/video/BV1yu41157zB)
        
 　   　　[Open source TTS](https://www.bilibili.com/read/cv25192534) ─┘　  │　　 　 
             
-　                                                     │　　 　 
+　　　　　　　　　　　　　　    │　　 　 
          
 　　　　　　　　　　　　　　   │　　 　 
                 
@@ -121,6 +121,12 @@ Message format: View [WebSocket.md](https://github.com/TheRamU/Fay/blob/main/Web
 
 
 ## **Upgrade Log**
+
+**2023.07.28：**
+
++ Add runtime automatic cleaning of UI cache;
++  Add GPT proxy setting can be null;
++ Improve the stability of Lingju docking.
 
 **2023.07.21：**
 
