@@ -1,4 +1,5 @@
 [`中文`](https://github.com/TheRamU/Fay/blob/main/README.md)
+[`日本語`](https://github.com/TheRamU/Fay/blob/main/README_JA.md)
 
 <div align="center">
     <br>
