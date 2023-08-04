@@ -21,6 +21,8 @@ class LipSyncGenerator:
 
     def convert_mp3_to_wav(self, mp3_filepath):
         audio = AudioSegment.from_mp3(mp3_filepath)
+        # 使用 set_frame_rate 方法设置采样率
+        audio = audio.set_frame_rate(44100)
         wav_filepath = mp3_filepath.rsplit(".", 1)[0] + ".wav"
         audio.export(wav_filepath, format="wav")
         return wav_filepath
@@ -65,16 +67,16 @@ class LipSyncGenerator:
             if viseme == current_viseme:
                 count += 1
             else:
-                result.append({"Lip": current_viseme, "Time": count*10})  # Multiply by 10 for duration in ms
+                result.append({"Lip": current_viseme, "Time": count*33})  # Multiply by 10 for duration in ms
                 current_viseme = viseme
                 count = 1
 
         # Add the last viseme to the result
-        result.append({"Lip": current_viseme, "Time": count*10})  # Multiply by 10 for duration in ms
+        result.append({"Lip": current_viseme, "Time": count*33})  # Multiply by 10 for duration in ms
 
         new_data = []
         for i in range(len(result)):
-            if result[i]['Time'] < 60:
+            if result[i]['Time'] < 30:
                 if len(new_data) > 0:
                     new_data[-1]['Time'] += result[i]['Time']
             else:
@@ -83,7 +85,8 @@ class LipSyncGenerator:
 if __name__ == "__main__":
     start_time = time.time()
     lip_sync_generator = LipSyncGenerator()
-    viseme_list = lip_sync_generator.generate_visemes("C:\\Users\\Administrator\\Documents\\GitHub\\Fay\\bin\\x64-Debug\\fay.mp3")
+    viseme_list = lip_sync_generator.generate_visemes("E:\\github\\Fay\\samples\\fay-man.mp3")
+    print(viseme_list)
     consolidated_visemes = lip_sync_generator.consolidate_visemes(viseme_list)
     print(json.dumps(consolidated_visemes))
     print(time.time() - start_time)

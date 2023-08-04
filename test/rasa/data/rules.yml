@@ -32,4 +32,9 @@ rules:
   - intent: ask_problem
   - action: action_ask_problem
 
+- rule: 多模态
+  steps:
+  - intent: ask_goods
+  - action: action_ask_goods
+
 

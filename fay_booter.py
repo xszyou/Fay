@@ -6,11 +6,12 @@ from core.fay_core import FeiFei
 from scheduler.thread_manager import MyThread
 from utils import util, config_util, stream_util, ngrok_util
 from core.wsa_server import MyServer
+from scheduler.thread_manager import MyThread
 
 feiFei: FeiFei = None
 recorderListener: Recorder = None
 
-__running = True
+__running = False
 
 #录制麦克风音频输入并传给aliyun
 class RecorderListener(Recorder):
@@ -19,6 +20,7 @@ class RecorderListener(Recorder):
         self.__device = device
         self.__RATE = 16000
         self.__FORMAT = pyaudio.paInt16
+        self.__running = False
 
         super().__init__(fei)
 
@@ -39,7 +41,14 @@ class RecorderListener(Recorder):
             util.log(1, '请检查设备是否有误，再重新启动!')
             return
         self.stream = self.paudio.open(input_device_index=device_id, rate=self.__RATE, format=self.__FORMAT, channels=channels, input=True)
+        self.__running = True
+        MyThread(target=self.__pyaudio_clear).start()
         return self.stream
+
+    def __pyaudio_clear(self):
+        while self.__running:
+            time.sleep(30)
+            
 
     def __findInternalRecordingDevice(self, p):
         for i in range(p.get_device_count()):
@@ -53,6 +62,7 @@ class RecorderListener(Recorder):
     
     def stop(self):
         super().stop()
+        self.__running = False
         try:
             self.stream.stop_stream()
             self.stream.close()

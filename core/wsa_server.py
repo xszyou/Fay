@@ -25,20 +25,22 @@ class MyServer:
     def __del__(self):
         self.stop_server()
 
+    # 接收处理
     async def __consumer_handler(self, websocket, path):
         async for message in websocket:
             await self.__consumer(message)
 
+    # 发送处理
     async def __producer_handler(self, websocket, path):
         while self.__running:
             await asyncio.sleep(0.000001)
             message = await self.__producer()
             if message:
                 await websocket.send(message)
-                # util.log('发送 {}'.format(message))
+                
 
     async def __handler(self, websocket, path):
-        isConnect = True
+        self.isConnect = True
         util.log(1,"websocket连接上:{}".format(self.__port))
         self.on_connect_handler()
         consumer_task = asyncio.ensure_future(self.__consumer_handler(websocket, path))
@@ -46,30 +48,34 @@ class MyServer:
         done, self.__pending = await asyncio.wait([consumer_task, producer_task], return_when=asyncio.FIRST_COMPLETED, )
         for task in self.__pending:
             task.cancel()
-            isConnect = False
+            self.isConnect = False
             util.log(1,"websocket连接断开:{}".format(self.__port))
-
-    # 接收处理
+    
     async def __consumer(self, message):
         self.on_revice_handler(message)
-
-    # 发送处理
+    
     async def __producer(self):
         if len(self.__listCmd) > 0:
-            return self.__listCmd.pop(0)
+            message = self.on_send_handler(self.__listCmd.pop(0))
+            return message
         else:
             return None
 
 
-    #Edit by xszyou on 20230113:通过继承此类来实现服务端的接收处理逻辑
+    #Edit by xszyou on 20230113:通过继承此类来实现服务端的接收后处理逻辑
     @abstractmethod
     def on_revice_handler(self, message):
         pass
+
     #Edit by xszyou on 20230114:通过继承此类来实现服务端的连接处理逻辑
     @abstractmethod
     def on_connect_handler(self):
         pass
     
+    #Edit by xszyou on 20230804:通过继承此类来实现服务端的发送前的处理逻辑
+    @abstractmethod
+    def on_send_handler(self, message):
+        return message
 
     # 创建server
     def __connect(self):
@@ -98,7 +104,7 @@ class MyServer:
     # 关闭服务
     def stop_server(self):
         self.__running = False
-        isConnect = False
+        self.isConnect = False
         if self.__server is None:
             return
         self.__server.ws_server.close()
@@ -114,6 +120,7 @@ class MyServer:
         except BaseException as e:
             print("Error: {}".format(e))
 
+#数字人端server
 class HumanServer(MyServer):
     def __init__(self, host='0.0.0.0', port=10000):
         super().__init__(host, port)
@@ -124,6 +131,11 @@ class HumanServer(MyServer):
     def on_connect_handler(self):
         pass
 
+    def on_send_handler(self, message):
+        # util.log(1, '向human发送 {}'.format(message))
+        return message
+
+#ui端server
 class WebServer(MyServer):
     def __init__(self, host='0.0.0.0', port=10000):
         super().__init__(host, port)
@@ -134,6 +146,10 @@ class WebServer(MyServer):
     def on_connect_handler(self):
         self.add_cmd({"panelMsg": "使用提示：直播，请关闭麦克风。连接数字人，请关闭面板播放。"})
 
+    def on_send_handler(self, message):
+        return message
+
+#测试
 class TestServer(MyServer):
     def __init__(self, host='0.0.0.0', port=10000):
         super().__init__(host, port)
@@ -143,9 +159,12 @@ class TestServer(MyServer):
     
     def on_connect_handler(self):
         print("连接上了")
+    
+    def on_send_handler(self, message):
+        return message
 
 
-
+#单例
 
 __instance: MyServer = None
 __web_instance: MyServer = None

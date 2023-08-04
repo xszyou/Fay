@@ -30,6 +30,13 @@ nlu:
     - 请教
     - 请问
 
+- intent: ask_goods
+  examples: |
+    - 我手里拿着是什么
+    - 这是什么
+    - 这个是什么东西
+
+
 - intent: ask_date
   examples: |
     - 今天是几号？

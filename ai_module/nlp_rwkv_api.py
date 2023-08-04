@@ -43,7 +43,7 @@ def question(cont):
 
     print("接口调用耗时 :" + str(time.time() - starttime))
 
-    return response_text
+    return response_text.strip()
 
 if __name__ == "__main__":
     for i in range(3):

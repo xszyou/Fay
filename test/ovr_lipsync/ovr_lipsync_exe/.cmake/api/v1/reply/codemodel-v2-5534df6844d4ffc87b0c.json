@@ -18,7 +18,7 @@
 					]
 				}
 			],
-			"name" : "Debug",
+			"name" : "RelWithDebInfo",
 			"projects" : 
 			[
 				{
@@ -38,7 +38,7 @@
 				{
 					"directoryIndex" : 0,
 					"id" : "ProcessWAV::@6890427a1f51a3e7e1df",
-					"jsonFile" : "target-ProcessWAV-Debug-260ee181644312dd6c6e.json",
+					"jsonFile" : "target-ProcessWAV-RelWithDebInfo-66687df1b3d078e507c6.json",
 					"name" : "ProcessWAV",
 					"projectIndex" : 0
 				}
@@ -48,7 +48,7 @@
 	"kind" : "codemodel",
 	"paths" : 
 	{
-		"build" : "E:/fay/ovr_lipsync_native_29.0.0/OVRLipSyncNative/Sample/ProcessWAV/out/build/x64-Debug",
+		"build" : "E:/fay/ovr_lipsync_native_29.0.0/OVRLipSyncNative/Sample/ProcessWAV/out/build/x64-Release",
 		"source" : "E:/fay/ovr_lipsync_native_29.0.0/OVRLipSyncNative/Sample/ProcessWAV"
 	},
 	"version" : 

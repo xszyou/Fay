@@ -36,6 +36,7 @@ from ai_module import nlp_yuan
 from ai_module import yolov8
 from ai_module import nlp_VisualGLM
 from ai_module import nlp_lingju
+from ai_module import nlp_rwkv_api
 
 import platform
 if platform.system() == "Windows":
@@ -51,7 +52,8 @@ modules = {
     "nlp_chatgpt": nlp_chatgpt,
     "nlp_rasa": nlp_rasa,
     "nlp_VisualGLM": nlp_VisualGLM,
-    "nlp_lingju": nlp_lingju
+    "nlp_lingju": nlp_lingju,
+    "nlp_rwkv_api":nlp_rwkv_api
 }
 
 
@@ -125,6 +127,8 @@ class FeiFei:
         self.q_msg = '你叫什么名字？'
         self.a_msg = 'hi,我叫菲菲，英文名是fay'
         self.mood = 0.0  # 情绪值
+        self.old_mood = 0.0
+        self.connect = False
         self.item_index = 0
         self.deviceSocket = None
         self.deviceConnect = None
@@ -228,7 +232,9 @@ class FeiFei:
                     index = interact.interact_type
                     if index == 1:
                         self.q_msg = interact.data["msg"]
-
+                        if not config_util.config["interact"]["playSound"]: # 非展板播放
+                            content = {'Topic': 'Unreal', 'Data': {'Key': 'question', 'Value': self.q_msg}}
+                            wsa_server.get_instance().add_cmd(content)
                         #fay eyes
                         fay_eyes = yolov8.new_instance()            
                         if fay_eyes.get_status():#YOLO正在运行
@@ -251,10 +257,6 @@ class FeiFei:
                         contentdb = Content_Db()    
                         contentdb.add_content('member','speak',self.q_msg)
                         wsa_server.get_web_instance().add_cmd({"panelReply": {"type":"member","content":self.q_msg}})
-                        if not config_util.config["interact"]["playSound"]: # 非展板播放
-                            content = {'Topic': 'Unreal', 'Data': {'Key': 'question', 'Value': self.q_msg}}
-                            wsa_server.get_instance().add_cmd(content)
-
                         text = ''
                         textlist = []
                         self.speaking = True
@@ -304,11 +306,20 @@ class FeiFei:
 
     # 发送情绪
     def __send_mood(self):
-        while self.__running:
+         while self.__running:
             time.sleep(3)
             if not self.sleep and not config_util.config["interact"]["playSound"] and wsa_server.get_instance().isConnect:
                 content = {'Topic': 'Unreal', 'Data': {'Key': 'mood', 'Value': self.mood}}
-                wsa_server.get_instance().add_cmd(content)
+                if not self.connect:
+                      wsa_server.get_instance().add_cmd(content)
+                      self.connect = True
+                else:
+                    if  self.old_mood != self.mood:
+                        wsa_server.get_instance().add_cmd(content)
+                        self.old_mood = self.mood
+                 
+            else:
+                  self.connect = False
 
     # 更新情绪
     def __update_mood(self, typeIndex):
@@ -364,13 +375,13 @@ class FeiFei:
                 self.speaking = False
             else:
                 util.printInfo(1, '菲菲', '({}) {}'.format(self.__get_mood_voice(), self.a_msg))
+                if not config_util.config["interact"]["playSound"]: # 非展板播放
+                    content = {'Topic': 'Unreal', 'Data': {'Key': 'text', 'Value': self.a_msg}}
+                    wsa_server.get_instance().add_cmd(content)
                 MyThread(target=storer.storage_live_interact, args=[Interact('Fay', 0, {'user': 'Fay', 'msg': self.a_msg})]).start()
                 util.log(1, '合成音频...')
                 tm = time.time()
                 #文字也推送出去，为了ue5
-                if not config_util.config["interact"]["playSound"]: # 非展板播放
-                    content = {'Topic': 'Unreal', 'Data': {'Key': 'text', 'Value': self.a_msg}}
-                    wsa_server.get_instance().add_cmd(content)
                 result = self.sp.to_sample(self.a_msg, self.__get_mood_voice())
                 util.log(1, '合成音频完成. 耗时: {} ms 文件:{}'.format(math.floor((time.time() - tm) * 1000), result))
                 if result is not None:            
@@ -390,7 +401,10 @@ class FeiFei:
 
     def __send_or_play_audio(self, file_url, say_type):
         try:
-            audio_length = eyed3.load(file_url).info.time_secs #mp3音频长度
+            try:
+                audio_length = eyed3.load(file_url).info.time_secs #mp3音频长度
+            except Exception as e:
+                audio_length = 3
             # with wave.open(file_url, 'rb') as wav_file: #wav音频长度
             #     audio_length = wav_file.getnframes() / float(wav_file.getframerate())
             #     print(audio_length)
