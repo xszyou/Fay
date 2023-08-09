@@ -10,6 +10,8 @@ import json
 
 import eyed3
 from openpyxl import load_workbook
+import logging
+
 
 # 适应模型使用
 import numpy as np
@@ -44,8 +46,6 @@ if platform.system() == "Windows":
     sys.path.append("test/ovr_lipsync")
     from test_olipsync import LipSyncGenerator
     
-
-
 modules = {
     "nlp_yuan": nlp_yuan, 
     "nlp_gpt": nlp_gpt,
@@ -257,6 +257,8 @@ class FeiFei:
                         contentdb = Content_Db()    
                         contentdb.add_content('member','speak',self.q_msg)
                         wsa_server.get_web_instance().add_cmd({"panelReply": {"type":"member","content":self.q_msg}})
+                     
+
                         text = ''
                         textlist = []
                         self.speaking = True
@@ -402,9 +404,11 @@ class FeiFei:
     def __send_or_play_audio(self, file_url, say_type):
         try:
             try:
+                logging.getLogger('eyed3').setLevel(logging.ERROR)
                 audio_length = eyed3.load(file_url).info.time_secs #mp3音频长度
             except Exception as e:
                 audio_length = 3
+
             # with wave.open(file_url, 'rb') as wav_file: #wav音频长度
             #     audio_length = wav_file.getnframes() / float(wav_file.getframerate())
             #     print(audio_length)

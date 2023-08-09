@@ -122,6 +122,13 @@ Message format: View [WebSocket.md](https://github.com/TheRamU/Fay/blob/main/Web
 
 ## **Upgrade Log**
 
+**2023.08.09:**
+
+- Remove mp3 format warning message;
+- Remove Lingju and Rwkv interface warning message;
+- Optimize websocket logic;
+- Optimize digital human interface communication.
+
 **2023.08.04:**
 
 - UE5 project updated.

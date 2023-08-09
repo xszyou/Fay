@@ -35,7 +35,7 @@ class MyServer:
         while self.__running:
             await asyncio.sleep(0.000001)
             message = await self.__producer()
-            if message:
+            if message and self.isConnect:
                 await websocket.send(message)
                 
 
@@ -91,7 +91,7 @@ class MyServer:
 
     # 往要发送的命令列表中，添加命令
     def add_cmd(self, content):
-        if not self.__running:
+        if not self.__running or not self.isConnect:
             return
         jsonObj = json.dumps(content)
         self.__listCmd.append(jsonObj)

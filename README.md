@@ -117,8 +117,14 @@ Remote Android　　[Live2D](https://www.bilibili.com/video/BV1sx4y1d775/?vd_sou
 └── test                    # 都是惊喜
 ```
 
-
 ## **三、升级日志**
+
+**2023.08.09：**
+
++ 去除mp3格式警告信息；
++ 去除灵聚、渡鸦接口警告信息；
++ websocket逻辑优化；
++ 数字人端接口通讯优化。
 
 **2023.08.04：**
 
@@ -132,7 +138,7 @@ Remote Android　　[Live2D](https://www.bilibili.com/video/BV1sx4y1d775/?vd_sou
 + 补充wav文件启动清理；
 + websocket工具类升级完善。
 
-**2023.07.28：**
+**2023.07：**
 
 + 增加运行时自动清理ui缓存；
 + 增加gpt代理设置可为空；
