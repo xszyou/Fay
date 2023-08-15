@@ -35,7 +35,7 @@ class MyServer:
         while self.__running:
             await asyncio.sleep(0.000001)
             message = await self.__producer()
-            if message and self.isConnect:
+            if message:
                 await websocket.send(message)
                 
 
@@ -50,6 +50,9 @@ class MyServer:
             task.cancel()
             self.isConnect = False
             util.log(1,"websocket连接断开:{}".format(self.__port))
+            if self.__port == 10002:
+                web_server_instance = get_web_instance()  
+                web_server_instance.add_cmd({"is_connect": False}) 
     
     async def __consumer(self, message):
         self.on_revice_handler(message)
@@ -57,6 +60,7 @@ class MyServer:
     async def __producer(self):
         if len(self.__listCmd) > 0:
             message = self.on_send_handler(self.__listCmd.pop(0))
+            print(message)
             return message
         else:
             return None
@@ -77,6 +81,7 @@ class MyServer:
     def on_send_handler(self, message):
         return message
 
+
     # 创建server
     def __connect(self):
         self.__event_loop = asyncio.new_event_loop()
@@ -91,7 +96,7 @@ class MyServer:
 
     # 往要发送的命令列表中，添加命令
     def add_cmd(self, content):
-        if not self.__running or not self.isConnect:
+        if not self.__running or (not self.isConnect and self.__port == 10002):
             return
         jsonObj = json.dumps(content)
         self.__listCmd.append(jsonObj)
@@ -129,11 +134,15 @@ class HumanServer(MyServer):
         pass
     
     def on_connect_handler(self):
-        pass
+        web_server_instance = get_web_instance()  
+        web_server_instance.add_cmd({"is_connect": True}) 
+        
 
     def on_send_handler(self, message):
-        # util.log(1, '向human发送 {}'.format(message))
+        util.log(1, '向human发送 {}'.format(message))
         return message
+    
+
 
 #ui端server
 class WebServer(MyServer):
@@ -162,6 +171,8 @@ class TestServer(MyServer):
     
     def on_send_handler(self, message):
         return message
+    
+
 
 
 #单例
