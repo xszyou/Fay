@@ -16,7 +16,6 @@ class MyServer:
         self.__port = port  # 端口号
         self.__listCmd = []  # 要发送的信息的列表
         self.__server: Serve = None
-        self.__message_value = None  # client返回消息的value
         self.__event_loop: AbstractEventLoop = None
         self.__running = True
         self.__pending = None
@@ -28,39 +27,38 @@ class MyServer:
     # 接收处理
     async def __consumer_handler(self, websocket, path):
         async for message in websocket:
+            await asyncio.sleep(0.01)
             await self.__consumer(message)
-
+            
+            
     # 发送处理
     async def __producer_handler(self, websocket, path):
         while self.__running:
-            await asyncio.sleep(0.000001)
+            await asyncio.sleep(0.01)
             message = await self.__producer()
             if message:
                 await websocket.send(message)
-                
-
+    
     async def __handler(self, websocket, path):
         self.isConnect = True
         util.log(1,"websocket连接上:{}".format(self.__port))
         self.on_connect_handler()
-        consumer_task = asyncio.ensure_future(self.__consumer_handler(websocket, path))
-        producer_task = asyncio.ensure_future(self.__producer_handler(websocket, path))
+        consumer_task = asyncio.ensure_future(self.__consumer_handler(websocket, path))#接收
+        producer_task = asyncio.ensure_future(self.__producer_handler(websocket, path))#发送
         done, self.__pending = await asyncio.wait([consumer_task, producer_task], return_when=asyncio.FIRST_COMPLETED, )
         for task in self.__pending:
             task.cancel()
             self.isConnect = False
+            self.__running = False
             util.log(1,"websocket连接断开:{}".format(self.__port))
-            if self.__port == 10002:
-                web_server_instance = get_web_instance()  
-                web_server_instance.add_cmd({"is_connect": False}) 
-    
+            self.on_close_handler()
+                
     async def __consumer(self, message):
         self.on_revice_handler(message)
     
     async def __producer(self):
         if len(self.__listCmd) > 0:
             message = self.on_send_handler(self.__listCmd.pop(0))
-            print(message)
             return message
         else:
             return None
@@ -81,6 +79,10 @@ class MyServer:
     def on_send_handler(self, message):
         return message
 
+    #Edit by xszyou on 20230816:通过继承此类来实现服务端的断开后的处理逻辑
+    @abstractmethod
+    def on_close_handler(self):
+        pass
 
     # 创建server
     def __connect(self):
@@ -88,7 +90,7 @@ class MyServer:
         asyncio.set_event_loop(self.__event_loop)
         self.__isExecute = True
         if self.__server:
-            print('server already exist')
+            util.log(1, 'server already exist')
             return
         self.__server = websockets.serve(self.__handler, self.__host, self.__port)
         asyncio.get_event_loop().run_until_complete(self.__server)
@@ -96,7 +98,7 @@ class MyServer:
 
     # 往要发送的命令列表中，添加命令
     def add_cmd(self, content):
-        if not self.__running or (not self.isConnect and self.__port == 10002):
+        if not self.__running:
             return
         jsonObj = json.dumps(content)
         self.__listCmd.append(jsonObj)
@@ -117,31 +119,13 @@ class MyServer:
         try:
             all_tasks = asyncio.all_tasks(self.__event_loop)
             for task in all_tasks:
-                # print(task.cancel())
                 while not task.cancel():
-                    print("无法关闭！")
+                    util.log(1, "无法关闭！")
             self.__event_loop.stop()
             self.__event_loop.close()
         except BaseException as e:
-            print("Error: {}".format(e))
+            util.log(1, "Error: {}".format(e))
 
-#数字人端server
-class HumanServer(MyServer):
-    def __init__(self, host='0.0.0.0', port=10000):
-        super().__init__(host, port)
-
-    def on_revice_handler(self, message):
-        pass
-    
-    def on_connect_handler(self):
-        web_server_instance = get_web_instance()  
-        web_server_instance.add_cmd({"is_connect": True}) 
-        
-
-    def on_send_handler(self, message):
-        util.log(1, '向human发送 {}'.format(message))
-        return message
-    
 
 
 #ui端server
@@ -158,6 +142,34 @@ class WebServer(MyServer):
     def on_send_handler(self, message):
         return message
 
+    def on_close_handler(self):
+        pass
+
+#数字人端server
+class HumanServer(MyServer):
+    def __init__(self, host='0.0.0.0', port=10000):
+        super().__init__(host, port)
+
+    def on_revice_handler(self, message):
+        pass
+    
+    def on_connect_handler(self):
+        web_server_instance = get_web_instance()  
+        web_server_instance.add_cmd({"is_connect": True}) 
+        
+
+    def on_send_handler(self, message):
+        util.log(1, '向human发送 {}'.format(message))
+        if not self.isConnect:
+            return None
+        return message
+
+    def on_close_handler(self):
+        web_server_instance = get_web_instance()  
+        web_server_instance.add_cmd({"is_connect": False}) 
+
+        
+
 #测试
 class TestServer(MyServer):
     def __init__(self, host='0.0.0.0', port=10000):
@@ -172,6 +184,8 @@ class TestServer(MyServer):
     def on_send_handler(self, message):
         return message
     
+    def on_close_handler(self):
+        pass
 
 
 

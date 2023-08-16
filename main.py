@@ -30,10 +30,19 @@ def __clear_songs():
         if file_name.endswith('.mp3'):
             os.remove('./songs/' + file_name)
 
+def __clear_logs():
+    if not os.path.exists("./logs"):
+        os.mkdir("./logs")
+    for file_name in os.listdir('./logs'):
+        if file_name.endswith('.log'):
+            os.remove('./logs/' + file_name)
+           
+
 
 if __name__ == '__main__':
     __clear_samples()
     __clear_songs()
+    __clear_logs()
     config_util.load_config()
     dbstatus = os.path.exists("fay.db")
     if(dbstatus == False):

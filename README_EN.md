@@ -122,6 +122,12 @@ Message format: View [WebSocket.md](https://github.com/TheRamU/Fay/blob/main/Web
 
 ## **Upgrade Log**
 
+**2023.08.16:**
+
+- Optimized the issue of high system resource consumption caused by UE repeatedly reconnecting;
+- Automatically control whether to start panel playback;
+- Automatically delete runtime logs.
+
 **2023.08.09:**
 
 - Remove mp3 format warning message;

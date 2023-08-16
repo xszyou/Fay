@@ -84,9 +84,8 @@
                                         <br>
                                         <li>
                                             <p>使用面板播放：</p>
-                                            <el-switch v-model="play_sound_enabled" active-color="#13ce66"
-                                                inactive-color="#ff4949">
-                                            </el-switch>
+                                           <p style="text-align: left;" v-if="play_sound_enabled">是</p>
+                                           <p style="text-align: left;" v-else>否</p>
                                         </li>
                                         <br>
                                         <li>
@@ -146,8 +145,9 @@
                                         @click=postStartLive()>开启</el-button>
                                     <el-button type="button" style="width:200px" @click=postData()>保存配置</el-button>
                                 </li>
-                                <li class="p_red">
-                                    <p>注：启动后请选中场景客户端，让其前端运行，否则可能会卡顿，或者无声音。</p>
+                                <li class="p_red" >
+                                    <p v-if="is_connect" style="color: #67c23a;"> 数字人：已连接 </p>
+                                    <p v-else > 数字人：未连接 </p>
                                 </li>
                             </ul>
                         </div>
