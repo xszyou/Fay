@@ -49,7 +49,6 @@ class MyServer:
         for task in self.__pending:
             task.cancel()
             self.isConnect = False
-            self.__running = False
             util.log(1,"websocket连接断开:{}".format(self.__port))
             self.on_close_handler()
                 
@@ -159,7 +158,7 @@ class HumanServer(MyServer):
         
 
     def on_send_handler(self, message):
-        util.log(1, '向human发送 {}'.format(message))
+        # util.log(1, '向human发送 {}'.format(message))
         if not self.isConnect:
             return None
         return message
