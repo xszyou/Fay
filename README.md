@@ -121,6 +121,11 @@ Remote Android　　[Live2D](https://www.bilibili.com/video/BV1sx4y1d775/?vd_sou
 
 **2023.08.16：**
 
++ 更换gpt对接方式;
++ 增加chatglm2对接。
+
+**2023.08.16：**
+
 + 优化UE反复重连系统资源占用太高的问题；
 + 自动控制是否启动面板播放；
 + 自动删除运行日志。

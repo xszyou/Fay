@@ -39,6 +39,7 @@ from ai_module import yolov8
 from ai_module import nlp_VisualGLM
 from ai_module import nlp_lingju
 from ai_module import nlp_rwkv_api
+from ai_module import nlp_ChatGLM2
 
 import platform
 if platform.system() == "Windows":
@@ -53,7 +54,9 @@ modules = {
     "nlp_rasa": nlp_rasa,
     "nlp_VisualGLM": nlp_VisualGLM,
     "nlp_lingju": nlp_lingju,
-    "nlp_rwkv_api":nlp_rwkv_api
+    "nlp_rwkv_api":nlp_rwkv_api,
+    "nlp_chatglm2": nlp_ChatGLM2
+
 }
 
 

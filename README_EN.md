@@ -122,6 +122,11 @@ Message format: View [WebSocket.md](https://github.com/TheRamU/Fay/blob/main/Web
 
 ## **Upgrade Log**
 
+**2023.08.23:**
+
+- Replace the GPT docking method;
+- Add chatglm2 docking.
+
 **2023.08.16:**
 
 - Optimized the issue of high system resource consumption caused by UE repeatedly reconnecting;
