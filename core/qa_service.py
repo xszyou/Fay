@@ -2,11 +2,19 @@
 from openpyxl import load_workbook
 import difflib
 from utils import config_util as cfg
+from scheduler.thread_manager import MyThread
+import shlex
+import subprocess
+import time
 
 def question(query_type,text):
     qa = QAService()
     answer = qa.question(query_type,text)
     return answer
+
+def run_script(command):
+    args = shlex.split(command)  # 分割命令行参数
+    subprocess.Popen(args)
 
 class QAService:
     
@@ -34,31 +42,38 @@ class QAService:
     def question(self, query_type, text):
         if query_type == 'qa':
             answer_dict = self.__read_qna(cfg.config['interact']['QnA'])
-            answer = self.__get_keyword(answer_dict, text)
+            answer, action = self.__get_keyword(answer_dict, text, query_type)
+            if action:
+                MyThread(target=self.__run, args=[action]).start()
+            return answer
+    
         elif query_type == 'Persona':
             answer_dict = self.attribute_keyword
-            answer = self.__get_keyword(answer_dict, text)
+            answer, action  = self.__get_keyword(answer_dict, text, query_type)
         elif query_type == 'command':
-            answer = self.__get_keyword(self.command_keyword, text)
+            answer, action  = self.__get_keyword(self.command_keyword, text, query_type)
         return answer
-    
 
-    def __read_qna(self, filename) -> list:
+    def __run(self,action):
+        time.sleep(2)
+        run_script(action)   
+
+    def __read_qna(self, filename):
         qna = []
         try:
             wb = load_workbook(filename)
-            sheets = wb.worksheets
-            sheet = sheets[0]
-            for row in sheet.rows:
+            sheet = wb.active
+            for row in sheet.iter_rows(min_row=2, values_only=True):
                 if len(row) >= 2:
-                    qna.append([row[0].value.split(";"), row[1].value])
+                    qna.append([row[0].split(";"), row[1], row[2] if len(row) >= 3 else None])
         except BaseException as e:
-            print("无法读取Q&A文件 {} -> ".format(filename) + str(e))
+            print(f"无法读取Q&A文件 {filename} -> {e}")
         return qna
 
-    def __get_keyword(self, keyword_dict, text):
+    def __get_keyword(self, keyword_dict, text, query_type):
         last_similar = 0
         last_answer = ''
+        last_action = ''
         for qa in keyword_dict:
             for quest in qa[0]:
                 similar = self.__string_similar(text, quest)
@@ -67,10 +82,11 @@ class QAService:
                 if similar > last_similar:
                     last_similar = similar
                     last_answer = qa[1]
+                    if query_type == "qa":
+                        last_action = qa[2]
         if last_similar >= 0.6:
-            return last_answer
-        return None
-
+            return last_answer, last_action
+        return None, None
 
     def __string_similar(self, s1, s2):
         return difflib.SequenceMatcher(None, s1, s2).quick_ratio()

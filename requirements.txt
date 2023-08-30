@@ -11,7 +11,7 @@ flask_cors~=3.0.10
 PyQtWebEngine~=5.15.5
 eyed3~=0.9.6
 websocket-client
-azure-cognitiveservices-speech~=1.21.0
+azure-cognitiveservices-speech
 aliyun-python-sdk-core==2.13.3
 scipy~=1.10.0
 simhash
@@ -21,3 +21,5 @@ edge_tts~=6.1.3
 eyed3
 revChatGPT
 ultralytics
+subprocess
+shlex

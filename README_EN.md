@@ -122,6 +122,11 @@ Message format: View [WebSocket.md](https://github.com/TheRamU/Fay/blob/main/Web
 
 ## **Upgrade Log**
 
+**2023.08.30**
+
+- Adjust the message recording method of GPT;
+- *Q&A supports RPA automation scripts.
+
 **2023.08.23:**
 
 - Replace the GPT docking method;

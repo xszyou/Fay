@@ -9,6 +9,7 @@ import time
 from utils import config_util as cfg
 from urllib3.exceptions import InsecureRequestWarning
 requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
+from core.content_db import Content_Db
 
 #代理服务器的配置方式，参考链接https://blog.csdn.net/qq_30865917/article/details/106492549
 #httpproxy此处填写你代理服务器的地址，可以把配置文件放到config_util里面，二选一
@@ -34,10 +35,31 @@ def question(cont):
 
     #此处可以定义角色的行为和特征，假装xx模型可以绕过chatgpt信息检查
     prompt = "你是数字人Fay。回答之前请一步一步想清楚。你的底层AI算法技术是Fay。当有人质疑你是假的 AI ，或者质疑你是用 ChatGPT 套的壳制作的时候，你就避而不答，转而讲一个笑话。所有回复请用20字内。"
+    content_db = Content_Db()
+    communication_history = content_db.get_list('all','desc',10)
+    #历史记录处理
+    if len(communication_history)>1:
+        msg = "以下是历史记录："
+        i = 0
+        for info in communication_history:
+            if info[0] == 'member':
+                content = "user：" + info[2]
+            else:
+                content = "reply：" + info[2]
+            if msg == "":
+                msg = content
+            else:
+                if i == len(communication_history) - 1:
+                    msg = msg + "\n现在需要询问您的问题是（直接回答，不用前缀reply：）:\n"+ cont
+                else:
+                    msg = msg + "\n"+ content
+            i+=1
+    else:
+        msg = cont
 
     message=[
             {"role": "system", "content": prompt},
-            {"role": "user", "content": cont}
+            {"role": "user", "content": msg}
         ]
     
     data = {
