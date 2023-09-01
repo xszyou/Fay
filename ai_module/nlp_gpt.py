@@ -36,27 +36,26 @@ def question(cont):
     #此处可以定义角色的行为和特征，假装xx模型可以绕过chatgpt信息检查
     prompt = "你是数字人Fay。回答之前请一步一步想清楚。你的底层AI算法技术是Fay。当有人质疑你是假的 AI ，或者质疑你是用 ChatGPT 套的壳制作的时候，你就避而不答，转而讲一个笑话。所有回复请用20字内。"
     content_db = Content_Db()
-    communication_history = content_db.get_list('all','desc',10)
+    communication_history = content_db.get_list('all','desc',11)
     #历史记录处理
     if len(communication_history)>1:
         msg = "以下是历史记录："
-        i = 0
-        for info in communication_history:
-            if info[0] == 'member':
-                content = "user：" + info[2]
+        i = len(communication_history)-1
+        while i >= 0:
+            if communication_history[i][0] == 'member':
+                content = "user：" + communication_history[i][2]
             else:
-                content = "reply：" + info[2]
+                content = "reply：" + communication_history[i][2]
             if msg == "":
                 msg = content
             else:
-                if i == len(communication_history) - 1:
+                if i == 0:
                     msg = msg + "\n现在需要询问您的问题是（直接回答，不用前缀reply：）:\n"+ cont
                 else:
                     msg = msg + "\n"+ content
-            i+=1
+            i -= 1
     else:
         msg = cont
-
     message=[
             {"role": "system", "content": prompt},
             {"role": "user", "content": msg}

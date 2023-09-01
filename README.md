@@ -119,13 +119,14 @@ Remote Android　　[Live2D](https://www.bilibili.com/video/BV1sx4y1d775/?vd_sou
 
 ## **三、升级日志**
 
+**2023.09.01**
+
++ 修复gpt、chatglm2的消息记录方式逻辑。
+
 **2023.08.30**
 
 + 调整gpt的消息记录方式;
-
 + *q&a支持RPA自动化脚本。
-
-  
 
 **2023.08.23：**
 
