@@ -122,6 +122,12 @@ Message format: View [WebSocket.md](https://github.com/TheRamU/Fay/blob/main/Web
 
 ## **Upgrade Log**
 
+**2023.09.06**
+
+- Modification of digital person connection prompts;
+- Q&A fill in demo repair;
+- Fix installation package errors.
+
 **2023.09.01**
 
 - Fix the message logging logic of GPT and Chatglm2.

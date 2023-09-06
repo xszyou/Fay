@@ -136,7 +136,7 @@ class WebServer(MyServer):
         pass
     
     def on_connect_handler(self):
-        self.add_cmd({"panelMsg": "使用提示：直播，请关闭麦克风。连接数字人，请关闭面板播放。"})
+        self.add_cmd({"panelMsg": "使用提示：Fay可以独立使用，启动数字人将自动对接。"})
 
     def on_send_handler(self, message):
         return message

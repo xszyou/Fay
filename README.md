@@ -119,6 +119,12 @@ Remote Android　　[Live2D](https://www.bilibili.com/video/BV1sx4y1d775/?vd_sou
 
 ## **三、升级日志**
 
+**2023.09.06**
+
++ 数字人连接提示词修改;
++ Q&A填写demo修复;
++ 安装包错误修复。
+
 **2023.09.01**
 
 + 修复gpt、chatglm2的消息记录方式逻辑。
