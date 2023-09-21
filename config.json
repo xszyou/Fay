@@ -21,7 +21,7 @@
             "indifferent": 10,
             "join": 10
         },
-        "playSound": true,
+        "playSound": false,
         "visualization": false
     },
     "items": [
@@ -46,8 +46,9 @@
             "url": "\u65b0\u7248\u672c\u4e0d\u7528\u586b\u5199"
         },
         "record": {
-            "device": "",
-            "enabled": false
+            "channels": 1,
+            "device": "\u9ea6\u514b\u98ce (UGREEN CM564 USB Audio )",
+            "enabled": true
         }
     }
 }

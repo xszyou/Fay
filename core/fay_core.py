@@ -2,6 +2,7 @@ import difflib
 import imp
 import math
 import os
+import platform
 import random
 import time
 import wave
@@ -30,6 +31,7 @@ import pygame
 from utils import config_util as cfg
 from core.content_db import Content_Db
 from datetime import datetime
+from test.ovr_lipsync.test_olipsync import LipSyncGenerator
 
 from ai_module import nlp_rasa
 from ai_module import nlp_chatgpt
@@ -41,11 +43,11 @@ from ai_module import nlp_lingju
 from ai_module import nlp_rwkv_api
 from ai_module import nlp_ChatGLM2
 
-import platform
-if platform.system() == "Windows":
-    import sys
-    sys.path.append("test/ovr_lipsync")
-    from test_olipsync import LipSyncGenerator
+# import platform
+# if platform.system() == "Windows":
+#     import sys
+#     sys.path.append("test/ovr_lipsync")
+#     from test_olipsync import LipSyncGenerator
     
 modules = {
     "nlp_yuan": nlp_yuan, 
@@ -411,7 +413,6 @@ class FeiFei:
                 audio_length = eyed3.load(file_url).info.time_secs #mp3音频长度
             except Exception as e:
                 audio_length = 3
-
             # with wave.open(file_url, 'rb') as wav_file: #wav音频长度
             #     audio_length = wav_file.getnframes() / float(wav_file.getframerate())
             #     print(audio_length)
@@ -421,17 +422,20 @@ class FeiFei:
             else:#发送音频给ue和socket
                 #推送ue
                 content = {'Topic': 'Unreal', 'Data': {'Key': 'audio', 'Value': os.path.abspath(file_url), 'Text': self.a_msg, 'Time': audio_length, 'Type': say_type}}
+                print(content)
                 #计算lips
-                if platform.system() == "Windows":
-                    try:
-                        lip_sync_generator = LipSyncGenerator()
-                        viseme_list = lip_sync_generator.generate_visemes(os.path.abspath(file_url))
-                        consolidated_visemes = lip_sync_generator.consolidate_visemes(viseme_list)
-                        content["Data"]["Lips"] = consolidated_visemes
-                    except e:
-                        util.log(1, "唇型数字生成失败，无法使用新版ue5工程")
+                try:
+                    lip_sync_generator = LipSyncGenerator()
+                    print(os.path.abspath(file_url))
+                    viseme_list = lip_sync_generator.generate_visemes(os.path.abspath(file_url))
+                    print(f"====== {viseme_list} ======")
+                    consolidated_visemes = lip_sync_generator.consolidate_visemes(viseme_list)
+                    content["Data"]["Lips"] = consolidated_visemes
+                    print(f"====== {consolidated_visemes} ======")
+                except e:
+                    util.log(1, "唇型数字生成失败，无法使用新版ue5工程")
                 wsa_server.get_instance().add_cmd(content)
-
+                print(self.deviceConnect)
                 #推送远程音频
                 if self.deviceConnect is not None:
                     try:
@@ -458,6 +462,7 @@ class FeiFei:
                 util.log(1, '结束播放！')
             self.speaking = False
         except Exception as e:
+            print("123456789")
             print(e)
 
     def __device_socket_keep_alive(self):

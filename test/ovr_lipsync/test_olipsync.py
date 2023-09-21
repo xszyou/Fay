@@ -20,10 +20,14 @@ class LipSyncGenerator:
         self.exe_path = "test\\ovr_lipsync\\ovr_lipsync_exe\\ProcessWAV.exe"
 
     def convert_mp3_to_wav(self, mp3_filepath):
+
+        print(f"********** {mp3_filepath} **********")
         audio = AudioSegment.from_mp3(mp3_filepath)
+        print(f"********** {audio} **********")
         # 使用 set_frame_rate 方法设置采样率
         audio = audio.set_frame_rate(44100)
         wav_filepath = mp3_filepath.rsplit(".", 1)[0] + ".wav"
+        print(f"********** {wav_filepath} **********")
         audio.export(wav_filepath, format="wav")
         return wav_filepath
 
@@ -47,12 +51,13 @@ class LipSyncGenerator:
         return new_viseme
 
     def generate_visemes(self, mp3_filepath):
-        
 
+        print("****** start generate_visemes ******")
         wav_filepath = self.convert_mp3_to_wav(mp3_filepath)
+        print(f"****** {wav_filepath} ******")
         arguments = ["--print-viseme-name", wav_filepath]
         self.run_exe_and_get_output(arguments)
-        
+        print(self.viseme)
         return self.filter(self.viseme)
         
     def consolidate_visemes(self, viseme_list):

@@ -45,6 +45,7 @@ if __name__ == '__main__':
     __clear_logs()
     config_util.load_config()
     dbstatus = os.path.exists("fay.db")
+    print(dbstatus)
     if(dbstatus == False):
          contentdb = Content_Db()
          contentdb.init_db()     
