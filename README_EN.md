@@ -122,6 +122,13 @@ Message format: View [WebSocket.md](https://github.com/TheRamU/Fay/blob/main/Web
 
 ## **Upgrade Log**
 
+**2023.10.23**
+
+- Fix the issue of digital human connection state recognition errors caused by a certain low probability;
+
+- *Add wake-up function
+
+
 **2023.09.06**
 
 - Modification of digital person connection prompts;
