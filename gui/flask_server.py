@@ -69,6 +69,12 @@ def control_eyes():
 
 @__app.route('/api/get-data', methods=['post'])
 def api_get_data():
+    config_data = config_util.config
+    if  wsa_server.new_instance().isConnect:
+        config_data['interact']['playSound'] = False
+    else:
+        config_data['interact']['playSound'] = True
+    config_util.save_config(config_data)
     wsa_server.get_web_instance().add_cmd({
         "voiceList": [
             {"id": EnumVoice.XIAO_XIAO.name, "name": "晓晓"},

@@ -27,6 +27,9 @@ ASR_mode = None
 local_asr_ip = None 
 local_asr_port = None 
 
+picovoice_api_key = None
+
+
 def load_config():
     global config
     global system_config
@@ -51,6 +54,9 @@ def load_config():
     global ASR_mode
     global local_asr_ip 
     global local_asr_port
+
+    global picovoice_api_key 
+
 
     system_config = ConfigParser()
     system_config.read('system.conf', encoding='UTF-8')
@@ -77,7 +83,11 @@ def load_config():
 
     proxy_config = system_config.get('key', 'proxy_config')
 
+    picovoice_api_key = system_config.get('key', 'picovoice_api_key')
+
     config = json.load(codecs.open('config.json', encoding='utf-8'))
+
+
 
 
 def save_config(config_data):

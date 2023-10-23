@@ -21,3 +21,6 @@ edge_tts~=6.1.3
 eyed3
 revChatGPT
 ultralytics
+pvporcupine
+pvrecorder
+

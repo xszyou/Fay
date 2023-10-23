@@ -100,11 +100,11 @@ def send_for_answer(msg,sendto):
         contentdb.add_content('member','send',msg)
         textlist = []
         text = None
+        
         # 人设问答
         keyword = qa_service.question('Persona',msg)
         if keyword is not None:
             text = config_util.config["attribute"][keyword]
-
         # 全局问答
         if text is None:
             answer = qa_service.question('qa',msg)
@@ -213,6 +213,9 @@ class FeiFei:
                         wsa_server.get_instance().add_cmd(content)
                 return "NO_ANSWER"
         
+        if text == '唤醒':
+            return '您好，我是FAY智能助理，有什么可以帮您？'
+
         # 人设问答
         keyword = qa_service.question('Persona',text)
         if keyword is not None:

@@ -74,7 +74,8 @@ new Vue({
                 content: 'Tab 2 content'
             }],
             msg_list:[],
-            is_connect: false
+            is_connect: false,
+            wake_word_enabled:false
 
         }
     },
@@ -245,6 +246,7 @@ new Vue({
                             let interact = config["interact"]
                             let perception = interact["perception"]
                             let items = config["items"]
+                            _this.wake_word_enabled = source["wake_word_enabled"]
                             _this.play_sound_enabled = interact["playSound"]
                             _this.visualization_detection_enabled = interact["visualization"]
                             _this.source_liveRoom_enabled = source["liveRoom"]["enabled"]
@@ -313,7 +315,8 @@ new Vue({
                         "record": {
                             "enabled": this.source_record_enabled,
                             "device": this.source_record_device
-                        }
+                        },
+                        "wake_word_enabled": this.wake_word_enabled
                     },
                     "attribute": {
                         "voice": this.attribute_voice,
