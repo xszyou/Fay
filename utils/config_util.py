@@ -29,6 +29,7 @@ local_asr_port = None
 
 picovoice_api_key = None
 
+ltp_mode = None
 
 def load_config():
     global config
@@ -56,6 +57,8 @@ def load_config():
     global local_asr_port
 
     global picovoice_api_key 
+
+    global ltp_mode 
 
 
     system_config = ConfigParser()
@@ -85,6 +88,7 @@ def load_config():
 
     picovoice_api_key = system_config.get('key', 'picovoice_api_key')
 
+    ltp_mode = system_config.get('key', 'ltp_mode')
     config = json.load(codecs.open('config.json', encoding='utf-8'))
 
 

@@ -5,7 +5,7 @@
 
 import requests
 import time
-
+from utils import util
 from utils import config_util as cfg
 from urllib3.exceptions import InsecureRequestWarning
 requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
@@ -65,7 +65,7 @@ def question(cont):
         response_text = "抱歉，我现在太忙了，休息一会，请稍后再试。"
 
 
-    print("接口调用耗时 :" + str(time.time() - starttime))
+    util.log(1, "接口调用耗时 :" + str(time.time() - starttime))
 
     return response_text
 

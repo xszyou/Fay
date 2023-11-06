@@ -10,6 +10,7 @@ from utils import config_util as cfg
 from urllib3.exceptions import InsecureRequestWarning
 requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
 from core.content_db import Content_Db
+from utils import util
 
 #代理服务器的配置方式，参考链接https://blog.csdn.net/qq_30865917/article/details/106492549
 #httpproxy此处填写你代理服务器的地址，可以把配置文件放到config_util里面，二选一
@@ -86,7 +87,7 @@ def question(cont):
         response_text = "抱歉，我现在太忙了，休息一会，请稍后再试。"
 
 
-    print("接口调用耗时 :" + str(time.time() - starttime))
+    util.log(1, "接口调用耗时 :" + str(time.time() - starttime))
 
     return response_text
 

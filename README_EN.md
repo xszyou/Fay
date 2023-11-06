@@ -122,6 +122,16 @@ Message format: View [WebSocket.md](https://github.com/TheRamU/Fay/blob/main/Web
 
 ## **Upgrade Log**
 
+**2023.11.06**
+
+- Update dependency packages: motion, pydub, flask~=3.0.0;
+
+- *Adding optional sentiment analysis for motion;
+
+- Fix bug in iFlytek sentiment analysis interface call;
+
+- Improve the logic for saving configuration.
+
 **2023.10.23**
 
 - Fix the issue of digital human connection state recognition errors caused by a certain low probability;

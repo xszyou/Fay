@@ -1,6 +1,7 @@
 
 import requests
 import time
+from utils import util
 
 def question(cont):
     url= "https://rwkv.ai-creator.net/chntuned/v1/chat/completions"
@@ -39,7 +40,7 @@ def question(cont):
         response_text = "抱歉，我现在太忙了，休息一会，请稍后再试。"
 
 
-    print("接口调用耗时 :" + str(time.time() - starttime))
+    util.log(1, "接口调用耗时 :" + str(time.time() - starttime))
 
     return response_text.strip()
 

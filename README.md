@@ -92,6 +92,7 @@ Remote Android　　[Live2D](https://www.bilibili.com/video/BV1sx4y1d775/?vd_sou
 │   ├── nlp_rwkv.py         # 离线对接rwkv
 │   ├── nlp_rwkv_api.py     # rwkv server api
 │   ├── yolov8.py           # yolov8资态识别
+│   ├── nlp_cemotion.py     # cemotion 情感分析
 │   └── xf_ltp.py           # 讯飞 情感分析
 ├── bin                     # 可执行文件目录
 ├── core                    # 数字人核心
@@ -118,6 +119,13 @@ Remote Android　　[Live2D](https://www.bilibili.com/video/BV1sx4y1d775/?vd_sou
 ```
 
 ## **三、升级日志**
+
+**2023.11.06**
+
++ 更新依赖包:cemotion、pydub、flask~=3.0.0；
++ *增加cemotion可选情感分析;
++ 修复讯飞情感分析接口调用bug;
++ 完善保存配置逻辑。
 
 **2023.10.23**
 

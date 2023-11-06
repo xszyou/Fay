@@ -4,7 +4,7 @@ pyaudio~=0.2.11
 websockets~=10.2
 ws4py~=0.5.1
 pyqt5~=5.15.6
-flask~=2.1.1
+flask~=3.0.0
 openpyxl~=3.0.9
 pygame~=2.1.2
 flask_cors~=3.0.10
@@ -23,4 +23,5 @@ revChatGPT
 ultralytics
 pvporcupine
 pvrecorder
-
+pydub
+cemotion
