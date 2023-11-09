@@ -1,6 +1,7 @@
 import audioop
 import math
 import time
+import threading
 from abc import abstractmethod
 
 from ai_module.ali_nls import ALiNls
@@ -36,6 +37,9 @@ class Recorder:
         #Edit by xszyou in 20230516:增加本地asr
         self.ASRMode = cfg.ASR_mode
         self.__aLiNls = self.asrclient()
+        self.is_awake = False
+        self.wakeup_matched = False
+        self.timer = threading.Timer(60, self.reset_wakeup_status)  # 60秒后执行reset_wakeup_status方法
 
 
     def asrclient(self):
@@ -73,7 +77,10 @@ class Recorder:
             text += "-"
         print(text + " [" + str(int(per * 100)) + "%]")
 
-    def __waitingResult(self, iat):
+    def reset_wakeup_status(self):
+        self.wakeup_matched = False        
+
+    def __waitingResult(self, iat: asrclient):
         if self.__fay.playing:
             return
         self.processing = True
@@ -85,9 +92,22 @@ class Recorder:
         text = iat.finalResults
         util.log(1, "语音处理完成！ 耗时: {} ms".format(math.floor((time.time() - tm) * 1000)))
         if len(text) > 0:
-            self.on_speaking(text)
-            self.processing = False
+            if not self.wakeup_matched:
+                if '你好' in text or 'Hello' in text or 'Hi' in text:
+                    self.wakeup_matched = True  # 唤醒成功
+                    print('唤醒成功')
+                    self.on_speaking(text)
+                    self.processing = False
+                    self.timer.cancel()  # 取消之前的计时器任务
+            else:
+                self.on_speaking(text)
+                self.processing = False
+                self.timer.cancel()  # 取消之前的计时器任务
+                self.timer = threading.Timer(60, self.reset_wakeup_status)  # 重设计时器为60秒
+                self.timer.start()
         else:
+            if self.wakeup_matched:
+                self.wakeup_matched = False
             util.log(1, "[!] 语音未检测到内容！")
             self.processing = False
             self.dynamic_threshold = self.__get_history_percentage(30)
@@ -110,7 +130,7 @@ class Recorder:
                 data = np.frombuffer(data, dtype=np.int16)
                 data = np.reshape(data, (-1, cfg.config['source']['record']['channels']))  # reshaping the array to split the channels
                 mono = data[:, 0]  # taking the first channel
-                data = mono.tobytes()  
+                data = mono.tobytes() 
 
             level = audioop.rms(data, 2)
             if len(self.__history_data) >= 5:
