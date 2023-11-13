@@ -48,6 +48,7 @@
         "record": {
             "device": "",
             "enabled": false
-        }
+        },
+        "wake_word_enabled": false
     }
 }

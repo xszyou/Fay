@@ -34,28 +34,30 @@ class FeiEyes:
         self.is_running = False
         self.img = None
         
-    def is_sitting(self,keypoints):
+    def is_sitting(self, keypoints):
+        if len(keypoints) < 17:  # 确保有足够的关键点
+            return False
+        # 检查每个关键点的置信度
+        if keypoints[11][2] < 0.5 or keypoints[12][2] < 0.5 or keypoints[13][2] < 0.5 or keypoints[14][2] < 0.5 or keypoints[15][2] < 0.5 or keypoints[16][2] < 0.5:
+            return False
+
         left_hip, right_hip = keypoints[11][:2], keypoints[12][:2]
         left_knee, right_knee = keypoints[13][:2], keypoints[14][:2]
         left_ankle, right_ankle = keypoints[15][:2], keypoints[16][:2]
 
-        # 髋部和膝盖的平均位置
         hip_knee_y = (left_hip[1] + right_hip[1] + left_knee[1] + right_knee[1]) / 4
-
-        # 膝盖和脚踝的平均位置
         knee_ankle_y = (left_knee[1] + right_knee[1] + left_ankle[1] + right_ankle[1]) / 4
 
-        # 如果髋部和膝盖的平均位置在膝盖和脚踝的平均位置上方，判定为坐着
         return hip_knee_y < knee_ankle_y
 
-    def is_standing(self,keypoints): 
-        head = keypoints[0][:2] 
-        left_ankle, right_ankle = keypoints[15][:2], keypoints[16][:2] 
-        # 头部位置较高且脚部与地面接触 
-        if head[1] > left_ankle[1] and head[1] > right_ankle[1]: 
-            return True 
-        else:
+    def is_standing(self, keypoints):
+        if len(keypoints) < 17 or keypoints[0][2] < 0.5 or keypoints[15][2] < 0.5 or keypoints[16][2] < 0.5:
             return False
+
+        head = keypoints[0][:2]
+        left_ankle, right_ankle = keypoints[15][:2], keypoints[16][:2]
+
+        return head[1] > left_ankle[1] and head[1] > right_ankle[1]
 
     def get_counts(self):
         if not self.is_running:
@@ -98,7 +100,7 @@ class FeiEyes:
                     x1, y1, x2, y2 = box
                     cv2.rectangle(operated_frame, (int(x1.item()), int(y1.item())), (int(x2.item()), int(y2.item())), (0, 255, 0), 2)
                     cv2.putText(operated_frame, f"{res.names[int(cls.item())]}", (int(x1.item()), int(y1.item()) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)        
-                if res.keypoints is not None and res.keypoints.size(0) > 0:  # check if keypoints exist
+                if res.keypoints is not None and res.keypoints.xy.numel() > 0: # check if keypoints exist
                     keypoints = res.keypoints[0]
                     #总人数
                     person_count += 1
@@ -110,17 +112,20 @@ class FeiEyes:
                         stand_count += 1
 
                     for keypoint in keypoints:  # loop over keypoints
-                        x, y, conf = keypoint
-                        if conf > 0.5:  # draw keypoints with confidence greater than 0.5
-                            cv2.circle(operated_frame, (int(x.item()), int(y.item())), 3, (0, 0, 255), -1)
+                       
+                        if len(keypoint) == 3: 
+                            x, y, conf = keypoint
+                            if conf > 0.5:  # draw keypoints with confidence greater than 0.5
+                                cv2.circle(operated_frame, (int(x.item()), int(y.item())), 3, (0, 0, 255), -1)
 
                     # Draw lines connecting keypoints
                     for pair in self.POSE_PAIRS:
-                        pt1, pt2 = keypoints[pair[0]][:2], keypoints[pair[1]][:2]
-                        conf1, conf2 = keypoints[pair[0]][2], keypoints[pair[1]][2]
-                        if conf1 > 0.5 and conf2 > 0.5:
+                         if pair[0] < len(keypoints) and pair[1] < len(keypoints):
+                            pt1, pt2 = keypoints[pair[0]][:2], keypoints[pair[1]][:2]
+                            conf1, conf2 = keypoints[pair[0]][2], keypoints[pair[1]][2]
+                            if conf1 > 0.5 and conf2 > 0.5:
                             # cv2.line(operated_frame, (int(pt1[0].item()), int(pt1[1].item())), (int(pt2[0].item()), int(pt2[1].item())), (255, 255, 0), 2)
-                            pass
+                                pass
             self.person_count = person_count
             self.sit_count = sit_count
             self.stand_count = stand_count

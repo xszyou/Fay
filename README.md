@@ -120,6 +120,14 @@ Remote Android　　[Live2D](https://www.bilibili.com/video/BV1sx4y1d775/?vd_sou
 
 ## **三、升级日志**
 
+**2023.11.13**
+
++ 修复配置文件遗漏唤醒词开关参数问题；
++ 修复yolo稳定性问题;
++ 新增音色可供选择。
+
+
+
 **2023.11.06**
 
 + 更新依赖包:cemotion、pydub、flask~=3.0.0；

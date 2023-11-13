@@ -122,6 +122,14 @@ Message format: View [WebSocket.md](https://github.com/TheRamU/Fay/blob/main/Web
 
 ## **Upgrade Log**
 
+**2023.11.13**
+
+- Fix the issue of missing wake-up word switch parameters in the configuration file;
+
+- Fix yolo stability issues;
+
+- New voices available for selection.
+
 **2023.11.06**
 
 - Update dependency packages: motion, pydub, flask~=3.0.0;

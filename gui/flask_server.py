@@ -78,7 +78,12 @@ def api_get_data():
     wsa_server.get_web_instance().add_cmd({
         "voiceList": [
             {"id": EnumVoice.XIAO_XIAO.name, "name": "晓晓"},
-            {"id": EnumVoice.YUN_XI.name, "name": "云溪"}
+            {"id": EnumVoice.YUN_XI.name, "name": "云溪"},
+            {"id": EnumVoice.YUN_JIAN.name, "name": "云健"},
+            {"id": EnumVoice.XIAO_YI.name, "name": "晓伊"},
+            {"id": EnumVoice.YUN_YANG.name, "name": "云阳"},
+            {"id": EnumVoice.YUN_XIA.name, "name": "云夏"}
+            
         ]
     })
     wsa_server.get_web_instance().add_cmd({"deviceList": __get_device_list()})
