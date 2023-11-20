@@ -22,7 +22,7 @@ class Lingju:
         token = self.__check_token()
         if token is None or token == 'expired':
             token_info = self.__get_token()
-            if token_info is not None:
+            if token_info is not None and  token_info['data']['accessToken']  is not None:
                 #转换过期时间
                 updated_in_seconds = time.time()
                 updated_datetime = datetime.fromtimestamp(updated_in_seconds)

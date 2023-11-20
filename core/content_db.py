@@ -2,6 +2,7 @@ import sqlite3
 import time
 import threading
 import functools
+from utils import util
 def synchronized(func):
   @functools.wraps(func)
   def wrapper(self, *args, **kwargs):
@@ -19,7 +20,7 @@ class Content_Db:
     def init_db(self):
         conn = sqlite3.connect('fay.db')
         c = conn.cursor()
-        c.execute('''CREATE TABLE T_Msg
+        c.execute('''CREATE TABLE IF NOT EXISTS T_Msg
             (id INTEGER PRIMARY KEY     autoincrement,
             type        char(10),
             way        char(10),
@@ -36,9 +37,13 @@ class Content_Db:
     def add_content(self,type,way,content):
         conn = sqlite3.connect("fay.db")
         cur = conn.cursor()
-        cur.execute("insert into T_Msg (type,way,content,createtime) values (?,?,?,?)",(type,way,content,int(time.time())))
-        
-        conn.commit()
+        try:
+            cur.execute("insert into T_Msg (type,way,content,createtime) values (?,?,?,?)",(type,way,content,int(time.time())))
+            conn.commit()
+        except:
+               util.log(1, "请检查参数是否有误")
+               conn.close()
+               return 0
         conn.close()
         return cur.lastrowid
      

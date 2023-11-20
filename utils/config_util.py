@@ -3,7 +3,6 @@ import json
 import codecs
 from configparser import ConfigParser
 
-
 config: json = None
 system_config: ConfigParser = None
 system_chrome_driver = None
@@ -22,13 +21,9 @@ key_chat_module = None
 key_gpt_access_token = None
 key_gpt_conversation_id = None
 proxy_config = None
-
 ASR_mode = None
 local_asr_ip = None 
 local_asr_port = None 
-
-picovoice_api_key = None
-
 ltp_mode = None
 
 def load_config():
@@ -51,15 +46,10 @@ def load_config():
     global key_lingju_api_key
     global key_lingju_api_authcode
     global proxy_config
-
     global ASR_mode
     global local_asr_ip 
     global local_asr_port
-
-    global picovoice_api_key 
-
     global ltp_mode 
-
 
     system_config = ConfigParser()
     system_config.read('system.conf', encoding='UTF-8')
@@ -79,20 +69,12 @@ def load_config():
     key_gpt_conversation_id = system_config.get('key', 'gpt_conversation_id')
     key_lingju_api_key = system_config.get('key', 'lingju_api_key')
     key_lingju_api_authcode = system_config.get('key', 'lingju_api_authcode')
-
     ASR_mode = system_config.get('key', 'ASR_mode')
     local_asr_ip = system_config.get('key', 'local_asr_ip')
     local_asr_port = system_config.get('key', 'local_asr_port')
-
     proxy_config = system_config.get('key', 'proxy_config')
-
-    picovoice_api_key = system_config.get('key', 'picovoice_api_key')
-
     ltp_mode = system_config.get('key', 'ltp_mode')
     config = json.load(codecs.open('config.json', encoding='utf-8'))
-
-
-
 
 def save_config(config_data):
     global config

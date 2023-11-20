@@ -120,6 +120,13 @@ Remote Android　　[Live2D](https://www.bilibili.com/video/BV1sx4y1d775/?vd_sou
 
 ## **三、升级日志**
 
+**2023.11.20**
+
++ 唤醒功能优化替换；
++ 增加yolo稳定性;
++ 增加SQLLITE稳定性。
+
+
 **2023.11.13**
 
 + 修复配置文件遗漏唤醒词开关参数问题；

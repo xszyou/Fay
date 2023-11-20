@@ -44,10 +44,8 @@ if __name__ == '__main__':
     __clear_songs()
     __clear_logs()
     config_util.load_config()
-    dbstatus = os.path.exists("fay.db")
-    if(dbstatus == False):
-         contentdb = Content_Db()
-         contentdb.init_db()     
+    contentdb = Content_Db()
+    contentdb.init_db()     
     ws_server = wsa_server.new_instance(port=10002)
     ws_server.start_server()
     web_ws_server = wsa_server.new_web_instance(port=10003)

@@ -122,6 +122,14 @@ Message format: View [WebSocket.md](https://github.com/TheRamU/Fay/blob/main/Web
 
 ## **Upgrade Log**
 
+**2023.11.20**
+
+- Optimization and replacement of wake-up function;
+
+- Increase yolo stability;
+
+- Increase SQLLITE stability.
+
 **2023.11.13**
 
 - Fix the issue of missing wake-up word switch parameters in the configuration file;
