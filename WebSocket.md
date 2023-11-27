@@ -35,12 +35,11 @@
     "Topic": "Unreal",
     "Data": {
         "Key": "audio",
-        "Value": "C:\samples\sample-1.wav",
+        "Value": "C:\\samples\\sample-1.wav",
         "Text" : "很高兴见到你"
         "Lips":[{"Lip": "sil", "Time": 180}, {"Lip": "FF", "Time": 144}],
         "Time": 10,
         "Type": "interact"
-        ""
     }
 }
 ```

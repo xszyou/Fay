@@ -19,20 +19,16 @@ class Authorize_Tb:
     def init_tb(self):
         conn = sqlite3.connect('fay.db')
         c = conn.cursor()
-        try:
-            c.execute('SELECT * FROM T_Authorize')
-        except sqlite3.OperationalError:
-            c.execute('''
-                CREATE TABLE T_Authorize
-                (id INTEGER PRIMARY KEY     autoincrement,
-                userid        char(100),
-                accesstoken           TEXT,
-                expirestime           BigInt,
-                createtime         Int);
-            ''')
-            conn.commit()
-        finally:
-            conn.close()
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS T_Authorize
+            (id INTEGER PRIMARY KEY     autoincrement,
+            userid        char(100),
+            accesstoken           TEXT,
+            expirestime           BigInt,
+            createtime         Int);
+        ''')
+        conn.commit()
+        conn.close()
 
     #添加
     @synchronized

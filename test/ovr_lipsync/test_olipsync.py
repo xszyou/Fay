@@ -17,7 +17,7 @@ class LipSyncGenerator:
           "kk", "CH", "SS", "nn", "RR",
           "aa", "E", "ih", "oh", "ou"]
         self.viseme = []
-        self.exe_path = "test\\ovr_lipsync\\ovr_lipsync_exe\\ProcessWAV.exe"
+        self.exe_path = os.path.join(os.getcwd(), "test", "ovr_lipsync", "ovr_lipsync_exe", "ProcessWAV.exe")
 
     def convert_mp3_to_wav(self, mp3_filepath):
         audio = AudioSegment.from_mp3(mp3_filepath)

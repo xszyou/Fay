@@ -120,6 +120,12 @@ Remote Android　　[Live2D](https://www.bilibili.com/video/BV1sx4y1d775/?vd_sou
 
 ## **三、升级日志**
 
+**2023.11.27**
+
++ 提高websocket的稳定性；
++ 修复唇形程序路径问题;
++ 提高SQLLITE的稳定性。
+
 **2023.11.20**
 
 + 唤醒功能优化替换；

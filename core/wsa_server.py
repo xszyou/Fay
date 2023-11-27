@@ -26,18 +26,26 @@ class MyServer:
 
     # 接收处理
     async def __consumer_handler(self, websocket, path):
-        async for message in websocket:
-            await asyncio.sleep(0.01)
-            await self.__consumer(message)
+        try:
+            async for message in websocket:
+                await asyncio.sleep(0.01)
+                await self.__consumer(message)
+        except websockets.exceptions.ConnectionClosedError as e:
+            util.log(1, f"WebSocket 连接关闭: {e}")
+            self.isConnect = False
+            self.on_close_handler()
             
-            
-    # 发送处理
     async def __producer_handler(self, websocket, path):
-        while self.__running:
-            await asyncio.sleep(0.01)
-            message = await self.__producer()
-            if message:
-                await websocket.send(message)
+        try:
+            while self.__running:
+                await asyncio.sleep(0.01)
+                message = await self.__producer()
+                if message:
+                    await websocket.send(message)
+        except websockets.exceptions.ConnectionClosedError as e:
+            util.log(1, f"WebSocket 连接关闭: {e}")
+            self.isConnect = False
+            self.on_close_handler()
     
     async def __handler(self, websocket, path):
         self.isConnect = True
@@ -124,6 +132,10 @@ class MyServer:
             self.__event_loop.close()
         except BaseException as e:
             util.log(1, "Error: {}".format(e))
+
+
+
+ 
 
 
 

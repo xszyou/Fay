@@ -122,6 +122,14 @@ Message format: View [WebSocket.md](https://github.com/TheRamU/Fay/blob/main/Web
 
 ## **Upgrade Log**
 
+**2023.11.27**
+
+- Improve the stability of websockets;
+
+- Fix the path issue of the lip shape program;
+
+- Improve the stability of SQLLITE.
+
 **2023.11.20**
 
 - Optimization and replacement of wake-up function;
