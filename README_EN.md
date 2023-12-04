@@ -122,6 +122,12 @@ Message format: View [WebSocket.md](https://github.com/TheRamU/Fay/blob/main/Web
 
 ## **Upgrade Log**
 
+**2023.12.04**
+
+- Connect to fastgpt nlp;
+
+- Fix the issue of abnormal lip shape reporting errors;
+
 **2023.11.27**
 
 - Improve the stability of websockets;

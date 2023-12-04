@@ -25,6 +25,7 @@ ASR_mode = None
 local_asr_ip = None 
 local_asr_port = None 
 ltp_mode = None
+key_fast_api_key = None
 
 def load_config():
     global config
@@ -50,6 +51,7 @@ def load_config():
     global local_asr_ip 
     global local_asr_port
     global ltp_mode 
+    global key_fast_gpt_key
 
     system_config = ConfigParser()
     system_config.read('system.conf', encoding='UTF-8')
@@ -74,6 +76,7 @@ def load_config():
     local_asr_port = system_config.get('key', 'local_asr_port')
     proxy_config = system_config.get('key', 'proxy_config')
     ltp_mode = system_config.get('key', 'ltp_mode')
+    key_fast_gpt_key = system_config.get('key', 'fast_gpt_key')
     config = json.load(codecs.open('config.json', encoding='utf-8'))
 
 def save_config(config_data):

@@ -120,6 +120,11 @@ Remote Android　　[Live2D](https://www.bilibili.com/video/BV1sx4y1d775/?vd_sou
 
 ## **三、升级日志**
 
+**2023.12.04**
+
++ 接入fastgpt nlp;
++ 修复唇形异常报错的问题;
+
 **2023.11.27**
 
 + 提高websocket的稳定性；
