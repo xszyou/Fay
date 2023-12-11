@@ -1,0 +1,420 @@
+#app {
+    width: 1920px;
+    margin: 0;
+    padding: 0;
+}
+
+ul {
+    list-style-type: none;
+}
+
+.main {
+    width: 1920px;
+    display: flex;
+    flex-direction: column;
+    /* flex-wrap: wrap; */
+}
+
+.main_box {
+    width: 100%;
+    display: flex;
+
+}
+
+.left {
+    width: 915px;
+    margin-left: 15px;
+}
+
+.left .left_top {
+    width: 915px;
+    border: 1px solid #333333;
+
+}
+
+.left_top_p {
+    padding-left: 15px;
+}
+
+.character {
+    display: flex;
+    flex-direction: column;
+    flex-wrap: wrap;
+}
+
+.character_top {
+    width: 100%;
+    display: flex;
+}
+
+.character_left {
+    width: 443px;
+    display: flex;
+}
+
+.character_left ul {}
+
+.character_left ul li {
+    display: flex;
+    height: 51.5px;
+}
+
+.character_left ul li p {
+    width: 100px;
+    text-align: right;
+    margin-top: 5px;
+}
+
+.character_left ul li .el-input {
+    width: 320px;
+    height: 45px;
+}
+
+.character_right {
+    display: flex;
+    width: 430px;
+}
+
+.character_right ul {
+    width: 430px;
+}
+
+.character_right ul li {
+    display: flex;
+    width: 430px;
+}
+
+.character_right ul li p {
+    width: 120px;
+    text-align: right;
+    margin-top: 5px;
+    
+}
+
+.character_right ul li .el-slider__runway {
+    width: 250px;
+}
+.character_right ul li .el-select {
+    display: inline-block;
+    position: relative;
+    width: 250px;
+}
+.character_box {
+    width: 100%;
+    display: flex;
+    margin-left: 40px;
+}
+
+.character_box p {
+    width: 100px;
+}
+
+.character_box .el-input {
+    width: 730px;
+}
+
+
+.title {
+    width: 100%;
+    height: 75px;
+}
+
+.title h2 {
+    width: 100%;
+    height: 75px;
+    text-align: center;
+}
+
+.left_box {
+    width: 915px;
+    /*height: 260px;*/
+    margin-top: 15px;
+    border: 1px solid #333333;
+}
+
+.left_box p {
+    padding-left: 15px;
+}
+
+.left_box .source {}
+
+.left_box .source ul {}
+
+.left_box .source ul li {}
+
+.left_box .source ul .url {
+    width: 750px;
+    margin: 20px auto 0;
+    height: 40px;
+    display: flex;
+}
+
+.left_box .source ul .url .el-switch {
+    position: relative;
+    top: 8px;
+}
+
+.left_box .source ul .url p {
+    width: 85px;
+    height: 40px;
+    text-align: center;
+    line-height: 0;
+}
+
+.left_box .source ul .url .el-input {
+    height: 40px;
+}
+.left_box .source ul .url .el-select {
+    height: 40px;
+    width: 750px;
+}
+
+.left_box .source ul .but {
+    width: 750px;
+    display: flex;
+    justify-content: center;
+    margin: auto;
+    margin-top: 60px;
+}
+
+.left_box .source ul .but .el-button {
+    margin: 20px auto 0;
+}
+
+.left_box .source ul .p_red {
+    width: 750px;
+    display: flex;
+    justify-content: center;
+    margin: auto;
+}
+
+.left_box .source ul .p_red p {
+    color: red;
+
+}
+
+.right {
+    width: 915px;
+    margin-left: 15px;
+}
+
+.right_main {
+    width: 915px;
+    border: 1px solid #333333;
+}
+
+.right_main ul {
+    width: 915px;
+}
+
+.right_main ul li {
+    width: 915px;
+    display: flex;
+    padding-top: 10px;
+    padding-bottom: 10px;
+}
+
+.right_main ul li p {
+    width: 128px;
+    text-align: right;
+    padding: 0;
+    margin: 0;
+}
+
+.right_main ul li .el-input {
+    width: 666px;
+}
+
+.right_main ul li .upload-demo {
+    width: 666px;
+}
+.right_main ul li .el-textarea {
+    width: 666px;
+}
+
+.right_main ul li .el-switch {
+    position: relative;
+    top: 2px;
+}
+.el-input__inner {
+    -webkit-appearance: none;
+    background-color: #FFF;
+    border-radius: 4px;
+    border: 1px solid #DCDFE6;
+    box-sizing: border-box;
+    color: #606266;
+    display: inline-block;
+    font-size: inherit;
+    height: 43px;
+    line-height: 40px;
+    outline: 0;
+    padding: 0 15px;
+    transition: border-color .2s cubic-bezier(.645,.045,.355,1);
+    width: 100%;
+}
+.el-input.is-disabled .el-input__inner {
+    background-color: #F5F7FA;
+    border-color: #E4E7ED;
+    color: #000206 !important;
+    cursor: not-allowed;
+}
+.container {
+    height: 902px;
+    width: 913px;
+    border-radius: 4px;
+    border: 0.5px solid #e0e0e0;
+    background-color: #f5f5f5;
+    display: flex;
+    flex-flow: column;
+    overflow: hidden;
+}
+
+.content {
+    width: calc(100% - 20px);
+    padding: 20px;
+    overflow-y: scroll;
+    flex: 1;
+    white-space: pre-wrap;
+}
+
+.content:hover::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.1);
+}
+
+.bubble {
+    /* max-width: 400px; */
+    max-width: 60%;
+    padding: 10px;
+    border-radius: 5px;
+    position: relative;
+    color: #000;
+    word-wrap: break-word;
+    word-break: normal;
+}
+
+.item-left .bubble {
+    margin-left: 15px;
+    background-color: #fff;
+}
+
+.item-left .bubble:before {
+    content: "";
+    position: absolute;
+    width: 0;
+    height: 0;
+    border-left: 10px solid transparent;
+    border-top: 10px solid transparent;
+    border-right: 10px solid #fff;
+    border-bottom: 10px solid transparent;
+    left: -20px;
+}
+
+.item-right .bubble {
+    margin-right: 15px;
+    background-color: #63f5a1;
+}
+
+.item-right .bubble:before {
+    content: "";
+    position: absolute;
+    width: 0;
+    height: 0;
+    border-left: 10px solid #63f5a1;
+    border-top: 10px solid transparent;
+    border-right: 10px solid transparent;
+    border-bottom: 10px solid transparent;
+    right: -20px;
+}
+
+.item {
+    margin-top: 15px;
+    display: flex;
+    width: 100%;
+}
+
+.item.item-right {
+    justify-content: flex-end;
+}
+
+.item.item-center {
+    justify-content: center;
+}
+
+.item.item-center span {
+    font-size: 12px;
+    padding: 2px 4px;
+    color: #fff;
+    background-color: #dadada;
+    border-radius: 3px;
+    -moz-user-select: none;
+    /*火狐*/
+    -webkit-user-select: none;
+    /*webkit浏览器*/
+    -ms-user-select: none;
+    /*IE10*/
+    -khtml-user-select: none;
+    /*早期浏览器*/
+    user-select: none;
+}
+
+.avatar img {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+}
+
+.input-area {
+    border-top: 0.5px solid #e0e0e0;
+    height: 150px;
+    display: flex;
+    flex-flow: column;
+    background-color: #fff;
+}
+
+textarea {
+    flex: 1;
+    padding: 5px;
+    font-size: 14px;
+    border: none;
+    cursor: pointer;
+    overflow-y: auto;
+    overflow-x: hidden;
+    outline: none;
+    resize: none;
+}
+
+.button-area {
+    display: flex;
+    height: 40px;
+    margin-right: 10px;
+    line-height: 40px;
+    padding: 5px;
+    justify-content: flex-end;
+}
+
+.button-area button {
+    width: 80px;
+    border: none;
+    outline: none;
+    border-radius: 4px;
+    float: right;
+    cursor: pointer;
+}
+
+/* 设置滚动条的样式 */
+::-webkit-scrollbar {
+    width: 10px;
+}
+
+/* 滚动槽 */
+::-webkit-scrollbar-track {
+    -webkit-box-shadow: inset006pxrgba(0, 0, 0, 0.3);
+    border-radius: 8px;
+}
+
+/* 滚动条滑块 */
+::-webkit-scrollbar-thumb {
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0);
+    -webkit-box-shadow: inset006pxrgba(0, 0, 0, 0.5);
+}
