@@ -122,6 +122,13 @@ Message format: View [WebSocket.md](https://github.com/TheRamU/Fay/blob/main/Web
 
 ## **Upgrade Log**
 
+**2023.12.11**
+
+- Fixed an issue where gpt interface reported name invalid 
+
+- Fixed fastgpt error
+
+
 **2023.12.04**
 
 - Connect to fastgpt nlp;
