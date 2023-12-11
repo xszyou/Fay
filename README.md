@@ -1,1 +1,1 @@
-thanks to fay to create the robo
+thanks to fay for create the robo
