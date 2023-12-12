@@ -22,11 +22,11 @@ from utils import util, config_util
 
 import pygame
 from utils import config_util as cfg
-from core.content_db import Content_Db
 from ai_module import nlp_cemotion
 import platform
 from ai_module import yolov8
 from agent import agent_service
+import fay_booter
 if platform.system() == "Windows":
     import sys
     sys.path.append("test/ovr_lipsync")
@@ -36,17 +36,13 @@ if platform.system() == "Windows":
 
 #文本消息处理（20231211增加：agent操作）
 def send_for_answer(msg):
+        #记录运行时间
+        fay_booter.feiFei.last_quest_time = time.time()
 
-        # 非展板播放，发送给数字人端    
+        # 发送给数字人端    
         if not config_util.config["interact"]["playSound"]: 
             content = {'Topic': 'Unreal', 'Data': {'Key': 'question', 'Value': msg}}
             wsa_server.get_instance().add_cmd(content)
-
-        #消息保存到sqlite
-        contentdb = Content_Db()    
-        contentdb.add_content('member','agent',msg)
-        wsa_server.get_web_instance().add_cmd({"panelReply": {"type":"member","content":msg}})
-        
 
         #思考中...
         wsa_server.get_web_instance().add_cmd({"panelMsg": "思考中..."})
@@ -57,13 +53,11 @@ def send_for_answer(msg):
         #agent 处理
         text = agent_service.agent.run(msg)
 
-        #推送结果
-        contentdb.add_content('fay','agent',text)
-        wsa_server.get_web_instance().add_cmd({"panelReply": {"type":"fay","content":text}})
-        if not cfg.config["interact"]["playSound"]: # 非展板播放
+        #推送数字人
+        if not cfg.config["interact"]["playSound"]: 
             content = {'Topic': 'Unreal', 'Data': {'Key': 'log', 'Value': text}}
             wsa_server.get_instance().add_cmd(content)
-        if not config_util.config["interact"]["playSound"]: # 非展板播放
+        if not config_util.config["interact"]["playSound"]: 
             content = {'Topic': 'Unreal', 'Data': {'Key': 'text', 'Value': text}}
             wsa_server.get_instance().add_cmd(content)
 
@@ -94,7 +88,6 @@ class FeiFei:
         self.wss = None
         self.sp = Speech()
         self.speaking = False
-        self.last_interact_time = time.time()
         self.interactive = []
         self.sleep = False
         self.__running = True

@@ -17,7 +17,7 @@ class Speech:
     def connect(self):
         pass
 
-    def stop(self):
+    def close(self):
         pass
 
     def to_sample(self, text, voice="nova", response_format="mp3", speed=1):

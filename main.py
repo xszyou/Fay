@@ -30,11 +30,14 @@ def __clear_logs():
         if file_name.endswith('.log'):
             os.remove('./logs/' + file_name)
 
+def __clear_timer():
+    if os.path.exists("./timer.db"):
+        os.remove("./timer.db")
 if __name__ == '__main__':
     __clear_samples()
     __clear_logs()
-    config_util.load_config()
-    os.environ['OPENAI_API_KEY'] = config_util.key_gpt_api_key
+    __clear_timer()
+    
     contentdb = Content_Db()
     contentdb.init_db()     
     ws_server = wsa_server.new_instance(port=10002)

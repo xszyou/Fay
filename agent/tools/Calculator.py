@@ -7,7 +7,7 @@ from langchain.tools import BaseTool
 
 class Calculator(BaseTool, abc.ABC):
     name = "Calculator"
-    description = "Useful for when you need to answer questions about math"
+    description = "Useful for when you need to answer questions about math（不能用于时间计划）"
 
     def __init__(self):
         super().__init__()
