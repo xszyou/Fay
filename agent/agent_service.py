@@ -14,6 +14,7 @@ def init_db():
     cursor = conn.cursor()
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS timer (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             time TEXT NOT NULL,
             repeat_rule TEXT NOT NULL,
             content TEXT NOT NULL
@@ -32,7 +33,7 @@ def insert_test_data():
     conn.commit()
     conn.close()
 
-# 解析重复规则
+# 解析重复规则返回待执行时间，None代表不在今天的待执行计划
 def parse_repeat_rule(rule, task_time):
     today = datetime.datetime.now()
     if rule == '0000000':  # 不重复
@@ -49,8 +50,10 @@ def parse_repeat_rule(rule, task_time):
     return None
 
 # 执行任务
-def execute_task(task_time, content):
-    print(f"Executing task scheduled for {task_time}: {content} --> {agent.run(content)}")
+def execute_task(task_time, id, content):
+    content = content
+    agent.run(content)
+    del scheduled_tasks[id]
     # 如果不重复，执行后删除记录
     conn = sqlite3.connect('timer.db')
     cursor = conn.cursor()
@@ -59,26 +62,23 @@ def execute_task(task_time, content):
     conn.close()
 
 
-# 检查并执行任务
+# 30秒扫描一次数据库，当扫描到今天的不存在于定时任务列表的记录，则添加到定时任务列表。执行完的记录从定时任务列表中清除。
 def check_and_execute():
     while agent_running:
         conn = sqlite3.connect('timer.db')
         cursor = conn.cursor()
-        cursor.execute("SELECT time, repeat_rule, content FROM timer")
+        cursor.execute("SELECT * FROM timer")
         rows = cursor.fetchall()
 
         for row in rows:
-            task_time_str, repeat_rule, content = row
+            id, task_time_str, repeat_rule, content = row
             task_time = datetime.datetime.strptime(task_time_str, '%H:%M').time()
             next_execution = parse_repeat_rule(repeat_rule, task_time)
 
-            if next_execution and (task_time_str not in scheduled_tasks or scheduled_tasks[task_time_str] < next_execution):
-                # 更新线程
-                if task_time_str in scheduled_tasks:
-                    scheduled_tasks[task_time_str].cancel()
-                timer_thread = threading.Timer((next_execution - datetime.datetime.now()).total_seconds(), execute_task, [next_execution, content])
+            if next_execution and id not in scheduled_tasks:
+                timer_thread = threading.Timer((next_execution - datetime.datetime.now()).total_seconds(), execute_task, [next_execution, id, content])
                 timer_thread.start()
-                scheduled_tasks[task_time_str] = next_execution
+                scheduled_tasks[id] = timer_thread
 
         conn.close()
         time.sleep(30)  # 30秒扫描一次
@@ -86,6 +86,8 @@ def check_and_execute():
 # agent启动
 def agent_start():
     global agent_running
+    global agent
+    
     agent_running = True
     init_db()
     # insert_test_data()
@@ -93,8 +95,8 @@ def agent_start():
     check_and_execute_thread.start()
 
     #初始计划
-    agent.run("""
-        请为我一个个时间设置初始计划,注意在安排计划时请先确定这定时任务是否已经存在：
+    agent.run("""执行任务-->
+        请为我一个个时间设置初始计划：
         1、在每天12:30到13:30安静不影响主人休息;
         2、每天12点提醒主人吃饭;  
         3、在星期一到星期五13:30提醒主人开始工作; 

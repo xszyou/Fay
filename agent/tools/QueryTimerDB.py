@@ -9,7 +9,7 @@ from langchain.tools import BaseTool
 
 class QueryTimerDB(BaseTool, abc.ABC):
     name = "QueryTimerDB"
-    description = "用于查询所有定时任务，结果包含3个参数，第1个参数是时间,第2个参数是循环规则（如:'1000100'代表星期一和星期五循环，'0000000'代表不循环），第3个参数代表要执行的事项,如：('15:15', '0000001', '提醒主人叫咖啡')"
+    description = "用于查询所有定时任务，返回的数据里包含3个参数:时间、循环规则（如:'1000100'代表星期一和星期五循环，'0000000'代表不循环）、执行的事项"
 
     def __init__(self):
         super().__init__()
@@ -29,13 +29,13 @@ class QueryTimerDB(BaseTool, abc.ABC):
         # 拼接结果
         result = ""
         for row in rows:
-            result = result + "\n" + str(row)
+            result = result +  str(row) + "\n"
         conn.commit()
         conn.close()
         return result
 
 
 if __name__ == "__main__":
-    calculator_tool = MyTimer()
-    result = calculator_tool.run("sqrt(2) + 3")
+    tool = QueryTimerDB()
+    result = tool.run("")
     print(result)

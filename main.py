@@ -44,7 +44,6 @@ if __name__ == '__main__':
     ws_server.start_server()
     web_ws_server = wsa_server.new_web_instance(port=10003)
     web_ws_server.start_server()
-    #Edit by xszyou in 20230516:增加本地asr后，aliyun调成可选配置
     if config_util.ASR_mode == "ali":
         ali_nls.start()
     flask_server.start()

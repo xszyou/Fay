@@ -29,7 +29,7 @@ class RecorderListener(Recorder):
     def on_speaking(self, text):
         if len(text) > 1:
             util.printInfo(3, "语音", '{}'.format(text), time.time())
-            fay_core.send_for_answer("(语音提问)" + text)
+            fay_core.send_for_answer("主人语音说了：" + text)
             time.sleep(2)
 
     def get_stream(self):
@@ -110,7 +110,7 @@ class DeviceInputListener(Recorder):
 
         if len(text) > 1:
             util.printInfo(3, "语音", '{}'.format(text), time.time())
-            fay_core.send_for_answer("(语音提问)" + text)
+            fay_core.send_for_answer("主人语音说了：" + text)
             time.sleep(1)
 
     #recorder会等待stream不为空才开始录音
@@ -161,7 +161,7 @@ def console_listener():
                 util.log(1, '错误的参数！')
             msg = text[3:len(text)]
             util.printInfo(3, "控制台", '{}: {}'.format('控制台', msg))
-            thr = MyThread(target=fay_core.send_for_answer, args=["(语音提问)" + msg])
+            thr = MyThread(target=fay_core.send_for_answer, args=["请语音回复：" + msg])
             thr.start()
             thr.join()
 

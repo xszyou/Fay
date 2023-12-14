@@ -4,19 +4,54 @@
     <br>
     <img src="images/icon.png" alt="Fay">
     <h1>Fay数字人 AI Agent版</h1>
+    “agent”即代理，它能够代替你完成决策规划并执行，这一切都依赖目前最强的大语言模型的ReAct能力。
 </div>
 
-[`带货完整版`](https://github.com/TheRamU/Fay/tree/fay-sales-edition)                        [`助理完整版`](https://github.com/TheRamU/Fay/tree/fay-assistant-edition)
+**12月迟来的报到，Fay数字人 AI Agent版（含智慧农业应用demo）第3版正式上传！**
+
+如果你需要是一个线上线下的销售员，请移步[`带货完整版`](https://github.com/TheRamU/Fay/tree/fay-sales-edition)                       
+
+如果你需要的是一个人机交互的数字人助理（当然，你也可以命令它开关设备），请移步 [`助理完整版`](https://github.com/TheRamU/Fay/tree/fay-assistant-edition)
+
+
 
 ***“优秀的产品都值得用数字人从新做一遍”***
 
-**12月迟来的报到，Fay数字人 AI Agent版与官方demo(实验箱)第1版正式上传！**
-
 亮点：计划任务主动执行，无需一问一答，自动规划及调用agent tool去完成工作；使用open ai tts；使用向量数据库实现永久记忆及记忆检索；
 
-![](images/1.jpg)
+![](images/agent_demo.gif)
 
-​                                                                       (上图：Fay数字人智慧农业实验箱 Agent Demo）
+​                                                                       (上图：实测ReAct能力）
+
+## **安装说明**
+
+
+### **环境要求** 
+
+- Python 3.9、3.10
+- Windows、macos、linux
+
+### **安装依赖**
+
+```shell
+pip install -r requirements.txt
+```
+
+### **配置应用密钥**
+
++ 将GPT-4 key填入 `./system.conf` 中
+
+### **启动控制器**
+
+启动Fay控制器
+
+```shell
+python main.py
+```
+
+### **启动数字人（非必须）**
+
++ 启动数字人[xszyou/fay-ue5: 可对接fay数字人的ue5工程 (github.com)](https://github.com/xszyou/fay-ue5)
 
 ### **联系**
 

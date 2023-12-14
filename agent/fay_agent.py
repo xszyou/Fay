@@ -4,7 +4,7 @@ from langchain.memory import VectorStoreRetrieverMemory
 import faiss
 from langchain.docstore import InMemoryDocstore
 from langchain.vectorstores import FAISS
-from langchain.agents import AgentExecutor, Tool, ZeroShotAgent, initialize_agent
+from langchain.agents import AgentExecutor, Tool, ZeroShotAgent, initialize_agent, agent_types
 from langchain.chains import LLMChain
 
 from agent.tools.MyTimer import MyTimer
@@ -16,6 +16,7 @@ from agent.tools.Switch import Switch
 from agent.tools.Knowledge import Knowledge
 from agent.tools.Say import Say
 from agent.tools.QueryTimerDB import QueryTimerDB
+from agent.tools.DeleteTimer import DeleteTimer
 
 import utils.config_util as utils
 from core.content_db import Content_Db
@@ -34,13 +35,13 @@ class FayAgentCore():
         embedding_fn = OpenAIEmbeddings()
 
         #创建llm
-        llm = ChatOpenAI(model="gpt-4-1106-preview")#gpt-3.5-turbo-16k
+        llm = ChatOpenAI(verbose=True)#model="gpt-4-1106-preview"
 
         #创建向量数据库
         vectorstore = FAISS(embedding_fn, index, InMemoryDocstore({}), {})
 
         # 创建记忆
-        retriever = vectorstore.as_retriever(search_kwargs=dict(k=3))
+        retriever = vectorstore.as_retriever(search_kwargs=dict(k=2))
         memory = VectorStoreRetrieverMemory(memory_key="chat_history", retriever=retriever)
 
         # 保存基本信息到记忆
@@ -58,6 +59,7 @@ class FayAgentCore():
         knowledge_tool = Knowledge()
         say_tool = Say()
         query_timer_db_tool = QueryTimerDB()
+        delete_timer_tool = DeleteTimer()
         tools = [
             Tool(
                 name=my_timer.name,
@@ -104,40 +106,34 @@ class FayAgentCore():
                 func=query_timer_db_tool.run,
                 description=query_timer_db_tool.description
             ),
-            
+            Tool(
+                name=delete_timer_tool.name,
+                func=delete_timer_tool.run,
+                description=delete_timer_tool.description
+            ),
         ]
-        prefix = """你是运行在一个智慧农业实验箱的ai数字人，你叫Fay,你的主要作用是，陪伴主人生活、工作，以及协助主人打理好农业种植箱里的农作物. 农业箱内设备会通过一套不成熟的iotm系统自动管理。你可以调用以下工具来完成工作，若缺少必要的工具也请告诉我。所有回复请使用中文，遇到需要提醒的问题也告诉我。若你感觉是我在和你交流请直接回复我（语音提问语音回复，文字提问文字回复）。若你需要计算一个新的时间请先获取当前时间。"""
-        suffix = """Begin!"
 
-        {chat_history}
-        Question: {input}
-        {agent_scratchpad}"""
 
-        prompt = ZeroShotAgent.create_prompt(
-            tools,
-            prefix=prefix,
-            suffix=suffix,
-            input_variables=["input", "chat_history", "agent_scratchpad"],
-        )
-        llm_chain = LLMChain(llm=llm, prompt=prompt,  verbose=True)
-        agent = ZeroShotAgent(llm_chain=llm_chain, tools=tools, verbose=True)
-        # agent = initialize_agent(agent="chat-conversational-react-description",
-        #                          tools=tools, llm=llm, verbose=True, 
-        #                          max_iterations=3, early_stopping_method="generate", memory=memory, handle_parsing_errors=True)
-        self.agent_chain = AgentExecutor.from_agent_and_tools(
-            agent=agent, tools=tools, verbose=True, memory=memory, handle_parsing_errors=True
-        )
+        self.agent = initialize_agent(agent_types=agent_types.AgentType.CHAT_CONVERSATIONAL_REACT_DESCRIPTION,
+                         tools=tools, llm=llm, verbose=True,
+                         max_history=5, 
+                         memory=memory, handle_parsing_errors=True)
 
     def run(self, input_text):
         #消息保存
         contentdb = Content_Db()    
-        contentdb.add_content('member','agent',input_text.replace('(语音提问)', '').replace('(文字提问)', ''))
-        wsa_server.get_web_instance().add_cmd({"panelReply": {"type":"member","content":input_text.replace('(语音提问)', '').replace('(文字提问)', '')}})
-
-        result = self.agent_chain.run(input_text)
+        contentdb.add_content('member', 'agent', input_text.replace('主人语音说了：', '').replace('主人文字说了：', ''))
+        wsa_server.get_web_instance().add_cmd({"panelReply": {"type":"member","content":input_text.replace('主人语音说了：', '').replace('主人文字说了：', '')}})
+        result = None
+        try:
+            result = self.agent.run(input_text.replace('执行任务-->', ''))
+        except Exception as e:
+            print(e)
+        result = "执行完毕" if result is None or result == "N/A" else result
+        
 
         #消息保存
-        contentdb.add_content('fay','agent',result)
+        contentdb.add_content('fay','agent', result)
         wsa_server.get_web_instance().add_cmd({"panelReply": {"type":"fay","content":result}})
         
         return result

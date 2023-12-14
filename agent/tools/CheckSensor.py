@@ -7,7 +7,7 @@ from langchain.tools import BaseTool
 
 class CheckSensor(BaseTool):
     name = "CheckSensor"
-    description = "此工具用于查询传感器数据及设备开关状态"
+    description = "此工具用于查询农业箱传感器数据及设备开关状态"
 
     def __init__(self):
         super().__init__()
