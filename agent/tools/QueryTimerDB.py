@@ -9,7 +9,7 @@ from langchain.tools import BaseTool
 
 class QueryTimerDB(BaseTool, abc.ABC):
     name = "QueryTimerDB"
-    description = "用于查询所有定时任务，返回的数据里包含3个参数:时间、循环规则（如:'1000100'代表星期一和星期五循环，'0000000'代表不循环）、执行的事项"
+    description = "用于查询所有日程，返回的数据里包含3个参数:时间、循环规则（如:'1000100'代表星期一和星期五循环，'0000000'代表不循环）、执行的事项"
 
     def __init__(self):
         super().__init__()

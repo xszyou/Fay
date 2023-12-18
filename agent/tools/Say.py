@@ -9,7 +9,7 @@ from core.interact import Interact
 
 class Say(BaseTool):
     name = "Say"
-    description = """此工具用于语音输出内容，用于与主人沟通及提醒主人，使用时请传入说话内容作为参数，例如：“该下班了，请注意休息”"""
+    description = """此工具用于沟通及提醒，使用时请传入说话内容作为参数，例如：“该下班了，请注意休息”"""
 
     def __init__(self):
         super().__init__()

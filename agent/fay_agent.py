@@ -17,6 +17,8 @@ from agent.tools.Knowledge import Knowledge
 from agent.tools.Say import Say
 from agent.tools.QueryTimerDB import QueryTimerDB
 from agent.tools.DeleteTimer import DeleteTimer
+from agent.tools.GetSwitchLog import GetSwitchLog
+from agent.tools.getOnRunLinkage import getOnRunLinkage
 
 import utils.config_util as utils
 from core.content_db import Content_Db
@@ -35,7 +37,7 @@ class FayAgentCore():
         embedding_fn = OpenAIEmbeddings()
 
         #创建llm
-        llm = ChatOpenAI(verbose=True)#model="gpt-4-1106-preview"
+        llm = ChatOpenAI(model="gpt-4-1106-preview", verbose=True)
 
         #创建向量数据库
         vectorstore = FAISS(embedding_fn, index, InMemoryDocstore({}), {})
@@ -60,6 +62,9 @@ class FayAgentCore():
         say_tool = Say()
         query_timer_db_tool = QueryTimerDB()
         delete_timer_tool = DeleteTimer()
+        get_switch_log = GetSwitchLog()
+        get_on_run_linkage = getOnRunLinkage()
+
         tools = [
             Tool(
                 name=my_timer.name,
@@ -111,6 +116,16 @@ class FayAgentCore():
                 func=delete_timer_tool.run,
                 description=delete_timer_tool.description
             ),
+            Tool(
+                name=get_switch_log.name,
+                func=get_switch_log.run,
+                description=get_switch_log.description
+            ),
+            Tool(
+                name=get_on_run_linkage.name,
+                func=get_on_run_linkage.run,
+                description=get_on_run_linkage.description
+            ),
         ]
 
 
@@ -126,7 +141,7 @@ class FayAgentCore():
         wsa_server.get_web_instance().add_cmd({"panelReply": {"type":"member","content":input_text.replace('主人语音说了：', '').replace('主人文字说了：', '')}})
         result = None
         try:
-            result = self.agent.run(input_text.replace('执行任务-->', ''))
+            result = self.agent.run(input_text)
         except Exception as e:
             print(e)
         result = "执行完毕" if result is None or result == "N/A" else result

@@ -22,3 +22,5 @@ pydub
 cemotion
 langchain
 faiss-cpu
+openai
+tiktoken

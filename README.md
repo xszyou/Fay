@@ -4,10 +4,14 @@
     <br>
     <img src="images/icon.png" alt="Fay">
     <h1>Fay数字人 AI Agent版</h1>
-    “agent”即代理，它能够代替你完成决策规划并执行，这一切都依赖目前最强的大语言模型的ReAct能力。
+    “agent”即代理，它能够代替你完成决策规划并执行，这一切都依赖目前最强的大语言模型的ReAct能力。不同于助理版的一问一答，agent版的Fay可以实现自动代理执行的同时，在它认为必要时候会触发数字人或者直接的声音输出。
 </div>
 
-**12月迟来的报到，Fay数字人 AI Agent版（含智慧农业应用demo）第3版正式上传！**
+
+
+
+
+**12月迟来的报到，Fay数字人 AI Agent版（含智慧农业箱的操作demo代码，如果你需要完整代码可以公众号留言申请获取）第4版正式上传！**
 
 如果你需要是一个线上线下的销售员，请移步[`带货完整版`](https://github.com/TheRamU/Fay/tree/fay-sales-edition)                       
 
@@ -52,6 +56,8 @@ python main.py
 ### **启动数字人（非必须）**
 
 + 启动数字人[xszyou/fay-ue5: 可对接fay数字人的ue5工程 (github.com)](https://github.com/xszyou/fay-ue5)
+
+  
 
 ### **联系**
 
