@@ -33,7 +33,6 @@ from datetime import datetime
 from ai_module import nlp_cemotion
 
 from ai_module import nlp_rasa
-from ai_module import nlp_chatgpt
 from ai_module import nlp_gpt
 from ai_module import nlp_yuan
 from ai_module import yolov8
@@ -52,7 +51,6 @@ if platform.system() == "Windows":
 modules = {
     "nlp_yuan": nlp_yuan, 
     "nlp_gpt": nlp_gpt,
-    "nlp_chatgpt": nlp_chatgpt,
     "nlp_rasa": nlp_rasa,
     "nlp_VisualGLM": nlp_VisualGLM,
     "nlp_lingju": nlp_lingju,

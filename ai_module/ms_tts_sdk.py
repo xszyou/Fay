@@ -114,7 +114,7 @@ if __name__ == '__main__':
     cfg.load_config()
     sp = Speech()
     sp.connect()
-    text = """这是一段音频，测试一下3"""
+    text = "我叫Fay,我今年18岁，很年青。"
     s = sp.to_sample(text, "cheerful")
 
     print(s)

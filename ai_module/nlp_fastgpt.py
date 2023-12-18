@@ -1,8 +1,3 @@
-"""
-此代码由fay开源开发者社区 江湖墨明 提供
-通过此代码的修改，可以实现对接本地clash代理或远程代理，clash无需设置成系统代理。以解决在开系统代理后无法使用部分功能的问题
-"""
-
 import requests
 import time
 
@@ -13,12 +8,8 @@ from core.content_db import Content_Db
 from utils import util
 import json
 
-#代理服务器的配置方式，参考链接https://blog.csdn.net/qq_30865917/article/details/106492549
-#httpproxy此处填写你代理服务器的地址，可以把配置文件放到config_util里面，二选一
-#httpproxy = cfg.chatgpt_httpproxy
-httpproxy = '127.0.0.1:7890' 
-#如果要关闭代理直接访问，比如本地有加速器，则proxy_falg = '0';
-proxy_flag = '0' 
+httpproxy = cfg.proxy_config
+proxy_flag = str(cfg.is_proxy)
 
 def question(cont):
     url= "https://fastgpt.run/api/v1/chat/completions"
@@ -70,13 +61,16 @@ def question(cont):
     headers = {'content-type': 'application/json', 'Authorization': 'Bearer ' + cfg.key_fast_gpt_key}
 
     starttime = time.time()
-
+    result = None
     try:
         response = session.post(url, json=data, headers=headers, verify=False)
         response.raise_for_status()  # 检查响应状态码是否为200
 
         result = json.loads(response.text)
-        response_text = result["choices"][0]["message"]["content"]
+        if result.get("choices"):
+            response_text = result["choices"][0]["message"]["content"]
+        else:
+            response_text = result["message"]
         
 
     except requests.exceptions.RequestException as e:
