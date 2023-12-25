@@ -98,6 +98,9 @@ python main.py
 启动数字人[xszyou/fay-ue5: 可对接fay数字人的ue5工程 (github.com)](https://github.com/xszyou/fay-ue5)
 
 
+### **启动android 连接器（非必须）**
+代码地址：https://github.com/xszyou/fay-android
+
 
 ## **三、使用说明**
 

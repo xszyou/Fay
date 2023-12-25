@@ -75,7 +75,8 @@ new Vue({
             }],
             msg_list:[],
             is_connect: false,
-            wake_word_enabled:false
+            wake_word_enabled:false,
+            loading: false
 
         }
     },
@@ -212,7 +213,9 @@ new Vue({
                 }
                 let panelReply = data.panelReply;
                 if(panelReply != undefined){
+                    _this.loading = false;
                     _this.addMsg(panelReply)
+                    
                 }
                 let is_connect = data.is_connect
                 if(is_connect != undefined){
@@ -497,6 +500,7 @@ new Vue({
                 'way' : 'send' 
             } 
             _this.msg_list.push(info);
+            _this.loading = true;
             this.timer = setTimeout(()=>{   //设置延迟执行
                 //滚动条置底
                let height = document.querySelector('.content').scrollHeight;

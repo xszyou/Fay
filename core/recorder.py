@@ -149,7 +149,7 @@ class Recorder:
                 continue
             
 
-            if  cfg.config['source']['record']['enabled']:
+            if  cfg.config['source']['record']['enabled'] and not self.is_remote():
                 if len(cfg.config['source']['record'])<3:
                     channels = 1
                 else:
@@ -221,4 +221,8 @@ class Recorder:
     #TODO Edit by xszyou on 20230113:把流的获取方式封装出来方便实现麦克风录制及网络流等不同的流录制子类
     @abstractmethod
     def get_stream(self):
+        pass
+
+    @abstractmethod
+    def is_remote(self):
         pass

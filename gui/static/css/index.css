@@ -418,3 +418,18 @@ textarea {
     background: rgba(0, 0, 0, 0);
     -webkit-box-shadow: inset006pxrgba(0, 0, 0, 0.5);
 }
+  .spinner {
+    /* Customize the loading spinner animation based on your UI framework or styling preferences */
+    border: 4px solid rgba(0, 0, 0, 0.1);
+    border-radius: 50%;
+    border-top: 4px solid #3498db;
+    width: 10px;
+    height: 10px;
+    animation: spin 1s linear infinite;
+  }
+  
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
