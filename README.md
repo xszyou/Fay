@@ -79,10 +79,8 @@ python main.py
 修复一次性日程清除的bug✓
 
 
-### **联系**
+### **技术交流**
 
-**商务QQ: 467665317**
 
-**进交流群**关注公众号 **fay数字人**（**请先star本仓库**）
 
-<img src="images/2.jpg"  />
+<img src="images/qrcode.png"  />
