@@ -1,16 +1,13 @@
 import os
 from typing import Any
 
-import requests
 from langchain.tools import BaseTool
-import fay_booter
-from core.interact import Interact
 from agent import agent_service
 
 
-class Say(BaseTool):
-    name = "语音输出工具"
-    description = """此工具用于语音输出，使用时请传入说话内容作为参数，例如：“该下班了，请注意休息”"""
+class SetChatStatus(BaseTool):
+    name = "SetChatStatus"
+    description = """此工具用于设置聊天状态，当识别到主人想进行交流聊天时使用此工具"""
 
     def __init__(self):
         super().__init__()
@@ -21,14 +18,12 @@ class Say(BaseTool):
 
 
     def _run(self, para: str) -> str:
-        interact = Interact("audio", 1, {'user': '', 'msg': para})
-        fay_booter.feiFei.on_interact(interact)
         agent_service.agent.is_chat = True
-        return "语音输出了：" + para
+        return "设置聊天状态成功"
 
 
 
 if __name__ == "__main__":
-    tool = Say()
+    tool = SetChatStatus()
     info = tool.run("该下班了，请注意休息")
     print(info)

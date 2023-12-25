@@ -418,3 +418,31 @@ textarea {
     background: rgba(0, 0, 0, 0);
     -webkit-box-shadow: inset006pxrgba(0, 0, 0, 0.5);
 }
+/* CSS 加载动画样式 */
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  
+  .loading-spinner {
+    border: 5px solid #f3f3f3; /* 轻颜色 */
+    border-top: 5px solid #3498db; /* 蓝色 */
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    animation: spin 2s linear infinite;
+  }
+  .spinner {
+    border: 4px solid rgba(0, 0, 0, 0.1);
+    border-radius: 50%;
+    border-top: 4px solid #3498db;
+    width: 10px;
+    height: 10px;
+    animation: spin 1s linear infinite;
+  }
+  
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }

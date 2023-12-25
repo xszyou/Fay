@@ -157,28 +157,32 @@
                     <div class="right_main">
                         <div class="container">
                             <div class="content">
-                       
-                                <div v-for="item in msg_list">
+
+                                <div v-for="(item, index) in msg_list" :key="index">
+                                 
                                 <div class="item item-center"><span>[[item.timetext]]</span></div>
-
-                                <div class="item item-left" v-if="item.type == 'fay'">
-                                    <div class="avatar"><img src="{{ url_for('static',filename='to.jpg') }}" />
-                                    </div>
-                                    <div class="bubble bubble-left">[[item.content]]
-                                    </div>
-                                </div>
-                                <div class="item item-right" v-else>
-                                    <div class="bubble bubble-right">[[item.content]]</div>
-                                    <div class="avatar"><img src="{{ url_for('static',filename='from.jpg') }}" />
-                                    </div>
-                                </div>
-                            </div>
-                                
-                          
-
-                             
                               
-                            </div>
+                                 <div class="item item-left" v-if="item.type == 'fay'">
+                                 <div class="avatar"><img src="{{ url_for('static',filename='to.jpg') }}" />
+                                 </div>
+                                 <div class="bubble bubble-left">[[item.content]]
+                                 </div>
+                                 </div>
+                                 
+                                 
+                                 <div class="item item-right" v-else>
+                                 <div class="bubble bubble-right" >[[item.content]]<div v-if="loading && index === msg_list.length - 1" class="spinner"></div></div>
+                                 <div class="avatar"><img src="{{ url_for('static',filename='from.jpg') }}" />
+                                 </div>
+                                 </div>
+                                 </div>
+                                 <div>
+                                
+                                 </div>
+                                
+                                 
+                                 </div>
+                                        
                             <div class="input-area">
                                 <textarea v-model="send_msg" name="text" id="textarea" placeholder="发送些内容给Fay..."></textarea>
                                 <div class="button-area">

@@ -33,7 +33,6 @@ if platform.system() == "Windows":
     from test_olipsync import LipSyncGenerator
     
 
-
 #文本消息处理（20231211增加：agent操作）
 def send_for_answer(msg):
         #记录运行时间
@@ -52,6 +51,11 @@ def send_for_answer(msg):
         
         #agent 处理
         text = agent_service.agent.run(msg)
+
+        #聊天模式语音输入语音输出
+        if text and "语音" in msg and agent_service.agent.is_chat:
+            interact = Interact("audio", 1, {'user': '', 'msg': text})
+            fay_booter.feiFei.on_interact(interact)
 
         #推送数字人
         if not cfg.config["interact"]["playSound"]: 
@@ -240,7 +244,7 @@ class FeiFei:
             # if audio_length <= config_util.config["interact"]["maxInteractTime"] or say_type == "script":
             if config_util.config["interact"]["playSound"]: # 展板播放
                 self.__play_sound(file_url)
-            else:#发送音频给ue和socket
+            else:#发送音频给ue
                 #推送ue
                 content = {'Topic': 'Unreal', 'Data': {'Key': 'audio', 'Value': os.path.abspath(file_url), 'Text': self.a_msg, 'Time': audio_length, 'Type': say_type}}
                 #计算lips
@@ -254,22 +258,22 @@ class FeiFei:
                         util.log(1, "唇型数字生成失败，无法使用新版ue5工程")
                 wsa_server.get_instance().add_cmd(content)
 
-                #推送远程音频
-                if self.deviceConnect is not None:
-                    try:
-                        self.deviceConnect.send(b'\x00\x01\x02\x03\x04\x05\x06\x07\x08') # 发送音频开始标志，同时也检查设备是否在线
-                        wavfile = open(os.path.abspath(file_url),'rb')
+            #推送远程音频
+            if self.deviceConnect is not None:
+                try:
+                    self.deviceConnect.send(b'\x00\x01\x02\x03\x04\x05\x06\x07\x08') # 发送音频开始标志，同时也检查设备是否在线
+                    wavfile = open(os.path.abspath(file_url),'rb')
+                    data = wavfile.read(1024)
+                    total = 0
+                    while data:
+                        total += len(data)
+                        self.deviceConnect.send(data)
                         data = wavfile.read(1024)
-                        total = 0
-                        while data:
-                            total += len(data)
-                            self.deviceConnect.send(data)
-                            data = wavfile.read(1024)
-                            time.sleep(0.001)
-                        self.deviceConnect.send(b'\x08\x07\x06\x05\x04\x03\x02\x01\x00')# 发送音频结束标志
-                        util.log(1, "远程音频发送完成：{}".format(total))
-                    except socket.error as serr:
-                        util.log(1,"远程音频输入输出设备已经断开：{}".format(serr))
+                        time.sleep(0.001)
+                    self.deviceConnect.send(b'\x08\x07\x06\x05\x04\x03\x02\x01\x00')# 发送音频结束标志
+                    util.log(1, "远程音频发送完成：{}".format(total))
+                except socket.error as serr:
+                    util.log(1,"远程音频输入输出设备已经断开：{}".format(serr))
                     
             time.sleep(audio_length + 0.5)
             wsa_server.get_web_instance().add_cmd({"panelMsg": ""})

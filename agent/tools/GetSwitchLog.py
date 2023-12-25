@@ -2,11 +2,11 @@ import os
 from typing import Any
 
 from langchain.tools import BaseTool
-import agent.tools.IotmService as IotmService
+import tools.IotmService as IotmService
 
 class GetSwitchLog(BaseTool):
     name = "GetSwitchLog"
-    description = "此工具用于查询农业箱的设备开关操作历史记录，设备序号：小风扇（1）、电热风扇(2)、制冷风扇(3)、肥料开关(4)、补光设备(5)、植物生长灯(6)、二氧化碳(7)"
+    description = "此工具用于查询农业箱的设备开关当天的操作历史记录"
 
     def __init__(self):
         super().__init__()
@@ -16,10 +16,31 @@ class GetSwitchLog(BaseTool):
         pass
 
 
-    def _run(self, para: str) -> str:
-        infos = IotmService.get_switch_log()
-    
-        return infos
+    def _run(self, para: str):
+        logs = IotmService.get_switch_log()
+        device_logs = {}
+
+        switch_mapping = {
+            1: '小风扇',
+            2: '电热风扇',
+            3: '制冷风扇',
+            4: '水开关',
+            5: '肥料开关',
+            6: '植物生长灯',
+            7: '二氧化碳'
+        }
+
+        for val in logs:
+            switch_name = switch_mapping[val['number']]
+            status = 'on' if val['status'] == 1 else 'off'
+            info = val['timetText']
+
+            if switch_name not in device_logs:
+                device_logs[switch_name] = {'on': [], 'off': []}
+
+            device_logs[switch_name][status].append(info)
+
+        return device_logs
 
 if __name__ == "__main__":
     tool = GetSwitchLog()

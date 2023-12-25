@@ -71,7 +71,9 @@ class RecorderListener(Recorder):
         except Exception as e:
                 print(e)
                 util.log(1, "请检查设备是否有误，再重新启动!")
-                    
+    
+    def is_remote(self):
+        return False
         
 
 
@@ -129,6 +131,9 @@ class DeviceInputListener(Recorder):
     def start_ngrok(self, clientId):
         self.ngrok = ngrok_util.NgrokCilent(clientId)
         self.ngrok.start()
+    
+    def is_remote(self):
+        return True
         
 
 

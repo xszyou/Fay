@@ -7,7 +7,7 @@ from langchain.tools import BaseTool
 
 class Knowledge(BaseTool):
     name = "Knowledge"
-    description = """此工具用于查询箱内植物的专业知识，可以作为补充参考，使用时请传入相关问题作为参数，例如：“草梅最适合的生长温度”"""
+    description = """此工具用于查询箱内植物的专业知识，使用时请传入相关问题作为参数，例如：“草梅最适合的生长温度”"""
 
     def __init__(self):
         super().__init__()

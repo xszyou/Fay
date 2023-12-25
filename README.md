@@ -11,7 +11,7 @@
 
 
 
-**12月迟来的报到，Fay数字人 AI Agent版（含智慧农业箱的操作demo代码，如果你需要完整代码可以公众号留言申请获取）第4版正式上传！**
+**12月迟来的报到，Fay数字人 AI Agent版（含智慧农业箱的操作demo代码，如果你需要完整代码可以公众号留言申请获取）第5版正式上传！**
 
 如果你需要是一个线上线下的销售员，请移步[`带货完整版`](https://github.com/TheRamU/Fay/tree/fay-sales-edition)                       
 
@@ -55,9 +55,29 @@ python main.py
 
 ### **启动数字人（非必须）**
 
-+ 启动数字人[xszyou/fay-ue5: 可对接fay数字人的ue5工程 (github.com)](https://github.com/xszyou/fay-ue5)
++ 仓库地址：https://github.com/xszyou/fay-ue5
 
-  
+### **启动android 连接器（非必须）**
+
++ 仓库地址：https://github.com/xszyou/fay-android
+
+### **更新日志**
+2023.12.25:
+
+*实现agent ReAct与LLM chain自动切换逻辑✓
+
+聊天窗区分任务消息✓
+
+修复删除日程bug✓
+
+优化远程音频逻辑✓
+
+等待处理引入加载中效果✓
+
+优化prompt以解决日程任务递归调用问题✓
+
+修复一次性日程清除的bug✓
+
 
 ### **联系**
 

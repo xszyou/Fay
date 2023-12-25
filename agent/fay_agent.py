@@ -6,6 +6,7 @@ from langchain.docstore import InMemoryDocstore
 from langchain.vectorstores import FAISS
 from langchain.agents import AgentExecutor, Tool, ZeroShotAgent, initialize_agent, agent_types
 from langchain.chains import LLMChain
+from langchain.prompts import PromptTemplate
 
 from agent.tools.MyTimer import MyTimer
 from agent.tools.QueryTime import QueryTime
@@ -19,11 +20,14 @@ from agent.tools.QueryTimerDB import QueryTimerDB
 from agent.tools.DeleteTimer import DeleteTimer
 from agent.tools.GetSwitchLog import GetSwitchLog
 from agent.tools.getOnRunLinkage import getOnRunLinkage
+from agent.tools.SetChatStatus import SetChatStatus
+
 
 import utils.config_util as utils
 from core.content_db import Content_Db
 from core import wsa_server
 import os
+
 
 
 class FayAgentCore():
@@ -64,6 +68,7 @@ class FayAgentCore():
         delete_timer_tool = DeleteTimer()
         get_switch_log = GetSwitchLog()
         get_on_run_linkage = getOnRunLinkage()
+        set_chat_status_tool = SetChatStatus()
 
         tools = [
             Tool(
@@ -126,22 +131,57 @@ class FayAgentCore():
                 func=get_on_run_linkage.run,
                 description=get_on_run_linkage.description
             ),
+            Tool(
+                name=set_chat_status_tool.name,
+                func=set_chat_status_tool.run,
+                description=set_chat_status_tool.description
+            ),
         ]
 
-
+        #agent用于执行任务
         self.agent = initialize_agent(agent_types=agent_types.AgentType.CHAT_CONVERSATIONAL_REACT_DESCRIPTION,
                          tools=tools, llm=llm, verbose=True,
                          max_history=5, 
                          memory=memory, handle_parsing_errors=True)
+        
+        #创建llm chain用于聊天
+        tools_prompt = "["
+        tool_names = [tool.name for tool in tools if tool.name != set_chat_status_tool.name and tool.name != say_tool.name]
+        tools_prompt += "、".join(tool_names) + "]"
+        template = """你是一个智慧农业实验箱里的ai，你的责任是陪伴主人生活、工作，以及协助主人打理好农业种植箱里的农作物.现在主人正在和你聊天，若你在聊天过程中感觉到主人想使用以下工具，请按“agent:'主人刚刚的说话'”这样的格式回复，否则请直接回复我文字内容。工具如下：
+        """ +  tools_prompt +"""
+        {chat_history}
+        Human: {human_input}
+        AI:"""
+        prompt = PromptTemplate(
+            input_variables=["chat_history", "human_input"], template=template
+        )
+        self.llm_chain = LLMChain(
+            llm=llm,
+            prompt=prompt,
+            verbose=True,
+            memory=memory
+        )
+
+        self.is_chat = False#聊天状态
+
 
     def run(self, input_text):
         #消息保存
         contentdb = Content_Db()    
         contentdb.add_content('member', 'agent', input_text.replace('主人语音说了：', '').replace('主人文字说了：', ''))
         wsa_server.get_web_instance().add_cmd({"panelReply": {"type":"member","content":input_text.replace('主人语音说了：', '').replace('主人文字说了：', '')}})
-        result = None
+        result = ""
         try:
-            result = self.agent.run(input_text)
+            #判断执行聊天模式还是agent模式，双模式在运行过程中会主动切换
+            if self.is_chat:
+                result = self.llm_chain.predict(human_input=input_text.replace('主人语音说了：', '').replace('主人文字说了：', ''))
+            if "agent:" in result.lower() or not self.is_chat:
+                print(result)
+                print(self.is_chat)
+                self.is_chat = False
+                input_text = result if  result.lower().replace("agent:", "") else input_text
+                result = self.agent.run(input_text)
         except Exception as e:
             print(e)
         result = "执行完毕" if result is None or result == "N/A" else result

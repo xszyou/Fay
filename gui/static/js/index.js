@@ -74,7 +74,8 @@ new Vue({
             msg_list:[],
             is_connect: false,
             wake_word_enabled:false,
-            wake_word: ''
+            wake_word: '',
+            loading: false
 
         }
     },
@@ -535,6 +536,12 @@ new Vue({
                 'type' : data['type'] ,
                 'way' : 'send' 
             } 
+            console.log(info)
+            if (data['type'] == 'fay'){
+                _this.loading = false;
+            }else{
+                _this.loading = true;
+            }
             _this.msg_list.push(info);
             
             this.timer = setTimeout(()=>{   //设置延迟执行

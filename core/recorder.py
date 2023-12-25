@@ -155,8 +155,7 @@ class Recorder:
             if not data:
                 continue
             
-
-            if  cfg.config['source']['record']['enabled']:
+            if  cfg.config['source']['record']['enabled'] and not self.is_remote():
                 if len(cfg.config['source']['record'])<3:
                     channels = 1
                 else:
@@ -166,7 +165,6 @@ class Recorder:
                 data = np.reshape(data, (-1, channels))  # reshaping the array to split the channels
                 mono = data[:, 0]  # taking the first channel
                 data = mono.tobytes()  
-
 
             level = audioop.rms(data, 2)
             if len(self.__history_data) >= 5:
@@ -228,4 +226,9 @@ class Recorder:
     #TODO Edit by xszyou on 20230113:把流的获取方式封装出来方便实现麦克风录制及网络流等不同的流录制子类
     @abstractmethod
     def get_stream(self):
+        pass
+        
+     #TODO Edit by xszyou on 20231225:子类实现返回是否远程音频
+    @abstractmethod
+    def is_remote(self):
         pass

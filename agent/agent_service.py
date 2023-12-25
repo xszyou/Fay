@@ -8,6 +8,7 @@ scheduled_tasks = {}
 agent_running = False
 agent = FayAgentCore()
 
+
 # 数据库初始化
 def init_db():
     conn = sqlite3.connect('timer.db')
@@ -51,8 +52,7 @@ def parse_repeat_rule(rule, task_time):
 
 # 执行任务
 def execute_task(task_time, id, content):
-    content = "执行任务->现在" + content
-    agent.run(content)
+    agent.run("执行任务->立刻" + content)
     del scheduled_tasks[id]
     # 如果不重复，执行后删除记录
     conn = sqlite3.connect('timer.db')
@@ -90,7 +90,6 @@ def agent_start():
     
     agent_running = True
     init_db()
-    # insert_test_data()
     check_and_execute_thread = threading.Thread(target=check_and_execute)
     check_and_execute_thread.start()
 

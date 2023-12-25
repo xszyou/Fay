@@ -11,7 +11,7 @@
 
 
 
-**Belated December announcement, the 4th edition of Fay Digital Human AI Agent Version (complete code for smart agriculture box can be requested via our public channel) is officially uploaded!**
+**Belated December announcement, the 5th edition of Fay Digital Human AI Agent Version (complete code for smart agriculture box can be requested via our public channel) is officially uploaded!**
 
 If you need an online and offline salesperson, please go to [`Complete Retail Version`](https://github.com/TheRamU/Fay/tree/fay-sales-edition)
 
@@ -52,9 +52,29 @@ python main.py
 
 ### **Launching the Digital Human (Optional)**
 
-+ Launch the digital human[xszyou/fay-ue5: 可对接fay数字人的ue5工程 (github.com)](https://github.com/xszyou/fay-ue5)
+Repository URL:https://github.com/xszyou/fay-ue5
 
-  
+
+### **Launch of Android Connector (Optional)**
+Repository URL: https://github.com/xszyou/fay-android
+
+
+### **Changelog**
+2023.12.25:
+
+Implemented the automatic switching logic between agent ReAct and LLM chain ✓
+Distinguished task messages in the chat window ✓
+
+Fixed the bug in deleting schedules ✓
+
+Optimized remote audio logic ✓
+
+Introduced loading effects for pending processes ✓
+
+Optimized prompts to resolve recursive calling issues in schedule tasks ✓
+
+Fixed the bug in clearing one-time schedules ✓
+
 
 ### **Contact**
 
