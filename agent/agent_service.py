@@ -3,6 +3,7 @@ import threading
 import datetime
 import time
 from agent.fay_agent import FayAgentCore
+from core import fay_core
 
 scheduled_tasks = {}
 agent_running = False
@@ -52,8 +53,10 @@ def parse_repeat_rule(rule, task_time):
 
 # 执行任务
 def execute_task(task_time, id, content):
-    agent.run("执行任务->立刻" + content)
-    del scheduled_tasks[id]
+    agent.is_chat = False
+    fay_core.send_for_answer("执行任务->立刻" + content)
+    if id in scheduled_tasks:
+        del scheduled_tasks[id]
     # 如果不重复，执行后删除记录
     conn = sqlite3.connect('timer.db')
     cursor = conn.cursor()
@@ -89,24 +92,24 @@ def agent_start():
     global agent
     
     agent_running = True
-    init_db()
+    # init_db()
     check_and_execute_thread = threading.Thread(target=check_and_execute)
     check_and_execute_thread.start()
 
     #初始计划
-    agent.run("""执行任务-->
-        你是一个智慧农业实验箱里的ai，你的责任是陪伴主人生活、工作，以及协助主人打理好农业种植箱里的农作物：
-        1、在每天早上8点、中午12点、晚上10点检查农业种植箱的状态是否附合设定的预期执行，如果不符合请告知我调整。
-        2、每天12点“语音提醒主人吃饭”;  
-        3、在星期一到星期五13:30“语音提醒主人开始工作”; 
-        4、在星期一到星期五15:15“语音提醒主人冲咖啡”; 
-        5、在星期一、星期三的11:15“语音提醒主人开会”; 
-        6、在星期五17:30“语音提醒主人开会”;
-        7、在星期一到星期五18:00“语音提醒主人下班”;
-        8、在每天21点陪主人聊聊天;  
-        9、在每天晚上10:30会跟据第二天的天气预报信息和当天的运行情况，检查iotm系统当天的控制规则；
+    # fay_core.send_for_answer("""执行任务-->
+    #     你是一个智慧农业实验箱里的ai，你的责任是陪伴主人生活、工作，以及协助主人打理好农业种植箱里的农作物：
+    #     1、在每天早上8点、中午12点、晚上10点检查农业种植箱的状态是否附合设定的预期执行，如果不符合请告知我调整。
+    #     2、每天12点“语音提醒主人吃饭”;  
+    #     3、在星期一到星期五13:30“语音提醒主人开始工作”; 
+    #     4、在星期一到星期五15:15“语音提醒主人冲咖啡”; 
+    #     5、在星期一、星期三的11:15“语音提醒主人开会”; 
+    #     6、在星期五17:30“语音提醒主人开会”;
+    #     7、在星期一到星期五18:00“语音提醒主人下班”;
+    #     8、在每天21点陪主人聊聊天;  
+    #     9、在每天晚上10:30会跟据第二天的天气预报信息和当天的运行情况，检查iotm系统当天的控制规则；
 
-        """)
+    #     """)
 
 def agent_stop():
     global agent_running 

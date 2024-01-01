@@ -10,20 +10,30 @@
 
 
 
-
-**Belated December announcement, the 5th edition of Fay Digital Human AI Agent Version (complete code for smart agriculture box can be requested via our public channel) is officially uploaded!**
+**Please Understand First**
 
 If you need an online and offline salesperson, please go to [`Complete Retail Version`](https://github.com/TheRamU/Fay/tree/fay-sales-edition)
 
 If you need a digital human assistant for human-computer interaction (and yes, you can command it to switch devices on and off), please go to [`Complete Assistant Version`](https://github.com/TheRamU/Fay/tree/fay-assistant-edition)
 
-***“Exceptional products deserve to be reimagined with digital humans”***
+**"Excellent products deserve to be redone with digital humans."**
+1.Assistant mode based on schedule maintenance: Managing and maintaining your schedule, not just a simple alarm clock.
+<img src="images/you1.png" alt="Fay">
 
-Highlights: Proactive execution of planned tasks without the need for question-and-answer interactions, automatic planning and use of the agent tool to complete tasks; use of OpenAI TTS; use of a vector database for permanent memory and memory retrieval;
+2.Powerful planning and execution (ReAct) capability: Plan -> Execute <-> Reflect -> Summarize.
+<img src="images/you2.png" alt="Fay">
 
-![](images/agent_demo.gif)
+3.Automatic switching between LLM Chain and React Agent: Retains planning and execution capabilities while considering chatting abilities (still needs optimization).
+<img src="images/you3.png" alt="Fay">
 
-​                                                                       (Above image: Testing ReAct capabilities）
+4.Dual memory mechanism: Stanford AI Town's memory stream (time, importance, relevance) for long-term memory, and adjacent conversation memory for coherent conversations.
+<img src="images/you4.png" alt="Fay">
+
+5.Easily expandable agent tools.
+<img src="images/you5.png" alt="Fay">
+
+6.Accompanying 24-hour background running Android connector.
+<img src="images/you6.png" alt="Fay">
 
 ## **Installation Instructions**
 
@@ -60,19 +70,24 @@ Repository URL: https://github.com/xszyou/fay-android
 
 
 ### **Changelog**
+2024.01.01:
+
+OpenAI token calculation ✓
+Optimized ReAct Agent and LLM Chain auto-switching logic ✓
+*Added dual memory mechanism: long-term memory stream and short-term chat memory ✓
+Fixed record.py ASR bug ✓
+Improved stability of remote audio (Android connector) ✓
+Fixed execution time calculation bug ✓
+Optimized voice output logic ✓
+
 2023.12.25:
 
 Implemented the automatic switching logic between agent ReAct and LLM chain ✓
 Distinguished task messages in the chat window ✓
-
 Fixed the bug in deleting schedules ✓
-
 Optimized remote audio logic ✓
-
 Introduced loading effects for pending processes ✓
-
 Optimized prompts to resolve recursive calling issues in schedule tasks ✓
-
 Fixed the bug in clearing one-time schedules ✓
 
 

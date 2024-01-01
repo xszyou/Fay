@@ -10,10 +10,8 @@ import logging
 
 # 适应模型使用
 import numpy as np
-# import tensorflow as tf
 import fay_booter
 from ai_module import xf_ltp
-# from ai_module.ms_tts_sdk import Speech
 from ai_module.openai_tts import Speech
 from core import wsa_server
 from core.interact import Interact
@@ -27,6 +25,7 @@ import platform
 from ai_module import yolov8
 from agent import agent_service
 import fay_booter
+from core.content_db import Content_Db
 if platform.system() == "Windows":
     import sys
     sys.path.append("test/ovr_lipsync")
@@ -37,6 +36,11 @@ if platform.system() == "Windows":
 def send_for_answer(msg):
         #记录运行时间
         fay_booter.feiFei.last_quest_time = time.time()
+
+        #消息保存
+        contentdb = Content_Db()    
+        contentdb.add_content('member', 'agent', msg.replace('主人语音说了：', '').replace('主人文字说了：', ''))
+        wsa_server.get_web_instance().add_cmd({"panelReply": {"type":"member","content":msg.replace('主人语音说了：', '').replace('主人文字说了：', '')}})
 
         # 发送给数字人端    
         if not config_util.config["interact"]["playSound"]: 
@@ -49,13 +53,18 @@ def send_for_answer(msg):
             content = {'Topic': 'Unreal', 'Data': {'Key': 'log', 'Value': "思考中..."}}
             wsa_server.get_instance().add_cmd(content)
         
-        #agent 处理
-        text = agent_service.agent.run(msg)
+        #agent 或llm chain处理
+        is_use_say_tool, text = agent_service.agent.run(msg)
 
-        #聊天模式语音输入语音输出
-        if text and "语音" in msg and agent_service.agent.is_chat:
+        #语音输入强制语音输出
+        if text and "语音说了" in msg and not is_use_say_tool:
             interact = Interact("audio", 1, {'user': '', 'msg': text})
             fay_booter.feiFei.on_interact(interact)
+
+        #消息保存
+        contentdb.add_content('fay','agent', text)
+        wsa_server.get_web_instance().add_cmd({"panelReply": {"type":"fay","content":text}})
+        util.log(1, 'ReAct Agent或LLM Chain处理总时长：{} ms'.format(math.floor((time.time() - fay_booter.feiFei.last_quest_time) * 1000)))
 
         #推送数字人
         if not cfg.config["interact"]["playSound"]: 
@@ -294,7 +303,7 @@ class FeiFei:
                 except Exception as serr:
                     util.log(1,"远程音频输入输出设备已经断开：{}".format(serr))
                     self.deviceConnect = None
-            time.sleep(1)
+            time.sleep(5)
 
     def __accept_audio_device_output_connect(self):
         self.deviceSocket = socket.socket(socket.AF_INET,socket.SOCK_STREAM) 

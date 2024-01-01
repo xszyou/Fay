@@ -42,15 +42,13 @@ class Recorder:
         if cfg.config['source']['wake_word_enabled']:
             self.timer = threading.Timer(60, self.reset_wakeup_status)  # 60秒后执行reset_wakeup_status方法
 
-
     def asrclient(self):
+        asrcli = None
         if self.ASRMode == "ali":
             asrcli = ALiNls()
         elif self.ASRMode == "funasr":
             asrcli = FunASR()
         return asrcli
-
-    
 
     def __get_history_average(self, number):
         total = 0

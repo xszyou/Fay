@@ -21,9 +21,11 @@ class Say(BaseTool):
 
 
     def _run(self, para: str) -> str:
+        agent_service.agent.is_chat = True
+        agent_service.agent.is_use_say_tool = True
+        agent_service.agent.say_tool_text = para
         interact = Interact("audio", 1, {'user': '', 'msg': para})
         fay_booter.feiFei.on_interact(interact)
-        agent_service.agent.is_chat = True
         return "语音输出了：" + para
 
 
