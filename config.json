@@ -49,6 +49,7 @@
             "device": "",
             "enabled": false
         },
-        "wake_word_enabled": false
+        "wake_word_enabled": false,
+        "wake_word": ""
     }
 }

@@ -95,8 +95,14 @@ class Recorder:
         if len(text) > 0:
             if cfg.config['source']['wake_word_enabled']:
                 if not self.wakeup_matched:
-                    #唤醒词判断
-                    if '你好' in text or 'hello' in text.lower() or 'hi' in text.lower():
+                     #唤醒词判断
+                    wake_word =  cfg.config['source']['wake_word']
+                    wake_word_list = wake_word.split(',')
+                    wake_up = False
+                    for word in wake_word_list:
+                        if word in text:
+                                wake_up = True
+                    if wake_up:
                         self.wakeup_matched = True  # 唤醒成功
                         util.log(1, "唤醒成功！")
                         self.on_speaking('唤醒')

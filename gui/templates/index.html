@@ -114,6 +114,17 @@
                                             inactive-color="#ff4949">
                                         </el-switch>
                                         </li>
+                                        <br>
+                                        <li>
+                                            <p>唤醒词：</p>
+                                            <el-input style="width: 250px;" v-model="wake_word" placeholder="请输入内容（以,隔开）"></el-input>
+                                        </li>
+                                        <br>
+                                        <li>
+                                            <p> 远程音频：</p>
+                                            <p style = "text-align: left;color: #67c23a" v-if="remote_audio_connect" >已连接 </p>
+                                            <p style = "text-align: left;"  v-else>未连接 </p>
+                                        </li>
                                     </ul>
                                 </div>
                             </div>
@@ -156,6 +167,7 @@
                                     <p v-if="is_connect" style="color: #67c23a;"> 数字人：已连接 </p>
                                     <p v-else > 数字人：未连接 </p>
                                 </li>
+                               
                             </ul>
                         </div>
                     </div>
