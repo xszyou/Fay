@@ -1,3 +1,0 @@
-E:/fay/ovr_lipsync_native_29.0.0/OVRLipSyncNative/Sample/ProcessWAV/out/build/x64-Release/CMakeFiles/ProcessWAV.dir
-E:/fay/ovr_lipsync_native_29.0.0/OVRLipSyncNative/Sample/ProcessWAV/out/build/x64-Release/CMakeFiles/edit_cache.dir
-E:/fay/ovr_lipsync_native_29.0.0/OVRLipSyncNative/Sample/ProcessWAV/out/build/x64-Release/CMakeFiles/rebuild_cache.dir
