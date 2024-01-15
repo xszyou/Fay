@@ -78,7 +78,15 @@ new Vue({
             wake_word_enabled:false,
             wake_word: '',
             loading: false,
-            remote_audio_connect: false
+            remote_audio_connect: false,
+            wake_word_type: 'common',
+            wake_word_type_options: [{
+                value: 'common',
+                label: '普通'
+            }, {
+                value: 'front',
+                label: '前置词'
+            }],
 
         }
     },
@@ -215,7 +223,6 @@ new Vue({
                 }
                 let panelReply = data.panelReply;
                 if(panelReply != undefined){
-                    _this.loading = false;
                     _this.addMsg(panelReply)
                     
                 }
@@ -258,6 +265,7 @@ new Vue({
                             let items = config["items"]
                             _this.wake_word_enabled = source["wake_word_enabled"]
                             _this.wake_word = source["wake_word"]
+                            _this.wake_word_type = source["wake_word_type"]
                             _this.play_sound_enabled = interact["playSound"]
                             _this.visualization_detection_enabled = interact["visualization"]
                             _this.source_liveRoom_enabled = source["liveRoom"]["enabled"]
@@ -328,7 +336,8 @@ new Vue({
                             "device": this.source_record_device
                         },
                         "wake_word_enabled": this.wake_word_enabled,
-                        "wake_word": this.wake_word
+                        "wake_word": this.wake_word,
+                        "wake_word_type": this.wake_word_type
                     },
                     "attribute": {
                         "voice": this.attribute_voice,
@@ -502,14 +511,13 @@ new Vue({
                 alert('请输入内容');
                 return;
             }
-            let info = {
-                'content' : text ,
-                'timetext' : _this.getCurrentTime() ,
-                'type' : 'member' ,
-                'way' : 'send' 
-            } 
-            _this.msg_list.push(info);
-            _this.loading = true;
+            // let info = {
+            //     'content' : text ,
+            //     'timetext' : _this.getCurrentTime() ,
+            //     'type' : 'member' ,
+            //     'way' : 'send' 
+            // } 
+            // _this.msg_list.push(info);
             this.timer = setTimeout(()=>{   //设置延迟执行
                 //滚动条置底
                let height = document.querySelector('.content').scrollHeight;
@@ -529,7 +537,7 @@ new Vue({
             let executed = false
             xhr.onreadystatechange = async function () {
                 if (!executed && xhr.status === 200) {
-                  // _this.getMsgList()
+                //   this.getMsgList()
                 //    document.querySelector('#textarea').value = '';
                 //    document.querySelector('#textarea').focus();
                    
@@ -588,6 +596,11 @@ new Vue({
                 'type' : data['type'] ,
                 'way' : 'send' 
             } 
+            if (data['type'] == 'fay'){
+                _this.loading = false;
+            }else{
+                _this.loading = true;
+            }
             _this.msg_list.push(info);
             
             this.timer = setTimeout(()=>{   //设置延迟执行

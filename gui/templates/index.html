@@ -87,7 +87,7 @@
                                            <p style="text-align: left;" v-if="play_sound_enabled">是</p>
                                            <p style="text-align: left;" v-else>否</p>
                                         </li>
-                                        <br>
+                                       
                                         <li>
                                             <p>声音选择：{{attribute_voice}}</p>
                                             <el-select v-model="attribute_voice" placeholder="请选择">
@@ -114,10 +114,19 @@
                                             inactive-color="#ff4949">
                                         </el-switch>
                                         </li>
-                                        <br>
-                                        <li>
+                                       
+                                        <li style="margin-bottom: 10px;">
                                             <p>唤醒词：</p>
                                             <el-input style="width: 250px;" v-model="wake_word" placeholder="请输入内容（以,隔开）"></el-input>
+                                        </li>
+                                        
+                                        <li>
+                                            <p>唤醒方式：</p>
+                                            <el-select v-model="wake_word_type" placeholder="请选择">
+                                                <el-option v-for="item in wake_word_type_options" :key="item.value"
+                                                    :label="item.label" :value="item.value">
+                                                </el-option>
+                                            </el-select>
                                         </li>
                                         <br>
                                         <li>

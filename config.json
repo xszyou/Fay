@@ -49,7 +49,8 @@
             "device": "",
             "enabled": false
         },
+        "wake_word": "",
         "wake_word_enabled": false,
-        "wake_word": ""
+        "wake_word_type": "common"
     }
 }

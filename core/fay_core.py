@@ -99,6 +99,7 @@ def determine_nlp_strategy(sendto,msg):
 def send_for_answer(msg,sendto):
         contentdb = Content_Db()
         contentdb.add_content('member','send',msg)
+        wsa_server.get_web_instance().add_cmd({"panelReply": {"type":"member","content":msg}})
         textlist = []
         text = None
         # 人设问答

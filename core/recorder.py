@@ -94,30 +94,51 @@ class Recorder:
         util.log(1, "语音处理完成！ 耗时: {} ms".format(math.floor((time.time() - tm) * 1000)))
         if len(text) > 0:
             if cfg.config['source']['wake_word_enabled']:
-                if not self.wakeup_matched:
-                     #唤醒词判断
+
+                if cfg.config['source']['wake_word_type'] == 'common':
+
+                    if not self.wakeup_matched:
+                        #唤醒词判断
+                        wake_word =  cfg.config['source']['wake_word']
+                        wake_word_list = wake_word.split(',')
+                        wake_up = False
+                        for word in wake_word_list:
+                            if word in text:
+                                    wake_up = True
+                        if wake_up:
+                            self.wakeup_matched = True  # 唤醒成功
+                            util.log(1, "唤醒成功！")
+                            self.on_speaking('唤醒')
+                            self.processing = False
+                            self.timer.cancel()  # 取消之前的计时器任务
+                        else:
+                            util.log(1, "[!] 待唤醒！")
+                            wsa_server.get_web_instance().add_cmd({"panelMsg": ""})
+                
+  
+                    else:
+                        self.on_speaking(text)
+                        self.processing = False
+                        self.timer.cancel()  # 取消之前的计时器任务
+                        self.timer = threading.Timer(60, self.reset_wakeup_status)  # 重设计时器为60秒
+                        self.timer.start()
+                elif  cfg.config['source']['wake_word_type'] == 'front':
                     wake_word =  cfg.config['source']['wake_word']
                     wake_word_list = wake_word.split(',')
                     wake_up = False
                     for word in wake_word_list:
-                        if word in text:
-                                wake_up = True
+                        if text.startswith(word):
+                            wake_up = True
+                            break
                     if wake_up:
-                        self.wakeup_matched = True  # 唤醒成功
                         util.log(1, "唤醒成功！")
-                        self.on_speaking('唤醒')
+                        self.on_speaking(text)
                         self.processing = False
-                        self.timer.cancel()  # 取消之前的计时器任务
                     else:
                         util.log(1, "[!] 待唤醒！")
                         wsa_server.get_web_instance().add_cmd({"panelMsg": ""})
-  
-                else:
-                    self.on_speaking(text)
-                    self.processing = False
-                    self.timer.cancel()  # 取消之前的计时器任务
-                    self.timer = threading.Timer(60, self.reset_wakeup_status)  # 重设计时器为60秒
-                    self.timer.start()
+
+
             else:
                   self.on_speaking(text)
                   self.processing = False
