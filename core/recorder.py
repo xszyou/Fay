@@ -128,11 +128,14 @@ class Recorder:
                     wake_up = False
                     for word in wake_word_list:
                         if text.startswith(word):
+                            wake_up_word = word
                             wake_up = True
                             break
                     if wake_up:
                         util.log(1, "唤醒成功！")
-                        self.on_speaking(text)
+                        #去除唤醒词后语句
+                        question = text[len(wake_up_word):].lstrip()
+                        self.on_speaking(question)
                         self.processing = False
                     else:
                         util.log(1, "[!] 待唤醒！")

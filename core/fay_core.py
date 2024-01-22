@@ -91,7 +91,9 @@ def determine_nlp_strategy(sendto,msg):
 
     return text,textlist
     
-    
+
+
+
 
 
 
@@ -241,6 +243,7 @@ class FeiFei:
                     index = interact.interact_type
                     if index == 1:
                         self.q_msg = interact.data["msg"]
+                        self.write_to_file("./logs", "asr_result.txt",  self.q_msg)
                         if not config_util.config["interact"]["playSound"]: # 非展板播放
                             content = {'Topic': 'Unreal', 'Data': {'Key': 'question', 'Value': self.q_msg}}
                             wsa_server.get_instance().add_cmd(content)
@@ -280,6 +283,7 @@ class FeiFei:
                         elif answer != 'NO_ANSWER': #语音内容没有命中指令,回复q&a内容
                             text = answer
                         self.a_msg = text
+                        self.write_to_file("./logs", "answer_result.txt", text)
                         contentdb.add_content('fay','speak',self.a_msg)
                         wsa_server.get_web_instance().add_cmd({"panelReply": {"type":"fay","content":self.a_msg}})
                         if len(textlist) > 1:
@@ -297,6 +301,17 @@ class FeiFei:
 
             except BaseException as e:
                 print(e)
+
+    def write_to_file(self, path, filename, content):
+        if not os.path.exists(path):
+            os.makedirs(path)
+        full_path = os.path.join(path, filename)
+        with open(full_path, 'w') as file:
+            file.write(content)
+            file.flush()  
+            os.fsync(file.fileno()) 
+
+
 
     def on_interact(self, interact: Interact):
         self.interactive.append(interact)

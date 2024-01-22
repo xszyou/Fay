@@ -12,7 +12,7 @@ httpproxy = cfg.proxy_config
 proxy_flag = str(cfg.is_proxy)
 
 def question(cont):
-    url= "https://fastgpt.run/api/v1/chat/completions"
+    url= "https://api.fastgpt.in/api/v1/chat/completions"
        
     session = requests.Session()
     session.verify = False
