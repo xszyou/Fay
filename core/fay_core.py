@@ -306,7 +306,7 @@ class FeiFei:
         if not os.path.exists(path):
             os.makedirs(path)
         full_path = os.path.join(path, filename)
-        with open(full_path, 'w') as file:
+        with open(full_path, 'w', encoding='utf-8') as file:
             file.write(content)
             file.flush()  
             os.fsync(file.fileno()) 
