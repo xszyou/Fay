@@ -5,13 +5,13 @@
 
 ## Install
 pip install torch
-pip install modelscope
+pip install modelscope==1.11.0
 pip install testresources
 pip install websockets
 pip install torchaudio
-git clone https://github.com/alibaba-damo-academy/FunASR.git 
-pip install ./FunASR(若editdistance编译不通过，请手动安装 pip install editdistance,在FunASR/setup.py也注释掉，再执行)
-
+下载 https://github.com/alibaba-damo-academy/FunASR/tree/v0.8.8
+解压
+pip install ./FunASR-0.8.8(若editdistance编译不通过，请手动安装 pip install editdistance,在FunASR/setup.py也注释掉，再执行)
 
 
 ## Start server

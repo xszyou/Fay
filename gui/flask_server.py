@@ -129,9 +129,38 @@ def api_get_Msg():
 
 @__app.route('/api/send/v1/chat/completions', methods=['post'])
 def api_send_v1_chat_completions():
-    data = request.values.get('content')
-    text = fay_core.send_for_answer(data,1)
-    return '{"result":"successful","msg":"'+text+'"}'
+    data = request.json  # 解析JSON数据
+    # 检查'messages'键是否存在于数据中
+    last_content = ""
+    if 'messages' in data and data['messages']:
+        last_message = data['messages'][-1]  # 获取最后一条消息
+        last_content = last_message.get('content', 'No content provided')  # 获取'content'字段
+    else:
+        last_content = 'No messages found'
+    text = fay_core.send_for_answer("主人文字说了：" + last_content)
+    return {
+  "id": "chatcmpl-8jqorq6Fw1Vi5XoH7pddGGpQeuPe0",
+  "object": "chat.completion",
+  "created": 1705938489,
+  "model": "fay-agent",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": text
+      },
+      "logprobs": "",
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": len(last_content),
+    "completion_tokens": len(text),
+    "total_tokens": len(last_content) + len(text)
+  },
+  "system_fingerprint": "fp_04de91a479"
+}
 
 
 

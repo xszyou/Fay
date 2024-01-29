@@ -97,25 +97,27 @@ class Recorder:
 
                 if cfg.config['source']['wake_word_type'] == 'common':
 
-                    if not self.wakeup_matched:
+                    if not self.wakeup_matched or self.__fay.speaking:
                         #唤醒词判断
                         wake_word =  cfg.config['source']['wake_word']
                         wake_word_list = wake_word.split(',')
                         wake_up = False
                         for word in wake_word_list:
                             if word in text:
+                                    wake_up_word = word
                                     wake_up = True
                         if wake_up:
                             self.wakeup_matched = True  # 唤醒成功
                             util.log(1, "唤醒成功！")
-                            self.on_speaking('唤醒')
+                            self.__fay.stop_say = True
+                            text = text.replace(wake_up_word, "")
+                            self.on_speaking(text)
+                            self.__fay.stop_say = False
                             self.processing = False
                             self.timer.cancel()  # 取消之前的计时器任务
                         else:
                             util.log(1, "[!] 待唤醒！")
                             wsa_server.get_web_instance().add_cmd({"panelMsg": ""})
-                
-  
                     else:
                         self.on_speaking(text)
                         self.processing = False
@@ -135,7 +137,9 @@ class Recorder:
                         util.log(1, "唤醒成功！")
                         #去除唤醒词后语句
                         question = text[len(wake_up_word):].lstrip()
+                        self.__fay.stop_say = True
                         self.on_speaking(question)
+                        self.__fay.stop_say = False
                         self.processing = False
                     else:
                         util.log(1, "[!] 待唤醒！")
@@ -208,7 +212,16 @@ class Recorder:
                 self.__dynamic_threshold += (history_percentage - self.__dynamic_threshold) * 1
 
             soon = False
-            if percentage > self.__dynamic_threshold and not self.__fay.speaking:
+            can_listen = False
+            if cfg.config['source']['wake_word_enabled']:    
+                can_listen = True
+            else:
+                if not self.__fay.speaking:
+                     can_listen = True
+                else:
+                     can_listen = False
+
+            if percentage > self.__dynamic_threshold and can_listen:
                 last_speaking_time = time.time()
                 if not self.__processing and not isSpeaking and time.time() - last_mute_time > _ATTACK:
                     soon = True  #

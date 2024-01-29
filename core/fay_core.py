@@ -162,6 +162,7 @@ class FeiFei:
         self.playing = False
         self.muting = False
         self.cemotion = None
+        self.stop_say = False
 
 
     def __play_song(self):
@@ -479,8 +480,16 @@ class FeiFei:
                 except socket.error as serr:
                     util.log(1,"远程音频输入输出设备已经断开：{}".format(serr))
                     wsa_server.get_web_instance().add_cmd({"remote_audio_connect": False}) 
-                    
-            time.sleep(audio_length + 0.5)
+
+            #打断时取消等待        
+            length = 0
+            while(not self.stop_say):
+                if audio_length + 0.5 > length:
+                    length = length + 1
+                    time.sleep(1)
+                else:
+                    break
+
             wsa_server.get_web_instance().add_cmd({"panelMsg": ""})
             if not cfg.config["interact"]["playSound"]: # 非展板播放
                 content = {'Topic': 'Unreal', 'Data': {'Key': 'log', 'Value': ""}}
