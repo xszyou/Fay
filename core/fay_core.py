@@ -484,9 +484,9 @@ class FeiFei:
             #打断时取消等待        
             length = 0
             while(not self.stop_say):
-                if audio_length + 0.5 > length:
-                    length = length + 1
-                    time.sleep(1)
+                if audio_length + 0.01 > length:
+                    length = length + 0.01
+                    time.sleep(0.01)
                 else:
                     break
 
