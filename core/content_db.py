@@ -9,6 +9,15 @@ def synchronized(func):
     with self.lock:
       return func(self, *args, **kwargs)
   return wrapper
+
+__content_tb = None
+def new_instance():
+    global __content_tb
+    if __content_tb is None:
+        __content_tb = Content_Db()
+    return __content_tb
+
+
 class Content_Db:
 
     def __init__(self) -> None:

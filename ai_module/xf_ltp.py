@@ -55,5 +55,5 @@ def get_score(text):
 def get_sentiment(text):
     result = __quest(text)
     if result['desc'] == 'success':
-        return int(result['data']['sentiment']) + 1
-    return -1
+        return result['data']['sentiment']
+    return 0

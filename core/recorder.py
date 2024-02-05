@@ -104,13 +104,11 @@ class Recorder:
                         wake_up = False
                         for word in wake_word_list:
                             if word in text:
-                                    wake_up_word = word
                                     wake_up = True
                         if wake_up:
                             self.wakeup_matched = True  # 唤醒成功
                             util.log(1, "唤醒成功！")
                             self.__fay.stop_say = True
-                            text = text.replace(wake_up_word, "")
                             self.on_speaking(text)
                             self.__fay.stop_say = False
                             self.processing = False

@@ -134,6 +134,12 @@
                                             <p style = "text-align: left;color: #67c23a" v-if="remote_audio_connect" >已连接 </p>
                                             <p style = "text-align: left;"  v-else>未连接 </p>
                                         </li>
+                                        <li>
+                                            <p>tts合成：</p>
+                                            <el-switch v-model="tts_enabled" active-color="#13ce66"
+                                            inactive-color="#ff4949">
+                                        </el-switch>
+                                        </li>
                                     </ul>
                                 </div>
                             </div>

@@ -28,7 +28,7 @@ from core import qa_service
 
 import pygame
 from utils import config_util as cfg
-from core.content_db import Content_Db
+from core import content_db
 from datetime import datetime
 from ai_module import nlp_cemotion
 
@@ -99,7 +99,7 @@ def determine_nlp_strategy(sendto,msg):
 
 #文本消息处理
 def send_for_answer(msg,sendto):
-        contentdb = Content_Db()
+        contentdb = content_db.new_instance()
         contentdb.add_content('member','send',msg)
         wsa_server.get_web_instance().add_cmd({"panelReply": {"type":"member","content":msg}})
         textlist = []
@@ -267,7 +267,7 @@ class FeiFei:
                                 wsa_server.get_instance().add_cmd(content)
                             continue
 
-                        contentdb = Content_Db()    
+                        contentdb = content_db.new_instance()  
                         contentdb.add_content('member','speak',self.q_msg)
                         wsa_server.get_web_instance().add_cmd({"panelReply": {"type":"member","content":self.q_msg}})
                      
@@ -297,9 +297,10 @@ class FeiFei:
                     if not cfg.config["interact"]["playSound"]: # 非展板播放
                         content = {'Topic': 'Unreal', 'Data': {'Key': 'log', 'Value': self.a_msg}}
                         wsa_server.get_instance().add_cmd(content)
-                    self.last_speak_data = self.a_msg               
+                    self.last_speak_data = self.a_msg 
                     MyThread(target=self.__say, args=['interact']).start()
-
+                    
+                        
             except BaseException as e:
                 print(e)
 
@@ -357,17 +358,19 @@ class FeiFei:
                     result = nlp_cemotion.get_sentiment(self.cemotion,self.q_msg)
                     chat_perception = perception["chat"]
                     if result >= 0.5 and result <= 1:
-                       self.mood = self.mood + (chat_perception / 200.0)
+                       self.mood = self.mood + (chat_perception / 150.0)
                     elif result <= 0.2:
                        self.mood = self.mood - (chat_perception / 100.0)
                 else:
+                    s = xf_ltp.get_score(self.q_msg)
                     result = xf_ltp.get_sentiment(self.q_msg)
                     chat_perception = perception["chat"]
                     if result == 1:
-                        self.mood = self.mood + (chat_perception / 200.0)
+                        self.mood = self.mood + (chat_perception / 150.0)
                     elif result == -1:
                         self.mood = self.mood - (chat_perception / 100.0)
             except BaseException as e:
+                self.mood = 0.5
                 print("[System] 情绪更新错误！")
                 print(e)
 
@@ -414,14 +417,18 @@ class FeiFei:
                     content = {'Topic': 'Unreal', 'Data': {'Key': 'text', 'Value': self.a_msg}}
                     wsa_server.get_instance().add_cmd(content)
                 MyThread(target=storer.storage_live_interact, args=[Interact('Fay', 0, {'user': 'Fay', 'msg': self.a_msg})]).start()
-                util.log(1, '合成音频...')
-                tm = time.time()
-                #文字也推送出去，为了ue5
-                result = self.sp.to_sample(self.a_msg, self.__get_mood_voice())
-                util.log(1, '合成音频完成. 耗时: {} ms 文件:{}'.format(math.floor((time.time() - tm) * 1000), result))
-                if result is not None:            
-                    MyThread(target=self.__send_or_play_audio, args=[result, styleType]).start()
-                    return result
+                if config_util.config["source"]["tts_enabled"]:
+                    util.log(1, '合成音频...')
+                    tm = time.time()
+                    result = self.sp.to_sample(self.a_msg, self.__get_mood_voice())
+                    util.log(1, '合成音频完成. 耗时: {} ms 文件:{}'.format(math.floor((time.time() - tm) * 1000), result))
+                    if result is not None:            
+                        MyThread(target=self.__send_or_play_audio, args=[result, styleType]).start()
+                        return result
+                else:
+                    util.log(1, '问答处理总时长：{} ms'.format(math.floor((time.time() - self.last_quest_time) * 1000)))
+                    self.speaking = False
+                
         except BaseException as e:
             print(e)
         self.speaking = False
@@ -484,8 +491,8 @@ class FeiFei:
             #打断时取消等待        
             length = 0
             while(not self.stop_say):
-                if audio_length + 0.5 > length:
-                    length = length + 1
+                if audio_length + 0.01 > length:
+                    length = length + 0.01
                     time.sleep(1)
                 else:
                     break

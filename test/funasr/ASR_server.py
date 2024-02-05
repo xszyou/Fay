@@ -172,12 +172,18 @@ async def ws_serve(websocket,path):
                     websocket.send_msg.task_done()
     except websockets.ConnectionClosed:
         print("ConnectionClosed...", websocket_users)    # 链接断开
-        websocket_users.remove(websocket)
+        cleanup(websocket)
     except websockets.InvalidState:
         print("InvalidState...")    # 无效状态
     except Exception as e:
         print("Exception:", e)
+        cleanup(websocket)
 
+
+def cleanup(websocket):
+    if websocket in websocket_users:
+        websocket_users.remove(websocket)
+    print(f"Cleaned up resources for websocket: {websocket}")
  
 
 def asr(websocket):  # ASR推理
@@ -185,14 +191,21 @@ def asr(websocket):  # ASR推理
         # global param_dict_punc
         global websocket_users
         while websocket in  websocket_users:
-            # if not websocket.speek.empty():
-            audio_in = websocket.speek.get()
-            websocket.speek.task_done()
-            if len(audio_in) > 0:
-                rec_result = inference_pipeline_asr(audio_in=audio_in)
-                if "text" in rec_result:
-                    websocket.send_msg.put(rec_result["text"]) # 存入发送队列  直接调用send发送不了
-            time.sleep(0.1)
+            try:
+                # if not websocket.speek.empty():
+                audio_in = websocket.speek.get()
+                websocket.speek.task_done()
+                if len(audio_in) > 0:
+                    rec_result = inference_pipeline_asr(audio_in=audio_in)
+                    if "text" in rec_result:
+                        websocket.send_msg.put(rec_result["text"]) # 存入发送队列  直接调用send发送不了
+                time.sleep(0.1)
+            except Exception as e:
+                print(f"ASR processing error: {e}")
+                cleanup(websocket)
+                break  
+       
+
 
 start_server = websockets.serve(ws_serve, args.host, args.port, subprotocols=["binary"], ping_interval=None)
 asyncio.get_event_loop().run_until_complete(start_server)

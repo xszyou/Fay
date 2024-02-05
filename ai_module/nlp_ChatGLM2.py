@@ -1,11 +1,11 @@
 import json
 import requests
-from core.content_db import Content_Db
+from core import content_db
 
 
 def question(cont):
-    content_db = Content_Db()
-    list = content_db.get_list('all','desc',11)
+    contentdb = content_db.new_instance()
+    list = contentdb.get_list('all','desc',11)
     answer_info = dict()
     chat_list = []
     i = len(list)-1

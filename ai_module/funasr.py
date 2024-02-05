@@ -8,7 +8,7 @@ import time
 import ssl
 import _thread as thread
 
-from core import wsa_server, song_player
+from core import wsa_server
 from utils import config_util as cfg
 from utils import util
 
@@ -24,13 +24,14 @@ class FunASR:
         self.__task_id = ''
         self.done = False
         self.finalResults = ""
+        self.__reconnect_delay = 1
+        self.__reconnecting = False
 
 
 
     def __on_msg(self):
-        if "暂停" in self.finalResults or "不想听了" in self.finalResults or "别唱了" in self.finalResults:
-            song_player.stop()
-
+        pass
+    
     # 收到websocket消息的处理
     def on_message(self, ws, message):
         try:
@@ -55,18 +56,26 @@ class FunASR:
     def on_close(self, ws, code, msg):
         self.__connected = False
         util.log(1, f"### CLOSE:{msg}")
+        self.__ws = None
         self.__attempt_reconnect()
 
     # 收到websocket错误的处理
     def on_error(self, ws, error):
         util.log(1, f"### error:{error}")
+        self.__ws = None
         self.__attempt_reconnect()
 
-
+    #重连
     def __attempt_reconnect(self):
-        util.log(1, "尝试重连funasr...")
-        time.sleep(5)  
-        self.start()  
+        if not self.__reconnecting:
+            self.__reconnecting = True
+            util.log(1, "尝试重连funasr...")
+            while not self.__connected:
+                time.sleep(self.__reconnect_delay)
+                self.start()
+                self.__reconnect_delay *= 2  
+            self.__reconnect_delay = 1  
+            self.__reconnecting = False
 
 
     # 收到websocket连接建立的处理

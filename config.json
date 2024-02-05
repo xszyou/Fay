@@ -49,7 +49,8 @@
             "device": "",
             "enabled": false
         },
-        "wake_word": "",
+        "tts_enabled": true,
+        "wake_word": "\u4f60\u597d",
         "wake_word_enabled": false,
         "wake_word_type": "common"
     }
