@@ -15,33 +15,37 @@
 
 框架文档：https://qqk9ntwbcit.feishu.cn/wiki/space/7321626901586411523
 
-Fay数字人2024.01.15更新：
+“所有产品都值得用数字人从新做一遍”
+Fay数字人2024.02.05更新：
+🌟Fay-助理版：
+1、新增tts合成开关；
+2、调整对话内容存储逻辑；
+3、增强funasr稳定性;
+4、修复更新情绪有误问题;
+5、普通唤醒模式取消唤醒词去除。
 
-🌟助理版&带货版：
-1、新增前置词唤醒方式；
-2、新增gpt兼容接口。
+🌟Fay-agent版：
+1、解决聊天记录存储线程同步问题;
+2、✨新增tts合成开关；
+3、增强funasr稳定性；
+4、增加开启服务提醒；
+5、fay.db记录上区分agent还是llm回应;
+6、✨更换最新model gpt-4-0125-preview ;
+7、✨优化聊天prompt;
+8、修复agent meney里的权重fn bug;
+9、删除时间查询tool;
+10、执行任务触发无需在聊天窗口显示及db中保存;
+11、修复删除日程bug;
 
-Fay数字人2024.01.22更新：
+🌟Fay-带货版：
+1、修复版本问题导致的错误；
+2、新增微信视频号监听；
+3、修复更新情绪有误问题。
 
-1、上传智慧农业iotm源码及agent版接入方式:
-https://qqk9ntwbcit.feishu.cn/wiki/B1m3wyizNi6xMWkoLt6cW6a7nTd
-
-2、发布大竖屏交互配套（新ue工程、助理版小更新）：
-https://qqk9ntwbcit.feishu.cn/wiki/RUbew9VARiQOYxkZslSc9TrdnLc
-
-3、发布agent版微信互通方案：
-https://qqk9ntwbcit.feishu.cn/wiki/LYHBwdlPXipOLQk3eFgcTEsNnlg
-
-Fay数字人2024.01.29更新：
-
-1、让数字人使用我的声音（声音克隆）
-https://qqk9ntwbcit.feishu.cn/wiki/L7KKw4VqMigjX2kPANkcRa3On3g
-
-2、必须听我的（打断数字人说话）
-https://www.bilibili.com/video/BV12K411h7Ey/?share_source=copy_web&vd_source=64cd9062f5046acba398177b62bea9ad
-
-3、接入免费的asr 
-https://qqk9ntwbcit.feishu.cn/wiki/TCTWwUwRbiRzVskGYgVcsLzKnwb
+✨本期推荐阅读：
+1、带货版接入微信视频号：https://qqk9ntwbcit.feishu.cn/wiki/DC4cwhYLoiZt2HkO2CecU3jCnGd
+2、Fay数字人NLP的选择：https://qqk9ntwbcit.feishu.cn/wiki/Tz4dw6LMUidnqhkv0cvc4FZCnld
+[加油]祝大家工作愉快！&[庆祝]新春快乐！
 
 
 
