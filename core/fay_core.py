@@ -488,12 +488,13 @@ class FeiFei:
                     util.log(1,"远程音频输入输出设备已经断开：{}".format(serr))
                     wsa_server.get_web_instance().add_cmd({"remote_audio_connect": False}) 
 
+
             #打断时取消等待        
             length = 0
             while(not self.stop_say):
                 if audio_length + 0.01 > length:
                     length = length + 0.01
-                    time.sleep(1)
+                    time.sleep(0.01)
                 else:
                     break
 
