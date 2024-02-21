@@ -1,129 +1,81 @@
-[`English`](https://github.com/TheRamU/Fay/blob/main/README_EN.md)
-
 <div align="center">
     <br>
-    <img src="images/icon.png" alt="Fay">
-    <h1>FAY</h1>
-	<h3>Fay数字人框架 助理版</h3>
-</div>
-
-
-
-助理版是Fay 数字人框架最常用的版本。它提供了灵活的模块化设计，使开发人员能够定制和组合各种功能模块，包括情绪分析、NLP处理、语音合成和语音输出等。助理版构建的是一问（远程或本地，移动或PC，语音或文字）一答（数字人或机器，移动或PC，语音或文字或RPA）的标准模式。
-
-
-
-如果你需要是一个线上线下的销售员，请移步[`带货完整版`](https://github.com/xszyou/Fay/tree/fay-sales-edition)  
-
-如果你需要是一个可以自主决策、主动联系主人的agent，请移步[`agent版`](https://github.com/xszyou/Fay/tree/fay-agent-edition)                      
-
-## **Fay数字人助理版**
-
-
-
-![](images/controller.png)
-
-助理版使用：语音沟通，语音和文字回复；文字沟通，文字回复;对接UE、live2d、xuniren，需关闭面板播放。
-
-
-## **一、模块的组成**
+    <img src="images/icon.png" alt="Fay" />
+    <h1>Fay开源数字人框架</h1></div>
 
 
 
 
-  Remote Android　　　　　　Local PC　　　　　Remote PC
 
-　　　　　└─────────────┼─────────────┘
-                
-                
-　　　　　　Aliyun API ─┐　　　│
-      
-            
-　　　　　 　　　　　　├── ASR　　　
-            
-            
- 　  　　 　　　 [FunASR](https://www.bilibili.com/video/BV1qs4y1g74e) ─┘  　　  │　　 　 ┌─ Yuan 1.0
-                
-　　　　　　　　　　　　　　　│　　 　 ├─ [LingJu](https://www.bilibili.com/video/BV1NW4y1D76a/)
-                
-　　　 　　　　　　　　　　　NLP ────┼─ GPT/FastGPT
-                
-　　　　　　　　　　　　　　　│　　 　 ├─ [Rasa+ChatGLM-6B](https://www.bilibili.com/video/BV1D14y1f7pr)
-         
-　　　　　　　　 Azure ─┐　 　 │　　 　 ├─ [VisualGLM](https://www.bilibili.com/video/BV1mP411Q7mj)
-            
-　　　　　 　 Edge TTS ─┼──     TTS 　  　 └─ [RWKV](https://www.bilibili.com/video/BV1yu41157zB)
-       
-　 　　 　   　　[开源 TTS](https://www.bilibili.com/read/cv25192534) ─┘　  　│　　 　 
-            
-　　　　　　　　　　　　　　　│　　 　 
-         
-　　　　　　　　　　　　　　　│　　 　 
-                
-　　　  ┌──────────┬────┼───────┬─────────┐
+如果你需要是一个线上线下的销售员，请移步[`带货完整版`](https://github.com/TheRamU/Fay/tree/fay-sales-edition)                       
 
-Remote Android　　[Live2D](https://www.bilibili.com/video/BV1sx4y1d775/?vd_source=564eede213b9ddfa9a10f12e5350fd64)　　 [UE](https://www.bilibili.com/read/cv25133736)　　　 [xuniren](https://www.bilibili.com/read/cv24997550)　　　Remote PC
+如果你需要的是一个人机交互的数字人助理（当然，你也可以命令它开关设备），请移步 [`助理完整版`](https://github.com/TheRamU/Fay/tree/fay-assistant-edition)
 
+如果你需要是一个可以自主决策、主动联系主人的agent，请移步[`agent版`](https://github.com/TheRamU/Fay/tree/fay-agent-edition)
 
+框架文档：https://qqk9ntwbcit.feishu.cn/wiki/space/7321626901586411523
 
-重要：Fay（服务端）与数字人（客户端）的通讯接口: [`ws://127.0.0.1:10002`](ws://127.0.0.1:10002)（已接通）
+“所有产品都值得用数字人从新做一遍”
 
-消息格式: 查看 [WebSocket.md](https://github.com/TheRamU/Fay/blob/main/WebSocket.md)
+Fay数字人2024.02.05更新：
 
+🌟Fay-助理版：
 
-## **二、安装说明**
+1、新增tts合成开关；
 
+2、调整对话内容存储逻辑；
 
-### **环境** 
-- Python 3.9、3.10
-- Windows、macos、linux
+3、增强funasr稳定性;
 
-### **安装依赖**
+4、修复更新情绪有误问题;
 
-```shell
-pip install -r requirements.txt
-```
+5、普通唤醒模式取消唤醒词去除。
 
-### **配置应用密钥**
-+ 将应用密钥填入 `./system.conf` 中
+🌟Fay-agent版：
 
-### **启动**
-启动Fay控制器
-```shell
-python main.py
-```
+1、解决聊天记录存储线程同步问题;
 
+2、✨新增tts合成开关；
 
-### **启动数字人（非必须）**
-启动数字人[xszyou/fay-ue5: 可对接fay数字人的ue5工程 (github.com)](https://github.com/xszyou/fay-ue5)
+3、增强funasr稳定性；
 
+4、增加开启服务提醒；
 
-### **启动android 连接器（非必须）**
-代码地址：https://github.com/xszyou/fay-android
+5、fay.db记录上区分agent还是llm回应;
 
+6、✨更换最新model gpt-4-0125-preview ;
 
-## **三、使用说明**
+7、✨优化聊天prompt;
 
+8、修复agent meney里的权重fn bug;
 
-### **使用说明**
+9、删除时间查询tool;
 
-+ 语音助理：Fay（麦克风输入源开启）；
-+ 远程语音助理：Fay + 远程设备接入；
-+ 数字人互动：Fay（麦克风输入源开启、填写性格Q&A）+ 数字人；
+10、执行任务触发无需在聊天窗口显示及db中保存;
 
-
-### **语音指令**
-
-| 关闭核心                  | 静音                       | 取消静音                                                         |
-| ------------------------- | -------------------------- | ------------------------------------------------------------ |
-| 关闭、再见、你走吧   | 静音、闭嘴、我想静静        |   取消静音、你在哪呢、你可以说话了                            |
+11、修复删除日程bug;
 
 
 
-### **联系**
+🌟Fay-带货版：
 
-**商务QQ: 467665317**
+1、修复版本问题导致的错误；
 
-**交流群及资料教程**关注公众号 **fay数字人**（**请先star本仓库**）
+2、新增微信视频号监听；
 
-![](images/gzh.jpg)
+3、修复更新情绪有误问题。
+
+
+
+✨本期推荐阅读：
+
+1、带货版接入微信视频号：https://qqk9ntwbcit.feishu.cn/wiki/DC4cwhYLoiZt2HkO2CecU3jCnGd
+
+2、Fay数字人NLP的选择：https://qqk9ntwbcit.feishu.cn/wiki/Tz4dw6LMUidnqhkv0cvc4FZCnld
+
+[加油]祝大家工作愉快！&[庆祝]新春快乐！
+
+
+
+联系我们，请关注微信公众号 fay数字人 
+

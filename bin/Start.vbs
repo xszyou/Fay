@@ -1,1 +1,0 @@
-CreateObject("Wscript.Shell").run "python main.py", vbhide
