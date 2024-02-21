@@ -1,0 +1,30 @@
+version: "3.1"
+
+intents:
+  - greet
+  - goodbye
+  - ask_time
+  - ask_date
+  - out_of_scope
+  - ask_problem
+  - ask_goods
+
+responses:
+  utter_greet:
+  - text: "你好，有什么帮到你呢？"
+
+  utter_goodbye:
+  - text: "那我先离开了，一会有事叫我"
+  - text: "先不打扰你了，你可以随时唤醒我"
+
+session_config:
+  session_expiration_time: 60
+  carry_over_slots_to_new_session: true
+
+actions:
+  - action_ask_time
+  - action_ask_date
+  - action_gpt_response
+  - action_ask_problem
+  - action_ask_goods
+

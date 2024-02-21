@@ -1,0 +1,40 @@
+version: "3.1"
+
+rules:
+
+- rule: 闲聊的回应
+  steps:
+  - intent: out_of_scope
+  - action: action_gpt_response
+
+- rule: Say goodbye
+  steps:
+  - intent: goodbye
+  - action: utter_goodbye
+
+- rule: Say hello
+  steps:
+  - intent: greet
+  - action: utter_greet
+
+- rule: 用户询问日期
+  steps:
+  - intent: ask_date
+  - action: action_ask_date
+
+- rule: 用户询问时间
+  steps:
+  - intent: ask_time
+  - action: action_ask_time
+
+- rule: 用户咨询
+  steps:
+  - intent: ask_problem
+  - action: action_ask_problem
+
+- rule: 多模态
+  steps:
+  - intent: ask_goods
+  - action: action_ask_goods
+
+
