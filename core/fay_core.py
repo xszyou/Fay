@@ -41,6 +41,7 @@ from ai_module import nlp_lingju
 from ai_module import nlp_rwkv_api
 from ai_module import nlp_ChatGLM2
 from ai_module import nlp_fastgpt
+from ai_module import nlp_xingchen
 
 import platform
 if platform.system() == "Windows":
@@ -56,7 +57,8 @@ modules = {
     "nlp_lingju": nlp_lingju,
     "nlp_rwkv_api":nlp_rwkv_api,
     "nlp_chatglm2": nlp_ChatGLM2,
-    "nlp_fastgpt": nlp_fastgpt
+    "nlp_fastgpt": nlp_fastgpt,
+    "nlp_xingchen": nlp_xingchen
 
 }
 

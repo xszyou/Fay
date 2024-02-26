@@ -25,6 +25,9 @@ local_asr_port = None
 ltp_mode = None
 key_fast_api_key = None
 is_proxy = None
+key_xingchen_api_key = None
+xingchen_characterid = None
+
 
 def load_config():
     global config
@@ -50,6 +53,9 @@ def load_config():
     global ltp_mode 
     global key_fast_gpt_key
     global is_proxy
+    global key_xingchen_api_key
+    global xingchen_characterid
+
 
     system_config = ConfigParser()
     system_config.read('system.conf', encoding='UTF-8')
@@ -74,6 +80,8 @@ def load_config():
     is_proxy = system_config.get('key', 'is_proxy')
     ltp_mode = system_config.get('key', 'ltp_mode')
     key_fast_gpt_key = system_config.get('key', 'fast_gpt_key')
+    key_xingchen_api_key = system_config.get('key', 'xingchen_api_key')
+    xingchen_characterid = system_config.get('key', 'xingchen_characterid')
     config = json.load(codecs.open('config.json', encoding='utf-8'))
 
 def save_config(config_data):
