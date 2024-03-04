@@ -11,6 +11,8 @@ from scheduler.thread_manager import MyThread
 from utils import util
 from utils import config_util as cfg
 import numpy as np
+import tempfile
+import wave
 # 启动时间 (秒)
 _ATTACK = 0.2
 
@@ -50,7 +52,15 @@ class Recorder:
             asrcli = FunASR()
         return asrcli
 
-    
+    def save_buffer_to_file(self, buffer):
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".wav", dir="cache_data")
+        wf = wave.open(temp_file.name, 'wb')
+        wf.setnchannels(1)
+        wf.setsampwidth(2)  
+        wf.setframerate(16000)
+        wf.writeframes(buffer)
+        wf.close()
+        return temp_file.name
 
     def __get_history_average(self, number):
         total = 0
@@ -81,12 +91,15 @@ class Recorder:
     def reset_wakeup_status(self):
         self.wakeup_matched = False        
 
-    def __waitingResult(self, iat: asrclient):
+    def __waitingResult(self, iat: asrclient, audio_data):
         if self.__fay.playing:
             return
         self.processing = True
         t = time.time()
         tm = time.time()
+        if self.ASRMode == "funasr":
+            file_url = self.save_buffer_to_file(audio_data)
+            self.__aLiNls.send_url(file_url)
         # 等待结果返回
         while not iat.done and time.time() - t < 1:
             time.sleep(0.01)
@@ -169,6 +182,7 @@ class Recorder:
         last_mute_time = time.time()
         last_speaking_time = time.time()
         data = None
+        concatenated_audio = bytearray()
         while self.__running:
             try:
                 data = stream.read(1024, exception_on_overflow=False)
@@ -225,13 +239,17 @@ class Recorder:
                     soon = True  #
                     isSpeaking = True  #用户正在说话
                     util.log(3, "聆听中...")
+                    concatenated_audio.clear()
                     self.__aLiNls = self.asrclient()
                     try:
                         self.__aLiNls.start()
                     except Exception as e:
                         print(e)
                     for buf in self.__history_data:
-                        self.__aLiNls.send(buf)
+                        if self.ASRMode == "ali":
+                            self.__aLiNls.send(buf)
+                        else:
+                            concatenated_audio.extend(buf)
             else:
                 last_mute_time = time.time()
                 if isSpeaking:
@@ -240,9 +258,12 @@ class Recorder:
                         self.__aLiNls.end()
                         util.log(1, "语音处理中...")
                         self.__fay.last_quest_time = time.time()
-                        self.__waitingResult(self.__aLiNls)
+                        self.__waitingResult(self.__aLiNls, concatenated_audio)
             if not soon and isSpeaking:
-                self.__aLiNls.send(data)
+                if self.ASRMode == "ali":
+                    self.__aLiNls.send(data)
+                else:
+                    concatenated_audio.extend(data)
      
 
     def set_processing(self, processing):

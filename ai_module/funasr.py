@@ -61,6 +61,7 @@ class FunASR:
 
     # 收到websocket错误的处理
     def on_error(self, ws, error):
+        self.__connected = False
         util.log(1, f"### error:{error}")
         self.__ws = None
         self.__attempt_reconnect()
@@ -115,6 +116,10 @@ class FunASR:
 
     def send(self, buf):
         self.__frames.append(buf)
+
+    def send_url(self, url):
+        frame = {'url' : url}
+        self.__ws.send(json.dumps(frame))
 
     def start(self):
         Thread(target=self.__connect, args=[]).start()

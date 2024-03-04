@@ -5,21 +5,16 @@
 
 ## Install
 pip install torch
-pip install modelscope==1.11.0
+pip install modelscope
 pip install testresources
 pip install websockets
 pip install torchaudio
-下载 https://github.com/alibaba-damo-academy/FunASR/tree/v0.8.8
-解压
-pip install ./FunASR-0.8.8(若editdistance编译不通过，请手动安装 pip install editdistance,在FunASR/setup.py也注释掉，再执行)
-
+pip install inference_pipeline_asr
+pip install FunASR
 
 ## Start server
-1、从百度网盘下载并解压模型文件到fay/test/funasr/data目录
-链接：https://pan.baidu.com/s/17SJqWIo9zeGAZxPCMIsHJA?pwd=5fzr 
-提取码：5fzr 
 
-2、python -u ASR_server.py --host "0.0.0.0" --port 10197 --ngpu 0 --model ./data/speech_paraformer-large-contextual_asr_nat-zh-cn-16k-common-vocab8404
+2、python -u ASR_server.py --host "0.0.0.0" --port 10197 --ngpu 0 
 
 ## Fay connect
 更改fay/system.conf配置项，并重新启动fay.
