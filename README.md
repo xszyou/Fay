@@ -15,7 +15,29 @@
 
 框架文档：https://qqk9ntwbcit.feishu.cn/wiki/space/7321626901586411523
 
+
+
 “所有产品都值得用数字人从新做一遍”
+
+Fay数字人2024.03.11更新：
+
+🌟Fay-agent版：
+
+1、取消重启重置日程功能； 
+
+2、上传主动发送微信消息tool(未引入)。
+
+🌟Fay-ue5：[入口](https://github.com/xszyou/fay-ue5)
+
+1、发布5.3模型。
+
+✨本期推荐阅读：
+
+1、[让agent主动给微信发送消息_哔哩哔哩_bilibili](https://www.bilibili.com/video/BV1fx421y7tz/)
+
+2、[老ue工程补充打断功能_哔哩哔哩_bilibili](https://www.bilibili.com/video/BV1RH4y157pX/)
+
+
 
 Fay数字人2024.03.04更新：
 
@@ -35,11 +57,15 @@ Fay数字人2024.03.04更新：
 
 4、集成funASR最新版本
 
+
+
 Fay数字人2024.02.27更新：
 
 🌟Fay-助理版：
 
 1、新增通义星辰nlp对接。
+
+
 
 Fay数字人2024.02.19更新：
 
@@ -50,6 +76,8 @@ Fay数字人2024.02.19更新：
 🌟Fay-agent版：
 
 1、增强funasr稳定性。
+
+
 
 Fay数字人2024.02.05更新：
 
@@ -98,8 +126,6 @@ Fay数字人2024.02.05更新：
 2、新增微信视频号监听；
 
 3、修复更新情绪有误问题。
-
-
 
 ✨本期推荐阅读：
 
