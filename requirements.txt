@@ -22,3 +22,4 @@ eyed3
 ultralytics~=8.0.2
 pydub
 cemotion
+langchain==0.0.336

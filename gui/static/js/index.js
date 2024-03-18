@@ -514,13 +514,10 @@ new Vue({
                 alert('请输入内容');
                 return;
             }
-            // let info = {
-            //     'content' : text ,
-            //     'timetext' : _this.getCurrentTime() ,
-            //     'type' : 'member' ,
-            //     'way' : 'send' 
-            // } 
-            // _this.msg_list.push(info);
+            if (this.live_state != 1){
+                alert('请先开启服务');
+                return;
+            }
             this.timer = setTimeout(()=>{   //设置延迟执行
                 //滚动条置底
                let height = document.querySelector('.content').scrollHeight;

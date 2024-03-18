@@ -9,7 +9,6 @@ pip install modelscope
 pip install testresources
 pip install websockets
 pip install torchaudio
-pip install inference_pipeline_asr
 pip install FunASR
 
 ## Start server

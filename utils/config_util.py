@@ -27,6 +27,8 @@ key_fast_api_key = None
 is_proxy = None
 key_xingchen_api_key = None
 xingchen_characterid = None
+gpt_base_url = None
+
 
 
 def load_config():
@@ -55,6 +57,7 @@ def load_config():
     global is_proxy
     global key_xingchen_api_key
     global xingchen_characterid
+    global gpt_base_url
 
 
     system_config = ConfigParser()
@@ -82,6 +85,7 @@ def load_config():
     key_fast_gpt_key = system_config.get('key', 'fast_gpt_key')
     key_xingchen_api_key = system_config.get('key', 'xingchen_api_key')
     xingchen_characterid = system_config.get('key', 'xingchen_characterid')
+    gpt_base_url = system_config.get('key', 'gpt_base_url')
     config = json.load(codecs.open('config.json', encoding='utf-8'))
 
 def save_config(config_data):

@@ -17,7 +17,7 @@ httpproxy = cfg.proxy_config
 proxy_flag = str(cfg.is_proxy)
 
 def question(cont):
-    url= "https://api.openai.com/v1/chat/completions"
+    url= cfg.gpt_base_url + "/chat/completions"
        
     session = requests.Session()
     session.verify = False

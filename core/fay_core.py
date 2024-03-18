@@ -42,6 +42,7 @@ from ai_module import nlp_rwkv_api
 from ai_module import nlp_ChatGLM2
 from ai_module import nlp_fastgpt
 from ai_module import nlp_xingchen
+from ai_module import nlp_langchain
 
 import platform
 if platform.system() == "Windows":
@@ -58,7 +59,8 @@ modules = {
     "nlp_rwkv_api":nlp_rwkv_api,
     "nlp_chatglm2": nlp_ChatGLM2,
     "nlp_fastgpt": nlp_fastgpt,
-    "nlp_xingchen": nlp_xingchen
+    "nlp_xingchen": nlp_xingchen,
+    "nlp_langchain": nlp_langchain
 
 }
 
@@ -71,7 +73,7 @@ def determine_nlp_strategy(sendto,msg):
         tm = time.time()
         cfg.load_config()
         if sendto == 2:
-            text = nlp_chatgpt.question(msg)
+            text = nlp_gpt.question(msg)
         else:
             module_name = "nlp_" + cfg.key_chat_module
             selected_module = modules.get(module_name)
@@ -106,18 +108,17 @@ def send_for_answer(msg,sendto):
         wsa_server.get_web_instance().add_cmd({"panelReply": {"type":"member","content":msg}})
         textlist = []
         text = None
-        # 人设问答
-        keyword = qa_service.question('Persona',msg)
-        if keyword is not None:
-            text = config_util.config["attribute"][keyword]
+         # 全局问答
+        text = qa_service.question('qa',msg)
 
-        # 全局问答
+        # 人设问答
         if text is None:
-            answer = qa_service.question('qa',msg)
-            if answer is not None:
-                text = answer       
-            else:
-                text,textlist = determine_nlp_strategy(sendto,msg)
+            keyword = qa_service.question('Persona',msg)
+            if keyword is not None:
+                text = config_util.config["attribute"][keyword]
+
+        if text is None:
+            text,textlist = determine_nlp_strategy(sendto,msg)
                 
         contentdb.add_content('fay','send',text)
         wsa_server.get_web_instance().add_cmd({"panelReply": {"type":"fay","content":text}})
@@ -222,17 +223,19 @@ class FeiFei:
                 return "NO_ANSWER"
                       
         if text == '唤醒':
-            return '您好，我是FAY智能助理，有什么可以帮您？'
+            return '您好，我是Fay智能助理，有什么可以帮您？'
         
-        # 人设问答
-        keyword = qa_service.question('Persona',text)
-        if keyword is not None:
-            return config_util.config["attribute"][keyword]
         answer = None
         # 全局问答
         answer = qa_service.question('qa',text)
         if answer is not None:
             return answer
+        
+        # 人设问答
+        keyword = qa_service.question('Persona',text)
+        if keyword is not None:
+            return config_util.config["attribute"][keyword]
+       
 
     def __auto_speak(self):
         while self.__running:
