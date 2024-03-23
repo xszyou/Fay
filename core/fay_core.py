@@ -43,6 +43,7 @@ from ai_module import nlp_ChatGLM2
 from ai_module import nlp_fastgpt
 from ai_module import nlp_xingchen
 from ai_module import nlp_langchain
+from ai_module import nlp_ollama_api
 
 import platform
 if platform.system() == "Windows":
@@ -60,8 +61,8 @@ modules = {
     "nlp_chatglm2": nlp_ChatGLM2,
     "nlp_fastgpt": nlp_fastgpt,
     "nlp_xingchen": nlp_xingchen,
-    "nlp_langchain": nlp_langchain
-
+    "nlp_langchain": nlp_langchain,
+    "nlp_ollama_api": nlp_ollama_api
 }
 
 
