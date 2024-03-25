@@ -1,10 +1,10 @@
-[`English`](https://github.com/TheRamU/Fay/blob/main/README_EN.md)
+[`English`](https://github.com/xszyou/Fay/blob/main/README_EN.md) 
 
 <div align="center">
     <br>
     <img src="images/icon.png" alt="Fay">
     <h1>FAY</h1>
-	<h3>Fay数字人框架 助理版</h3>
+	<h3>Fay数字人框架 助理版 </h3>
 </div>
 
 
@@ -23,55 +23,10 @@
 
 ![](images/controller.png)
 
-助理版使用：语音沟通，语音和文字回复；文字沟通，文字回复;对接UE、live2d、xuniren，需关闭面板播放。
+https://github.com/TheRamU/Fay/blob/main/WebSocket.md)
 
 
-## **一、模块的组成**
-
-
-
-
-  Remote Android　　　　　　Local PC　　　　　Remote PC
-
-　　　　　└─────────────┼─────────────┘
-                
-                
-　　　　　　Aliyun API ─┐　　　│
-      
-            
-　　　　　 　　　　　　├── ASR　　　
-            
-            
- 　  　　 　　　 [FunASR](https://www.bilibili.com/video/BV1qs4y1g74e) ─┘  　　  │　　 　 ┌─ Yuan 1.0
-                
-　　　　　　　　　　　　　　　│　　 　 ├─ [LingJu](https://www.bilibili.com/video/BV1NW4y1D76a/)
-                
-　　　 　　　　　　　　　　　NLP ────┼─ GPT/FastGPT
-                
-　　　　　　　　　　　　　　　│　　 　 ├─ [Rasa+ChatGLM-6B](https://www.bilibili.com/video/BV1D14y1f7pr)
-         
-　　　　　　　　 Azure ─┐　 　 │　　 　 ├─ [VisualGLM](https://www.bilibili.com/video/BV1mP411Q7mj)
-            
-　　　　　 　 Edge TTS ─┼──     TTS 　  　 └─ [RWKV](https://www.bilibili.com/video/BV1yu41157zB)
-       
-　 　　 　   　　[开源 TTS](https://www.bilibili.com/read/cv25192534) ─┘　  　│　　 　 
-            
-　　　　　　　　　　　　　　　│　　 　 
-         
-　　　　　　　　　　　　　　　│　　 　 
-                
-　　　  ┌──────────┬────┼───────┬─────────┐
-
-Remote Android　　[Live2D](https://www.bilibili.com/video/BV1sx4y1d775/?vd_source=564eede213b9ddfa9a10f12e5350fd64)　　 [UE](https://www.bilibili.com/read/cv25133736)　　　 [xuniren](https://www.bilibili.com/read/cv24997550)　　　Remote PC
-
-
-
-重要：Fay（服务端）与数字人（客户端）的通讯接口: [`ws://127.0.0.1:10002`](ws://127.0.0.1:10002)（已接通）
-
-消息格式: 查看 [WebSocket.md](https://github.com/TheRamU/Fay/blob/main/WebSocket.md)
-
-
-## **二、安装说明**
+## **安装说明**
 
 
 ### **环境** 
@@ -84,8 +39,8 @@ Remote Android　　[Live2D](https://www.bilibili.com/video/BV1sx4y1d775/?vd_sou
 pip install -r requirements.txt
 ```
 
-### **配置应用密钥**
-+ 将应用密钥填入 `./system.conf` 中
+### **配置应用**
++ 配置 `./system.conf` 文件
 
 ### **启动**
 启动Fay控制器
@@ -102,7 +57,7 @@ python main.py
 代码地址：https://github.com/xszyou/fay-android
 
 
-## **三、使用说明**
+## **使用说明**
 
 
 ### **使用说明**
