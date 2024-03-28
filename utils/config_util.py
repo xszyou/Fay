@@ -28,7 +28,8 @@ is_proxy = None
 key_xingchen_api_key = None
 xingchen_characterid = None
 gpt_base_url = None
-
+ollama_ip = None
+ollama_model = None
 
 
 def load_config():
@@ -58,7 +59,8 @@ def load_config():
     global key_xingchen_api_key
     global xingchen_characterid
     global gpt_base_url
-
+    global ollama_ip
+    global ollama_model
 
     system_config = ConfigParser()
     system_config.read('system.conf', encoding='UTF-8')
@@ -86,6 +88,8 @@ def load_config():
     key_xingchen_api_key = system_config.get('key', 'xingchen_api_key')
     xingchen_characterid = system_config.get('key', 'xingchen_characterid')
     gpt_base_url = system_config.get('key', 'gpt_base_url')
+    ollama_ip = system_config.get('key', 'ollama_ip')
+    ollama_model = system_config.get('key', 'ollama_model')
     config = json.load(codecs.open('config.json', encoding='utf-8'))
 
 def save_config(config_data):
