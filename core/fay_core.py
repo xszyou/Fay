@@ -65,29 +65,26 @@ modules = {
 }
 
 
-def determine_nlp_strategy(sendto,msg):
+def determine_nlp_strategy(msg):
     text = ''
     textlist = []
     try:
         util.log(1, '自然语言处理...')
         tm = time.time()
         cfg.load_config()
-        if sendto == 2:
-            text = nlp_gpt.question(msg)
+        module_name = "nlp_" + cfg.key_chat_module
+        selected_module = modules.get(module_name)
+        if selected_module is None:
+            raise RuntimeError('请选择正确的nlp模型')   
+        if cfg.key_chat_module == 'rasa':
+            textlist = selected_module.question(msg)
+            text = textlist[0]['text'] 
         else:
-            module_name = "nlp_" + cfg.key_chat_module
-            selected_module = modules.get(module_name)
-            if selected_module is None:
-                raise RuntimeError('灵聚key、yuan key、gpt key都没有配置！')   
-            if cfg.key_chat_module == 'rasa':
-                textlist = selected_module.question(msg)
-                text = textlist[0]['text'] 
-            else:
-                text = selected_module.question(msg)  
-            util.log(1, '自然语言处理完成. 耗时: {} ms'.format(math.floor((time.time() - tm) * 1000)))
-            if text == '哎呀，你这么说我也不懂，详细点呗' or text == '':
-                util.log(1, '[!] 自然语言无语了！')
-                text = '哎呀，你这么说我也不懂，详细点呗'  
+            text = selected_module.question(msg)  
+        util.log(1, '自然语言处理完成. 耗时: {} ms'.format(math.floor((time.time() - tm) * 1000)))
+        if text == '哎呀，你这么说我也不懂，详细点呗' or text == '':
+            util.log(1, '[!] 自然语言无语了！')
+            text = '哎呀，你这么说我也不懂，详细点呗'  
     except BaseException as e:
         print(e)
         util.log(1, '自然语言处理错误！')
@@ -102,7 +99,7 @@ def determine_nlp_strategy(sendto,msg):
 
 
 #文本消息处理
-def send_for_answer(msg,sendto):
+def send_for_answer(msg):
         contentdb = content_db.new_instance()
         contentdb.add_content('member','send',msg)
         wsa_server.get_web_instance().add_cmd({"panelReply": {"type":"member","content":msg}})
@@ -118,7 +115,7 @@ def send_for_answer(msg,sendto):
                 text = config_util.config["attribute"][keyword]
 
         if text is None:
-            text,textlist = determine_nlp_strategy(sendto,msg)
+            text,textlist = determine_nlp_strategy(msg)
                 
         contentdb.add_content('fay','send',text)
         wsa_server.get_web_instance().add_cmd({"panelReply": {"type":"fay","content":text}})
@@ -285,7 +282,7 @@ class FeiFei:
                             if not cfg.config["interact"]["playSound"]: # 非展板播放
                                 content = {'Topic': 'Unreal', 'Data': {'Key': 'log', 'Value': "思考中..."}}
                                 wsa_server.get_instance().add_cmd(content)
-                            text,textlist = determine_nlp_strategy(1,self.q_msg)
+                            text,textlist = determine_nlp_strategy(self.q_msg)
                         elif answer != 'NO_ANSWER': #语音内容没有命中指令,回复q&a内容
                             text = answer
                         self.a_msg = text

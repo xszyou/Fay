@@ -507,7 +507,7 @@ new Vue({
                 type: 'success'
             });
         },
-        send(sendto) {
+        send() {
             let _this = this;
             let text = _this.send_msg;
             if (!text) {
@@ -526,8 +526,7 @@ new Vue({
             _this.send_msg = ''
             let url = "http://127.0.0.1:5000/api/send";
             let send_data = {
-                "msg": text,
-                "sendto" : sendto
+                "msg": text
             };
       
             let xhr = new XMLHttpRequest()
@@ -544,18 +543,7 @@ new Vue({
                 }
             }
            
-            // // text = text.replace(/\s/g, "<br/>");
-            // text = text.replace(/\n/g, "<br/>");
-            // text = text.replace(/\r\n/g, "<br/>");
-            // let item = document.createElement('div');
-            // item.className = 'item item-right';
-            // item.innerHTML = `<div class="bubble bubble-right">${text}</div><div class="avatar"><img src="static/from.jpg" /></div>`;
-            // document.querySelector('.content').appendChild(item);
-            // document.querySelector('#textarea').value = '';
-            // document.querySelector('#textarea').focus();
-            // //滚动条置底
-            // let height = document.querySelector('.content').scrollHeight;
-            // document.querySelector(".content").scrollTop = height;
+            
         },
         getMsgList(){
             let _this = this;

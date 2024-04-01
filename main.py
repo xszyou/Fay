@@ -6,6 +6,7 @@ from PyQt5 import QtGui
 from PyQt5.QtWidgets import QApplication
 
 from ai_module import ali_nls
+from ai_module import nlp_langchain
 from core import wsa_server
 from gui import flask_server
 from gui.window import MainWindow
@@ -54,6 +55,7 @@ if __name__ == '__main__':
     if config_util.ASR_mode == "ali":
         ali_nls.start()
     flask_server.start()
+    nlp_langchain.save_all()
     app = QApplication(sys.argv)
     app.setWindowIcon(QtGui.QIcon('icon.png'))
     win = MainWindow()

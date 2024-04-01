@@ -2,8 +2,6 @@ import time
 
 import azure.cognitiveservices.speech as speechsdk
 import asyncio
-import sys
-sys.path.append("E:\\GitHub\\Fay\\")
 from core import tts_voice
 from core.tts_voice import EnumVoice
 from utils import util, config_util

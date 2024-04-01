@@ -111,7 +111,7 @@ def api_stop_live():
 def api_send():
     data = request.values.get('data')
     info = json.loads(data)
-    text = fay_core.send_for_answer(info['msg'],info['sendto'])
+    text = fay_core.send_for_answer(info['msg'])
     return '{"result":"successful","msg":"'+text+'"}'
 
 @__app.route('/api/get-msg', methods=['post'])
@@ -121,7 +121,7 @@ def api_get_Msg():
     relist = []
     i = len(list)-1
     while i >= 0:
-        relist.append(dict(type=list[i][0],way=list[i][1],content=list[i][2],createtime=list[i][3],timetext=list[i][4]))
+        relist.append(dict(type=list[i][0], way=list[i][1], content=list[i][2], createtime=list[i][3], timetext=list[i][4]))
         i -= 1
 
     return json.dumps({'list': relist})
