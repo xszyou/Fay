@@ -6,6 +6,7 @@ from abc import abstractmethod
 
 from ai_module.ali_nls import ALiNls
 from ai_module.funasr import FunASR
+from ai_module.funasr_wss import FunASRWSS
 from core import wsa_server
 from scheduler.thread_manager import MyThread
 from utils import util
@@ -50,6 +51,8 @@ class Recorder:
             asrcli = ALiNls()
         elif self.ASRMode == "funasr":
             asrcli = FunASR()
+        elif self.ASRMode == "funasr_wss":
+            asrcli = FunASRWSS()
         return asrcli
 
     def save_buffer_to_file(self, buffer):
@@ -100,6 +103,14 @@ class Recorder:
         if self.ASRMode == "funasr":
             file_url = self.save_buffer_to_file(audio_data)
             self.__aLiNls.send_url(file_url)
+        if self.ASRMode == "funasr_wss":
+            print(audio_data)
+            util.log(1, "ASRMode 111111111111......")
+            file_url = self.save_buffer_to_file(audio_data)
+            self.__aLiNls.send_url(file_url)
+        
+        util.log(1, file_url)
+        # return
         # 等待结果返回
         while not iat.done and time.time() - t < 1:
             time.sleep(0.01)
