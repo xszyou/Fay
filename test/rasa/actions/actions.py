@@ -160,7 +160,9 @@ class ActionAskProblem(Action):
 
         headers = {'content-type': 'application/json'}
         r = requests.post(url, headers=headers, data=req)
-        a = json.loads(r.text).get('response')
+        #如果是vll推理则用
+        # a = json.loads(r.text).get('response')
+        a = json.loads(r.text)['choices'][0]['text']
         history = json.loads(r.text).get('history')
         
 

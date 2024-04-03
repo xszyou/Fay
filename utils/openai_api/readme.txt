@@ -24,3 +24,8 @@ curl -X POST "http://127.0.0.1:8101/v1/completions" \
 -H "Content-Type: application/json" \
 -d "{\"model\": \"THUDM/chatglm3-6b\",\"prompt\": \"你叫什么名字\", \"history\": [{\"role\": \"user\", \"content\": \"你出生在哪里.\"}, {\"role\": \"assistant\", \"content\": \"出生在北京\"}]}"
 
+
+多轮对话
+curl -X POST "http://127.0.0.1:8101/v1/chat/completions" \
+-H "Content-Type: application/json" \
+-d "{\"model\": \"THUDM/chatglm3-6b\", \"messages\": [{\"role\": \"system\", \"content\": \"You are ChatGLM3, a large language model trained by Zhipu.AI. Follow the user's instructions carefully. Respond using markdown.\"}, {\"role\": \"user\", \"content\": \"你好，给我讲一个故事，大概100字\"}], \"stream\": false, \"max_tokens\": 100, \"temperature\": 0.8, \"top_p\": 0.8}"
