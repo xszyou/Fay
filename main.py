@@ -54,8 +54,9 @@ if __name__ == '__main__':
     #Edit by xszyou in 20230516:增加本地asr后，aliyun调成可选配置
     if config_util.ASR_mode == "ali":
         ali_nls.start()
-    flask_server.start()
-    nlp_langchain.save_all()
+    flask_server.start() 
+    if config_util.key_chat_module == 'langchain':
+        nlp_langchain.save_all()
     app = QApplication(sys.argv)
     app.setWindowIcon(QtGui.QIcon('icon.png'))
     win = MainWindow()
