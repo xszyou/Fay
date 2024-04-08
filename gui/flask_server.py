@@ -77,6 +77,7 @@ def api_get_data():
     config_util.save_config(config_data)
     wsa_server.get_web_instance().add_cmd({
         "voiceList": [
+            {"id": EnumVoice.XIAO_XIAO_NEW.name, "name": "晓晓(azure)"},
             {"id": EnumVoice.XIAO_XIAO.name, "name": "晓晓"},
             {"id": EnumVoice.YUN_XI.name, "name": "云溪"},
             {"id": EnumVoice.YUN_JIAN.name, "name": "云健"},
@@ -126,7 +127,7 @@ def api_get_Msg():
 
     return json.dumps({'list': relist})
 
-
+@__app.route('/v1/chat/completions', methods=['post'])
 @__app.route('/api/send/v1/chat/completions', methods=['post'])
 def api_send_v1_chat_completions():
     data = request.json  # 解析JSON数据
@@ -137,7 +138,7 @@ def api_send_v1_chat_completions():
         last_content = last_message.get('content', 'No content provided')  # 获取'content'字段
     else:
         last_content = 'No messages found'
-    text = fay_core.send_for_answer("主人文字说了：" + last_content)
+    text = fay_core.send_for_answer(last_content)
     return {
   "id": "chatcmpl-8jqorq6Fw1Vi5XoH7pddGGpQeuPe0",
   "object": "chat.completion",
