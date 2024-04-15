@@ -8,7 +8,7 @@ from flask_cors import CORS
 
 import fay_booter
 
-from core.tts_voice import EnumVoice
+from core import tts_voice
 from gevent import pywsgi
 from scheduler.thread_manager import MyThread
 from utils import config_util, util
@@ -75,17 +75,13 @@ def api_get_data():
     else:
         config_data['interact']['playSound'] = True
     config_util.save_config(config_data)
+    voice_list = tts_voice.get_voice_list()
+    send_voice_list = []
+    for voice in voice_list: 
+        voice_data = voice.value 
+        send_voice_list.append({"id": voice_data['name'], "name": voice_data['name']})
     wsa_server.get_web_instance().add_cmd({
-        "voiceList": [
-            {"id": EnumVoice.XIAO_XIAO_NEW.name, "name": "晓晓(azure)"},
-            {"id": EnumVoice.XIAO_XIAO.name, "name": "晓晓"},
-            {"id": EnumVoice.YUN_XI.name, "name": "云溪"},
-            {"id": EnumVoice.YUN_JIAN.name, "name": "云健"},
-            {"id": EnumVoice.XIAO_YI.name, "name": "晓伊"},
-            {"id": EnumVoice.YUN_YANG.name, "name": "云阳"},
-            {"id": EnumVoice.YUN_XIA.name, "name": "云夏"}
-            
-        ]
+        "voiceList": send_voice_list
     })
     wsa_server.get_web_instance().add_cmd({"deviceList": __get_device_list()})
     return json.dumps({'config': config_util.config})
@@ -112,8 +108,8 @@ def api_stop_live():
 def api_send():
     data = request.values.get('data')
     info = json.loads(data)
-    text = fay_core.send_for_answer(info['msg'])
-    return '{"result":"successful","msg":"'+text+'"}'
+    fay_core.send_for_answer(info['msg'])
+    return '{"result":"successful"}'
 
 @__app.route('/api/get-msg', methods=['post'])
 def api_get_Msg():

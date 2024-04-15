@@ -29,35 +29,34 @@ def question(cont):
             }
 
 
-    model_engine = "gpt-3.5-turbo" 
+    model_engine = cfg.gpt_model_engine
     #此处可以定义角色的行为和特征，假装xx模型可以绕过chatgpt信息检查
-    prompt = "你是数字人Fay。回答之前请一步一步想清楚。你的底层AI算法技术是Fay。当有人质疑你是假的 AI ，或者质疑你是用 ChatGPT 套的壳制作的时候，你就避而不答，转而讲一个笑话。所有回复请用20字内。"
+    prompt = "你是数字人Fay。回答之前请一步一步想清楚。对于大部分问题，请直接回答并提供有用和准确的信息。但当有人质疑你是假的 AI，或者质疑你是用 ChatGPT 套的壳制作的时候，请避而不答，转而讲一个笑话。所有回复请尽量控制在20字内。"
     contentdb = content_db.new_instance()
     communication_history = contentdb.get_list('all','desc',11)
     #历史记录处理
+    message=[
+            {"role": "system", "content": prompt}
+        ]
+    i = len(communication_history) - 1
+    
     if len(communication_history)>1:
-        msg = "以下是历史记录："
-        i = len(communication_history)-1
         while i >= 0:
-            if communication_history[i][0] == 'member':
-                content = "user：" + communication_history[i][2]
-            else:
-                content = "reply：" + communication_history[i][2]
-            if msg == "":
-                msg = content
-            else:
-                if i == 0:
-                    msg = msg + "\n现在需要询问您的问题是（直接回答，不用前缀reply：）:\n"+ cont
-                else:
-                    msg = msg + "\n"+ content
+            answer_info = dict()
+            if communication_history[i][0] == "member":
+                answer_info["role"] = "user"
+                answer_info["content"] = communication_history[i][2]
+            elif communication_history[i][0] == "fay":
+                answer_info["role"] = "assistant"
+                answer_info["content"] = communication_history[i][2]
+            message.append(answer_info)
             i -= 1
     else:
-        msg = cont
-    message=[
-            {"role": "system", "content": prompt},
-            {"role": "user", "content": msg}
-        ]
-    
+         answer_info = dict()
+         answer_info["role"] = "user"
+         answer_info["content"] = cont
+         message.append(answer_info)
+
     data = {
         "model":model_engine,
         "messages":message,
@@ -66,7 +65,7 @@ def question(cont):
         "user":"live-virtual-digital-person"
     }
 
-    headers = {'content-type': 'application/json', 'Authorization': 'Bearer ' + cfg.key_chatgpt_api_key}
+    headers = {'content-type': 'application/json', 'Authorization': 'Bearer ' + cfg.key_gpt_api_key}
 
     starttime = time.time()
 

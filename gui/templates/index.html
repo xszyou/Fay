@@ -37,40 +37,40 @@
                                     <ul>
                                         <li>
                                             <p>姓名：</p>
-                                            <el-input v-model="attribute_name" placeholder="请输入内容"></el-input>
+                                            <el-input v-model="attribute_name" placeholder="请输入内容" :disabled="!configEditable"></el-input>
                                         </li>
                                         <li>
                                             <p>性别：</p>
-                                            <el-input v-model="attribute_gender" placeholder="请输入内容"></el-input>
+                                            <el-input v-model="attribute_gender" placeholder="请输入内容" :disabled="!configEditable"></el-input>
                                         </li>
                                         <li>
                                             <p>年龄：</p>
-                                            <el-input v-model="attribute_age" placeholder="请输入内容"></el-input>
+                                            <el-input v-model="attribute_age" placeholder="请输入内容" :disabled="!configEditable"></el-input>
                                         </li>
 
                                         <li>
                                             <p>出生地：</p>
-                                            <el-input v-model="attribute_birth" placeholder="请输入内容"></el-input>
+                                            <el-input v-model="attribute_birth" placeholder="请输入内容" :disabled="!configEditable"></el-input>
                                         </li>
                                         <li>
                                             <p>生肖：</p>
-                                            <el-input v-model="attribute_zodiac" placeholder="请输入内容"></el-input>
+                                            <el-input v-model="attribute_zodiac" placeholder="请输入内容" :disabled="!configEditable"></el-input>
                                         </li>
                                         <li>
                                             <p>星座：</p>
-                                            <el-input v-model="attribute_constellation" placeholder="请输入内容"></el-input>
+                                            <el-input v-model="attribute_constellation" placeholder="请输入内容" :disabled="!configEditable"></el-input>
                                         </li>
                                         <li>
                                             <p>职业：</p>
-                                            <el-input v-model="attribute_job" placeholder="请输入内容"></el-input>
+                                            <el-input v-model="attribute_job" placeholder="请输入内容" :disabled="!configEditable"></el-input>
                                         </li>
                                         <li>
                                             <p>联系方式：</p>
-                                            <el-input v-model="attribute_contact" placeholder="请输入内容"></el-input>
+                                            <el-input v-model="attribute_contact" placeholder="请输入内容" :disabled="!configEditable"></el-input>
                                         </li>
                                         <li>
                                             <p>喜好：</p>
-                                            <el-input v-model="attribute_hobby" placeholder="请输入内容"></el-input>
+                                            <el-input v-model="attribute_hobby" placeholder="请输入内容" :disabled="!configEditable"></el-input>
                                         </li>
                                     </ul>
                                 </div>
@@ -78,18 +78,18 @@
                                     <ul>
                                         <li style="width: 375px;">
                                             <p>Q&A文件：</p>
-                                            <el-input v-model="interact_QnA" placeholder="请输入内容"></el-input>
+                                            <el-input v-model="interact_QnA" placeholder="请输入内容" :disabled="!configEditable"></el-input>
                                         </li>
                                         <br>
                                         <li>
                                             <p>使用面板播放：</p>
-                                           <p style="text-align: left;" v-if="play_sound_enabled">是</p>
+                                           <p style="text-align: left;" v-if="play_sound_enabled" :disabled="!configEditable">是</p>
                                            <p style="text-align: left;" v-else>否</p>
                                         </li>
                                        
                                         <li>
                                             <p>声音选择：{{attribute_voice}}</p>
-                                            <el-select v-model="attribute_voice" placeholder="请选择">
+                                            <el-select v-model="attribute_voice" placeholder="请选择" :disabled="!configEditable">
                                                 <el-option v-for="item in voice_list" :key="item.value"
                                                     :label="item.label" :value="item.value">
                                                 </el-option>
@@ -98,7 +98,7 @@
                                         <br>
                                         <li>
                                             <p>敏感度：</p>
-                                            <el-slider v-model="interact_perception_follow"></el-slider>
+                                            <el-slider v-model="interact_perception_follow" :disabled="!configEditable"></el-slider>
                                         </li>
                                        
                                         <br>
@@ -110,18 +110,18 @@
                                         <li>
                                             <p>唤醒模式：</p>
                                             <el-switch v-model="wake_word_enabled" active-color="#13ce66"
-                                            inactive-color="#ff4949">
+                                            inactive-color="#ff4949" :disabled="!configEditable">
                                         </el-switch>
                                         </li>
                                        
                                         <li style="margin-bottom: 10px;">
                                             <p>唤醒词：</p>
-                                            <el-input style="width: 250px;" v-model="wake_word" placeholder="请输入内容（以,隔开）"></el-input>
+                                            <el-input style="width: 250px;" v-model="wake_word" placeholder="请输入内容（以,隔开）" :disabled="!configEditable"></el-input>
                                         </li>
                                         
                                         <li>
                                             <p>唤醒方式：</p>
-                                            <el-select v-model="wake_word_type" placeholder="请选择">
+                                            <el-select v-model="wake_word_type" placeholder="请选择" :disabled="!configEditable">
                                                 <el-option v-for="item in wake_word_type_options" :key="item.value"
                                                     :label="item.label" :value="item.value">
                                                 </el-option>
@@ -136,7 +136,7 @@
                                         <li>
                                             <p>tts合成：</p>
                                             <el-switch v-model="tts_enabled" active-color="#13ce66"
-                                            inactive-color="#ff4949">
+                                            inactive-color="#ff4949" :disabled="!configEditable">
                                         </el-switch>
                                         </li>
                                     </ul>
@@ -152,10 +152,10 @@
                                 
                                 <li class="url">
                                     <el-switch v-model="source_record_enabled" active-color="#13ce66"
-                                        inactive-color="#ff4949">
+                                        inactive-color="#ff4949" :disabled="!configEditable">
                                     </el-switch>
                                     <p>麦克风</p>
-                                    <el-select v-model="source_record_device" placeholder="请选择">
+                                    <el-select v-model="source_record_device" placeholder="请选择" :disabled="!configEditable">
                                         <el-option v-for="item in device_list" :key="item.value" :label="item.label"
                                             :value="item.value">
                                         </el-option>
@@ -175,7 +175,7 @@
                                         style="width:200px">正在关闭...</el-button>
                                     <el-button v-else type="primary" style="width:200px" class="btn_open"
                                         @click=postStartLive()>开启</el-button>
-                                    <el-button type="button" style="width:200px" @click=postData()>保存配置</el-button>
+                                    <el-button type="button" style="width:200px" @click=postData() :disabled="!configEditable">保存配置</el-button>
                                 </li>
                                 <li class="p_red" >
                                     <p v-if="is_connect" style="color: #67c23a;"> 数字人：已连接 </p>

@@ -50,10 +50,13 @@ def get_index_path(index_name):
     return os.path.join(local_persist_path, index_name)
 
 def load_pdf_and_save_to_index(file_path, index_name):
-    loader = PyPDFLoader(file_path)
-    embedding = OpenAIEmbeddings(model="text-embedding-ada-002")
-    index = VectorstoreIndexCreator(embedding=embedding, vectorstore_kwargs={"persist_directory": get_index_path(index_name)}).from_loaders([loader])
-    index.vectorstore.persist()
+    try:
+        loader = PyPDFLoader(file_path)
+        embedding = OpenAIEmbeddings(model="text-embedding-ada-002")
+        index = VectorstoreIndexCreator(embedding=embedding, vectorstore_kwargs={"persist_directory": get_index_path(index_name)}).from_loaders([loader])
+        index.vectorstore.persist()
+    except Exception as e:
+        util.log(1, f"加载 {file_path} 失败...")
 
 def load_index(index_name):
     index_path = get_index_path(index_name)
@@ -78,6 +81,7 @@ def generate_prompt(question):
 
 def question(cont):
     try:
+        save_all()
         info = generate_prompt(cont)
         index = load_index(index_name)    
         llm = ChatOpenAI(model="gpt-4-0125-preview")

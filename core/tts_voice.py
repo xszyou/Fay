@@ -89,6 +89,7 @@ def get_voice_list():
 
 def get_voice_of(name):
     for voice in get_voice_list():
-        if voice.name == name:
+        voice_data = voice.value 
+        if voice_data["name"] == name:
             return voice
     return None

@@ -34,13 +34,9 @@ from ai_module import nlp_cemotion
 
 from ai_module import nlp_rasa
 from ai_module import nlp_gpt
-from ai_module import nlp_yuan
 from ai_module import yolov8
 from ai_module import nlp_VisualGLM
 from ai_module import nlp_lingju
-from ai_module import nlp_rwkv_api
-from ai_module import nlp_ChatGLM2
-from ai_module import nlp_fastgpt
 from ai_module import nlp_xingchen
 from ai_module import nlp_langchain
 from ai_module import nlp_ollama_api
@@ -52,14 +48,10 @@ if platform.system() == "Windows":
     from test_olipsync import LipSyncGenerator
     
 modules = {
-    "nlp_yuan": nlp_yuan, 
     "nlp_gpt": nlp_gpt,
     "nlp_rasa": nlp_rasa,
     "nlp_VisualGLM": nlp_VisualGLM,
     "nlp_lingju": nlp_lingju,
-    "nlp_rwkv_api":nlp_rwkv_api,
-    "nlp_chatglm2": nlp_ChatGLM2,
-    "nlp_fastgpt": nlp_fastgpt,
     "nlp_xingchen": nlp_xingchen,
     "nlp_langchain": nlp_langchain,
     "nlp_ollama_api": nlp_ollama_api
@@ -101,32 +93,8 @@ def determine_nlp_strategy(msg):
 
 #文本消息处理
 def send_for_answer(msg):
-        contentdb = content_db.new_instance()
-        contentdb.add_content('member','send',msg)
-        wsa_server.get_web_instance().add_cmd({"panelReply": {"type":"member","content":msg}})
-        textlist = []
-        text = None
-         # 全局问答
-        text = qa_service.question('qa',msg)
-
-        # 人设问答
-        if text is None:
-            keyword = qa_service.question('Persona',msg)
-            if keyword is not None:
-                text = config_util.config["attribute"][keyword]
-
-        if text is None:
-            text,textlist = determine_nlp_strategy(msg)
-                
-        contentdb.add_content('fay','send',text)
-        wsa_server.get_web_instance().add_cmd({"panelReply": {"type":"fay","content":text}})
-        if len(textlist) > 1:
-            i = 1
-            while i < len(textlist):
-                  contentdb.add_content('fay','send',textlist[i]['text'])
-                  wsa_server.get_web_instance().add_cmd({"panelReply": {"type":"fay","content":textlist[i]['text']}})
-                  i+= 1
-        return text
+        interact = Interact("audio", 1, {'user': '', 'msg': msg})
+        fay_booter.feiFei.on_interact(interact) 
 
 
 class FeiFei:
@@ -430,7 +398,13 @@ class FeiFei:
                         return result
                 else:
                     util.log(1, '问答处理总时长：{} ms'.format(math.floor((time.time() - self.last_quest_time) * 1000)))
+                    time.sleep(1)
+                    wsa_server.get_web_instance().add_cmd({"panelMsg": ""})
+                    if not cfg.config["interact"]["playSound"]: # 非展板播放
+                        content = {'Topic': 'Unreal', 'Data': {'Key': 'log', 'Value': ""}}
+                        wsa_server.get_instance().add_cmd(content)
                     self.speaking = False
+                  
                 
         except BaseException as e:
             print(e)
