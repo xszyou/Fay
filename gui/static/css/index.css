@@ -128,7 +128,7 @@ ul {
 .left_box {
     width: 915px;
     /*height: 260px;*/
-    margin-top: 15px;
+    margin-top: 35px;
     border: 1px solid #333333;
 }
 
@@ -144,7 +144,7 @@ ul {
 
 .left_box .source ul .url {
     width: 750px;
-    margin: 20px auto 0;
+    margin: 25px auto 0;
     height: 40px;
     display: flex;
 }
