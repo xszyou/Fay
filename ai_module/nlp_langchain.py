@@ -65,7 +65,7 @@ def load_index(index_name):
     return VectorStoreIndexWrapper(vectorstore=vectordb)
 
 def save_all():
-    os.environ['OPENAI_API_KEY'] = cfg.key_chatgpt_api_key
+    os.environ['OPENAI_API_KEY'] = cfg.key_gpt_api_key
     os.environ['OPENAI_API_BASE'] = cfg.gpt_base_url
     
     load_all_pdfs(folder_path)
