@@ -28,3 +28,17 @@ https://www.bilibili.com/video/BV1qs4y1g74e/?share_source=copy_web&vd_source=64c
 3. [modelscope](https://github.com/modelscope/modelscope)
 4. [FunASR](https://github.com/alibaba-damo-academy/FunASR)
 5. [Fay数字人助理](https://github.com/TheRamU/Fay).
+
+--------------------------------------------------------------------------------------
+
+funasr优化
+--------------------------------------------------------------------------------------
+pip install pyaudio
+
+启动服务端
+python funasr_wss_server.py --host "0.0.0.0" --port 10197 --ngpu 0 
+可以进行测试，测试完成后关闭(需要有麦克风和喇叭)
+python funasr_wss_client.py
+
+
+

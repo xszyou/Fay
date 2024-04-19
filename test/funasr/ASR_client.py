@@ -6,8 +6,8 @@ import argparse
 import json
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--host", type=str, default="172.16.77.144", required=False, help="host ip, localhost, 0.0.0.0")
-parser.add_argument("--port", type=int, default=10194, required=False, help="grpc server port")
+parser.add_argument("--host", type=str, default="127.0.0.1", required=False, help="host ip, localhost, 0.0.0.0")
+parser.add_argument("--port", type=int, default=10197, required=False, help="grpc server port")
 parser.add_argument("--chunk_size", type=int, default=160, help="ms")
 parser.add_argument("--vad_needed", type=bool, default=True)
 args = parser.parse_args()

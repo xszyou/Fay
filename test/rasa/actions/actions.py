@@ -7,6 +7,8 @@ import json
 import requests
 from rasa_sdk.forms import FormValidationAction
 
+# from utils.openai_api.openai_api_request import chat
+
 class ValidateScheduleReminderForm(FormValidationAction):
     def name(self) :
         return "validate_schedule_reminder_form"
@@ -35,23 +37,31 @@ class ActionGPTResponse(Action):
         
         # Separate user messages and bot messages
         for event in tracker.events:
+            answer_info = dict()
             if event.get("event") == "user":
                 user_messages.append(event.get("text"))
+                answer_info["role"] = "user"
+                answer_info["content"] = event.get("text")
+                history.append(answer_info)
             elif event.get("event") == "bot":
                 bot_messages.append(event.get("text"))
+                answer_info["role"] = "assistant"
+                answer_info["content"] = event.get("text")
+                history.append(answer_info)
 
         # Combine user and bot messages
-        for user, bot in zip(user_messages, bot_messages):
-            history.append([user, bot])
+        # for user, bot in zip(user_messages, bot_messages):
+        #     history.append([user, bot])
 
         print("*******************************")
         print(history)
         print("*******************************")
 
-        url = "http://127.0.0.1:8000"
+        url = "http://127.0.0.1:8000/v1/completions"
         req = json.dumps({
             "prompt": "请用20字内回复我。" +  tracker.latest_message.get("text"),
             "history": history})
+        print(req)
         headers = {'content-type': 'application/json'}
         r = requests.post(url, headers=headers, data=req)
         a = json.loads(r.text).get('response')
@@ -121,27 +131,41 @@ class ActionAskProblem(Action):
         
         # Separate user messages and bot messages
         for event in tracker.events:
+            answer_info = dict()
             if event.get("event") == "user":
                 user_messages.append(event.get("text"))
+                answer_info["role"] = "user"
+                answer_info["content"] = event.get("text")
+                history.append(answer_info)
             elif event.get("event") == "bot":
                 bot_messages.append(event.get("text"))
-
+                answer_info["role"] = "assistant"
+                answer_info["content"] = event.get("text")
+                history.append(answer_info)
+            
         # Combine user and bot messages
-        for user, bot in zip(user_messages, bot_messages):
-            history.append([user, bot])
+        # for user, bot in zip(user_messages, bot_messages):
+        #     history.append([user, bot])
 
         print("*******************************")
         print(history)
         print("*******************************")
 
-        url = "http://127.0.0.1:8000"
+        url = "http://127.0.0.1:8000/v1/completions"
         req = json.dumps({
             "prompt":  tracker.latest_message.get("text"),
             "history": history})
+        
+        print(req)
+
         headers = {'content-type': 'application/json'}
         r = requests.post(url, headers=headers, data=req)
-        a = json.loads(r.text).get('response')
+        # a = json.loads(r.text).get('response')
+        #如果是vll推理则用
+        a = json.loads(r.text)['choices'][0]['text']
         history = json.loads(r.text).get('history')
+        
+
 
         dispatcher.utter_message(a)
 
