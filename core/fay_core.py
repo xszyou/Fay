@@ -17,7 +17,7 @@ import logging
 import numpy as np
 # import tensorflow as tf
 import fay_booter
-from ai_module import xf_ltp
+from ai_module import baidu_emotion
 from ai_module.ms_tts_sdk import Speech
 from core import wsa_server, tts_voice, song_player
 from core.interact import Interact
@@ -333,12 +333,11 @@ class FeiFei:
                     elif result <= 0.2:
                        self.mood = self.mood - (chat_perception / 100.0)
                 else:
-                    s = xf_ltp.get_score(self.q_msg)
-                    result = xf_ltp.get_sentiment(self.q_msg)
+                    result = baidu_emotion.get_sentiment(self.q_msg)
                     chat_perception = perception["chat"]
-                    if result == 1:
+                    if result >= 2:
                         self.mood = self.mood + (chat_perception / 150.0)
-                    elif result == -1:
+                    elif result == 0:
                         self.mood = self.mood - (chat_perception / 100.0)
             except BaseException as e:
                 self.mood = 0.5

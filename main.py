@@ -15,6 +15,10 @@ from scheduler.thread_manager import MyThread
 from core import content_db
 import sys
 sys.setrecursionlimit(sys.getrecursionlimit() * 5)
+import hashlib
+import os
+import time
+
 
 def __clear_samples():
     if not os.path.exists("./samples"):
@@ -60,6 +64,7 @@ if __name__ == '__main__':
     app = QApplication(sys.argv)
     app.setWindowIcon(QtGui.QIcon('icon.png'))
     win = MainWindow()
+    time.sleep(1)
     win.show()
     app.exit(app.exec_())
 
