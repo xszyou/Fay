@@ -109,7 +109,6 @@ class Recorder:
             file_url = self.save_buffer_to_file(audio_data)
             self.__aLiNls.send_url(file_url)
         
-        util.log(1, file_url)
         # return
         # 等待结果返回
         while not iat.done and time.time() - t < 1:
