@@ -47,7 +47,11 @@ class Emotion:
                     util.log(1, f"百度情感分析对接有误: {r.text}")
                     return 1
                 info = json.loads(r.text)
-                return info['items'][0]['sentiment']
+                if not self.has_field(info,'error_code'):
+                    return info['items'][0]['sentiment']
+                else:
+                    util.log(1, f"百度情感分析对接有误： {info['error_msg']}") 
+                    return 1
             except Exception as e:
                 util.log(1, f"百度情感分析对接有误： {str(e)}")           
                 return 1
@@ -71,13 +75,25 @@ class Emotion:
             headers = {'Content-Type':'application/json;charset=UTF-8'}
             r = requests.post(url, headers=headers)    
             if r.status_code != 200:
-                util.log(1, f"百度情感分析对接有误: {r.text}")
+                info = json.loads(r.text)
+                if info["error"] == "invalid_client":
+                    util.log(1, f"请检查baidu_emotion_api_key")
+                else:
+                    util.log(1, f"请检查baidu_emotion_secret_key")
                 return None            
             info = json.loads(r.text)
-            return info
+            if not self.has_field(info,'error_code'):
+                return info
+            else:
+                util.log(1, f"百度情感分析对接有误： {info['error_msg']}") 
+                util.log(1, f"请检查baidu_emotion_api_key和baidu_emotion_secret_key") 
+                return None
         except Exception as e:
-            util.log(1, f"百度情感分析有误： {str(e)}")
+            util.log(1, f"百度情感分析有1误： {str(e)}")
             return None
 
+    
+    def has_field(self, array, field):
+        return any(field in item for item in array)
   
 
