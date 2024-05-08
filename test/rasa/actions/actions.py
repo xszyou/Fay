@@ -57,15 +57,18 @@ class ActionGPTResponse(Action):
         print(history)
         print("*******************************")
 
-        url = "http://127.0.0.1:8000/v1/completions"
+        url = "http://127.0.0.1:8101/v1/completions"
         req = json.dumps({
-            "prompt": "请用20字内回复我。" +  tracker.latest_message.get("text"),
-            "history": history})
+            "model": "THUDM/chatglm3-6b",
+            "prompt": tracker.latest_message.get("text"),
+            "max_tokens": 768,
+            "temperature": 0})
         print(req)
         headers = {'content-type': 'application/json'}
         r = requests.post(url, headers=headers, data=req)
-        a = json.loads(r.text).get('response')
-        history = json.loads(r.text).get('history')
+        
+        a = json.loads(r.text)['choices'][0]['text']
+        # history = json.loads(r.text).get('history')
 
         dispatcher.utter_message(a)
 
@@ -151,10 +154,12 @@ class ActionAskProblem(Action):
         print(history)
         print("*******************************")
 
-        url = "http://127.0.0.1:8000/v1/completions"
+        url = "http://127.0.0.1:8101/v1/completions"
         req = json.dumps({
-            "prompt":  tracker.latest_message.get("text"),
-            "history": history})
+            "model": "THUDM/chatglm3-6b",
+            "prompt": tracker.latest_message.get("text"),
+            "max_tokens": 768,
+            "temperature": 0})
         
         print(req)
 
@@ -163,7 +168,7 @@ class ActionAskProblem(Action):
         # a = json.loads(r.text).get('response')
         #如果是vll推理则用
         a = json.loads(r.text)['choices'][0]['text']
-        history = json.loads(r.text).get('history')
+        # history = json.loads(r.text).get('history')
         
 
 
