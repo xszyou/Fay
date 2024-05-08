@@ -62,7 +62,7 @@ class ActionGPTResponse(Action):
             "model": "THUDM/chatglm3-6b",
             "prompt": tracker.latest_message.get("text"),
             "max_tokens": 768,
-            "temperature": 0})
+            "temperature": 0},ensure_ascii=False)
         print(req)
         headers = {'content-type': 'application/json'}
         r = requests.post(url, headers=headers, data=req)
@@ -159,7 +159,7 @@ class ActionAskProblem(Action):
             "model": "THUDM/chatglm3-6b",
             "prompt": tracker.latest_message.get("text"),
             "max_tokens": 768,
-            "temperature": 0})
+            "temperature": 0},ensure_ascii=False)
         
         print(req)
 
