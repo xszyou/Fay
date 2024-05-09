@@ -42,6 +42,8 @@ def question(cont):
     
     if len(communication_history)>1:
         while i >= 0:
+            if communication_history[i][2] == "":
+                continue
             answer_info = dict()
             if communication_history[i][0] == "member":
                 answer_info["role"] = "user"
@@ -61,14 +63,15 @@ def question(cont):
         "model":model_engine,
         "messages":message,
         "temperature":0.3,
-        "max_tokens":2000,
+        "max_tokens":768,
         "user":"live-virtual-digital-person"
     }
 
     headers = {'content-type': 'application/json', 'Authorization': 'Bearer ' + cfg.key_gpt_api_key}
 
     starttime = time.time()
-
+    req = json.dumps(data)
+    
     try:
         response = session.post(url, json=data, headers=headers, verify=False)
         response.raise_for_status()  # 检查响应状态码是否为200

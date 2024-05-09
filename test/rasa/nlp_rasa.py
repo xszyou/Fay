@@ -8,3 +8,7 @@ def question(cont):
     r = requests.post(url, headers=headers, data=req)
     a = json.loads(r.text)[0].get('text')
     return a
+
+if __name__ == "__main__":
+    r = question("北京天气怎么样")
+    print(r)

@@ -37,6 +37,8 @@ class ActionGPTResponse(Action):
         
         # Separate user messages and bot messages
         for event in tracker.events:
+            if event.get("text") == "":
+                    continue
             answer_info = dict()
             if event.get("event") == "user":
                 user_messages.append(event.get("text"))
@@ -57,17 +59,24 @@ class ActionGPTResponse(Action):
         print(history)
         print("*******************************")
 
-        url = "http://127.0.0.1:8101/v1/completions"
+        current_chat={'role': 'user', 'content': tracker.latest_message.get("text")}
+        history.append(current_chat)
+
+        url = "http://127.0.0.1:8101/v1/chat/completions"
         req = json.dumps({
             "model": "THUDM/chatglm3-6b",
-            "prompt": tracker.latest_message.get("text"),
+            "messages": history,
             "max_tokens": 768,
-            "temperature": 0},ensure_ascii=False)
+            "temperature": 0})
         print(req)
         headers = {'content-type': 'application/json'}
-        r = requests.post(url, headers=headers, data=req)
+        r = requests.post(url, headers=headers, json={
+            "model": "THUDM/chatglm3-6b",
+            "messages": history,
+            "max_tokens": 768,
+            "temperature": 0})
         
-        a = json.loads(r.text)['choices'][0]['text']
+        a = json.loads(r.text)['choices'][0]['message']['content']
         # history = json.loads(r.text).get('history')
 
         dispatcher.utter_message(a)
@@ -134,6 +143,8 @@ class ActionAskProblem(Action):
         
         # Separate user messages and bot messages
         for event in tracker.events:
+            if event.get("text") == "":
+                continue
             answer_info = dict()
             if event.get("event") == "user":
                 user_messages.append(event.get("text"))
@@ -154,23 +165,28 @@ class ActionAskProblem(Action):
         print(history)
         print("*******************************")
 
-        url = "http://127.0.0.1:8101/v1/completions"
+        current_chat={'role': 'user', 'content': tracker.latest_message.get("text")}
+        history.append(current_chat)
+
+        url = "http://127.0.0.1:8101/v1/chat/completions"
         req = json.dumps({
             "model": "THUDM/chatglm3-6b",
-            "prompt": tracker.latest_message.get("text"),
+            "messages": history,
             "max_tokens": 768,
-            "temperature": 0},ensure_ascii=False)
+            "temperature": 0})
         
         print(req)
 
         headers = {'content-type': 'application/json'}
-        r = requests.post(url, headers=headers, data=req)
+        r = requests.post(url, headers=headers, json={
+            "model": "THUDM/chatglm3-6b",
+            "messages": history,
+            "max_tokens": 768,
+            "temperature": 0})
         # a = json.loads(r.text).get('response')
         #如果是vll推理则用
-        a = json.loads(r.text)['choices'][0]['text']
+        a = json.loads(r.text)['choices'][0]['message']['content']
         # history = json.loads(r.text).get('history')
-        
-
 
         dispatcher.utter_message(a)
 
