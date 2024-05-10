@@ -95,7 +95,7 @@ class VllmGPT:
         return res['choices'][0]['message']['content']
     
 if __name__ == "__main__":
-    vllm = VllmGPT('127.0.0.1','8101')
+    vllm = VllmGPT('127.0.0.1','8101','Qwen-7B-Chat')
     req = vllm.question2("你叫什么名字啊今年多大了")
     print(req)
     # url = "http://127.0.0.1:8101/v1/completions"

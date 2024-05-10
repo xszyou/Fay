@@ -82,3 +82,43 @@ curl http://127.0.0.1:8101/v1/completions \
     }'
 
 ----------------------------------------------------------------------------------------------------------------------
+二、采用fastchat部署大模型，降低显存占用，vllm会吃掉24g现存，而fastchat则用16g显存（测试基准chatglm3-6b或者qwen-1.5-7b模型）
+1、安装fastchat
+conda create -n fastchat python=3.10
+conda activate fastchat
+
+git clone https://github.com/lm-sys/FastChat
+cd Fastchat
+
+pip3 install -e ".[model_worker,webui]"
+
+安装flash attention
+git clone https://github.com/Dao-AILab/flash-attention
+cd flash-attention
+conda install -c nvidia cuda-nvcc # 为了使用conda内的cuda环境安装 flash_attn
+pip install flash_attn
+cd csrc/layer_norm && pip install .
+
+2、测试
+命令行测试
+python -m fastchat.serve.cli --model-path /mnt/f/xuniren/aimodels/ChatGLM-6B/Qwen-7B-Chat/
+类似openai接口测试
+第一步是启动控制器服务，启动命令如下所示：
+python -m fastchat.serve.controller --host 0.0.0.0
+第二步是启动 Model Worker 服务，启动命令如下所示
+python -m fastchat.serve.model_worker --model-path /mnt/f/xuniren/aimodels/ChatGLM-6B/Qwen-7B-Chat/ --host 0.0.0.0 --port 8101
+#第三步是启动 RESTFul API 服务，启动命令如下所示：
+python -m fastchat.serve.openai_api_server --host 0.0.0.0
+
+3、使用
+正式使用我采用提供了openai一样的接口的服务
+conda activate fastchat
+python -m fastchat.serve.controller --host 0.0.0.0
+python -m fastchat.serve.model_worker --model-path /mnt/f/xuniren/aimodels/ChatGLM-6B/Qwen-7B-Chat/ --host 0.0.0.0 --port 8101
+python -m fastchat.serve.openai_api_server --host 0.0.0.0
+
+修改fay项目下system.conf文件下的模型名称为Qwen-7B-Chat，即
+gpt_base_url=http://127.0.0.1:8101/v1
+gpt_model_engine=Qwen-7B-Chat
+
+启动fay：python app.py
