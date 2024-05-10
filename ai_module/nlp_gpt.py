@@ -39,10 +39,15 @@ def question(cont):
             {"role": "system", "content": prompt}
         ]
     i = len(communication_history) - 1
-    
+    n = 6
+    num = i - n
     if len(communication_history)>1:
         while i >= 0:
+            if i <= num:
+                i -= 1
+                continue
             if communication_history[i][2] == "":
+                i -= 1
                 continue
             answer_info = dict()
             if communication_history[i][0] == "member":
@@ -53,11 +58,11 @@ def question(cont):
                 answer_info["content"] = communication_history[i][2]
             message.append(answer_info)
             i -= 1
-    else:
-         answer_info = dict()
-         answer_info["role"] = "user"
-         answer_info["content"] = cont
-         message.append(answer_info)
+            
+    answer_info = dict()
+    answer_info["role"] = "user"
+    answer_info["content"] = cont
+    message.append(answer_info)
 
     data = {
         "model":model_engine,
@@ -66,7 +71,7 @@ def question(cont):
         "max_tokens":768,
         "user":"live-virtual-digital-person"
     }
-
+    print(data)
     headers = {'content-type': 'application/json', 'Authorization': 'Bearer ' + cfg.key_gpt_api_key}
 
     starttime = time.time()
