@@ -19,6 +19,30 @@
 
 “所有产品都值得用数字人从新做一遍”
 
+Fay数字人2024.05.15更新：
+
+🌟Fay-带货版：
+
+1、新增baidu情绪分析秘钥为空时不使用情绪分析；
+
+2、去除讯飞nlp。
+
+🌟Fay-助理版：
+
+1、新增baidu情绪分析秘钥为空时不使用情绪分析。
+
+Fay数字人2024.05.08更新：
+
+🌟Fay-agent版：
+
+1、配置项新增gpt模型配置、gpt代理默认空；
+
+本期推荐学习：
+
+1、【在Fay接入ufo执行任务】 https://www.bilibili.com/video/BV1rJ4m1P7Ee/
+
+文档：https://qqk9ntwbcit.feishu.cn/wiki/BX2gw9r8JicKLukGbOZcs9YdnGh
+
 Fay数字人2024.04.22更新：
 
 🌟Fay-带货版：
