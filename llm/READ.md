@@ -106,16 +106,32 @@ python -m fastchat.serve.cli --model-path /mnt/f/xuniren/aimodels/ChatGLM-6B/Qwe
 第一步是启动控制器服务，启动命令如下所示：
 python -m fastchat.serve.controller --host 0.0.0.0
 第二步是启动 Model Worker 服务，启动命令如下所示
-python -m fastchat.serve.model_worker --model-path /mnt/f/xuniren/aimodels/ChatGLM-6B/Qwen-7B-Chat/ --host 0.0.0.0 --port 8101
+启动不带推理加速的 模型worker
+python -m fastchat.serve.model_worker --model-path /mnt/f/xuniren/aimodels/ChatGLM-6B/Qwen-7B-Chat --host 0.0.0.0 --port 8101
+python -m fastchat.serve.model_worker --model-path /mnt/f/xuniren/aimodels/ChatGLM-6B/Qwen-7B-Chat/ --host 0.0.0.0 --port 8101 --dtype=half
+启动 带vllm推理加速的 模型worker
+python -m fastchat.serve.vllm_worker --model-path Qwen1.5-7B-Chat --host 0.0.0.0 --dtype=half  
 #第三步是启动 RESTFul API 服务，启动命令如下所示：
 python -m fastchat.serve.openai_api_server --host 0.0.0.0
+第四步
+python -m fastchat.serve.gradio_web_server --host 0.0.0.0
+
+
+curl http://127.0.0.1:8101/v1/completions \
+    -H "Content-Type: application/json" \
+    -d '{
+        "model": "Qwen-7B-Chat",
+        "prompt": "北京天气怎么样2",
+        "max_tokens": 768,
+        "temperature": 0
+    }'
 
 3、使用
 正式使用我采用提供了openai一样的接口的服务
 conda activate fastchat
 python -m fastchat.serve.controller --host 0.0.0.0
-python -m fastchat.serve.model_worker --model-path /mnt/f/xuniren/aimodels/ChatGLM-6B/Qwen-7B-Chat/ --host 0.0.0.0 --port 8101
-python -m fastchat.serve.openai_api_server --host 0.0.0.0
+python -m fastchat.serve.model_worker --model-path /mnt/f/xuniren/aimodels/ChatGLM-6B/Qwen-7B-Chat --load-8bit
+python -m fastchat.serve.openai_api_server --host 0.0.0.0 --port 8101
 
 修改fay项目下system.conf文件下的模型名称为Qwen-7B-Chat，即
 gpt_base_url=http://127.0.0.1:8101/v1
