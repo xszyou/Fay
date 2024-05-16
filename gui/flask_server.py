@@ -170,6 +170,15 @@ def home_get():
 def home_post():
     return __get_template()
 
+@__app.route('/shuziren', methods=['get'])
+def shuziren_get():
+    return render_template('chat2.html')
+
+
+@__app.route('/shuziren', methods=['post'])
+def shuziren_post():
+    return render_template('chat2.html')
+
 def run():
     server = pywsgi.WSGIServer(('0.0.0.0',5000), __app)
     server.serve_forever()
