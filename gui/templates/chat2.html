@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- index.css -->
+    <link rel="stylesheet" href="{{ url_for('static',filename='css/index.css') }}">
+    </link>
+    <!-- <link rel="stylesheet" href="../static/css/index.css"> -->
+    <!-- 引入element-ui样式 -->
+    <!-- <link rel="stylesheet" href="../static/css/element.css"> -->
+    <link rel="stylesheet" href="{{ url_for('static',filename='css/element.css') }}">
+    </link>
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/element-ui/2.15.14/theme-chalk/index.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.8.1/css/all.css">
+
+    <title>Fay</title>
+    <style>
+        button {
+            padding: 8px 16px;
+        }
+    
+        video {
+            width: 100%;
+            height: 860px;
+        }
+    
+        .option {
+            margin-bottom: 8px;
+            display: none
+        }
+    
+        #media {
+            max-width: 1280px;
+            height: 860px;
+        }
+        </style>
+</head>
+
+<body>
+    <div id="app">
+        <div class="main">
+            <div class="title">
+                <h2>Fay数字人助理版</h2>
+            </div>
+            <div class="main_box">
+                <div class="left">
+                    <div class="option">
+                        <input id="use-stun" type="checkbox"/>
+                        <label for="use-stun">Use STUN server</label>
+                    </div>
+                    <button class="btn btn-primary" id="btn_play">开启数字人</button>
+                    <button class="btn btn-primary" id="btn_play" onclick="history.back();">返回上一页</button>
+                    <!-- <form class="form-inline" id="echo-form">
+                        <div class="form-group">
+                          <p>input text</p>
+                    
+                          <textarea cols="2" rows="3" style="width:600px;height:50px;" class="form-control" id="message">test</textarea>
+                        </div>
+                        <button type="submit" class="btn btn-default">Send</button>
+                      </form> -->
+                    
+                    <div id="media">
+                        <!-- <h2>Media</h2> -->
+                    
+                        <video id="rtc_media_player" style="width:100%;" controls autoplay></video>
+                    </div>
+                    
+                    <div class="left_box" style="margin-top: 5px;">
+                        <div class="source">
+                            <ul>
+                                
+                                <li class="url">
+                                    <el-switch v-model="source_record_enabled" active-color="#13ce66"
+                                        inactive-color="#ff4949" :disabled="!configEditable">
+                                    </el-switch>
+                                    <p>麦克风</p>
+                                    <el-select v-model="source_record_device" placeholder="请选择" :disabled="!configEditable">
+                                        <el-option v-for="item in device_list" :key="item.value" :label="item.label"
+                                            :value="item.value">
+                                        </el-option>
+                                    </el-select>
+                                </li>
+                                <li class="url">
+
+                                    <p style="margin-left: 40px">消 息</p>
+                                    <el-input v-model="panel_msg" :disabled="true"></el-input>
+                                </li>
+                               
+                            </ul>
+                        </div>
+                    </div>
+                    
+                </div>
+                <div class="right">
+                    <div class="right_main">
+                        <div class="container" style="height: 1042px">
+                     <div class="content">
+
+                       <div v-for="(item, index) in msg_list" :key="index">
+                        
+                       <div class="item item-center"><span>[[item.timetext]]</span></div>
+                     
+                        <div class="item item-left" v-if="item.type == 'fay'">
+                        <div class="avatar"><img src="{{ url_for('static',filename='to.jpg') }}" />
+                        </div>
+                        <div class="bubble bubble-left">[[item.content]]
+                        </div>
+                        </div>
+                        
+                        
+                        <div class="item item-right" v-else>
+                        <div class="bubble bubble-right" >[[item.content]]<div v-if="loading && index === msg_list.length - 1" class="spinner"></div></div>
+                        <div class="avatar"><img src="{{ url_for('static',filename='from.jpg') }}" />
+                        </div>
+                        </div>
+                        </div>
+                        <div>
+                       
+                        </div>
+                       
+                        
+                        </div>
+                                
+                            <div class="input-area">
+                                <textarea v-model="send_msg" name="text" id="textarea" placeholder="发送些内容给Fay..."></textarea>
+                                <div class="button-area">
+                                    <button id="send-btn" @click="send()">Fay</button>                                    
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</body>
+<!-- 开发环境vue.js -->
+<script src="{{ url_for('static',filename='js/vue.js') }}"></script>
+<!-- 发行环境vue.js -->
+<!-- <script src="https://cdn.jsdelivr.net/npm/vue@2"></script> -->
+<!-- <script src="../static/js/vue.js"></script> -->
+<!-- 引入element-ui组件库 -->
+<!-- <script src="../static/js/element.js"></script> -->
+<script src="{{ url_for('static',filename='js/element.js') }}"></script>
+<!-- index.js -->
+<!-- <script src="../static/js/index.js"></script>
+<script src="../static/js/self-adaption.js"></script> -->
+
+<script src="{{ url_for('static',filename='js/index.js') }}"></script>
+<script src="{{ url_for('static',filename='js/self-adaption.js') }}"></script>
+
+<!-- <script src="../static/js/srs.sdk.js"></script> -->
+<script src="{{ url_for('static',filename='js/srs.sdk.js') }}"></script>
+
+<script type="text/javascript" src="http://cdn.sockjs.org/sockjs-0.3.4.js"></script>
+<script type="text/javascript" src="https://ajax.aspnetcdn.com/ajax/jquery/jquery-2.1.1.min.js"></script>
+
+<script type="text/javascript" charset="utf-8">
+    
+    $(function(){
+        var sdk = null; // Global handler to do cleanup when republishing.
+        var startPlay = function() {
+            $('#rtc_media_player').show();
+
+            // Close PC when user replay.
+            if (sdk) {
+                sdk.close();
+            }
+            sdk = new SrsRtcWhipWhepAsync();
+
+            // User should set the stream when publish is done, @see https://webrtc.org/getting-started/media-devices
+            // However SRS SDK provides a consist API like https://webrtc.org/getting-started/remote-streams
+            $('#rtc_media_player').prop('srcObject', sdk.stream);
+            // Optional callback, SDK will add track to stream.
+            // sdk.ontrack = function (event) { console.log('Got track', event); sdk.stream.addTrack(event.track); };
+
+            var host = window.location.hostname
+            // For example: webrtc://r.ossrs.net/live/livestream
+            var url = "http://"+host+":1985/rtc/v1/whep/?app=live&stream=livestream"
+            sdk.play(url).then(function(session){
+                //$('#sessionid').html(session.sessionid);
+                //$('#simulator-drop').attr('href', session.simulator + '?drop=1&username=' + session.sessionid);
+            }).catch(function (reason) {
+                sdk.close();
+                $('#rtc_media_player').hide();
+                console.error(reason);
+            });
+        };
+
+        $('#rtc_media_player').hide();
+        // var query = parse_query_string();
+        // srs_init_whep("#txt_url", query);
+
+        $("#btn_play").click(startPlay);
+        // Never play util windows loaded @see https://github.com/ossrs/srs/issues/2732
+        // if (query.autostart === 'true') {
+        //     $('#rtc_media_player').prop('muted', true);
+        //     console.warn('For autostart, we should mute it, see https://www.jianshu.com/p/c3c6944eed5a ' +
+        //         'or https://developers.google.com/web/updates/2017/09/autoplay-policy-changes#audiovideo_elements');
+        //     window.addEventListener("load", function(){ startPlay(); });
+        // }
+    });
+
+</script>
+</html>
