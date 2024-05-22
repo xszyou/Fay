@@ -19,6 +19,38 @@
 
 “所有产品都值得用数字人从新做一遍”
 
+Fay数字人2024.05.22更新：
+
+🌟Fay-带货版：
+
+1、调整gpt代理默认为空。
+
+🌟Fay-agent版：
+
+1、去除语音输出工具，改为语音输出只受“语音合成”按钮影响。
+
+🌟Fay-助理版：
+
+1、调整gpt代理默认为空；
+
+2、去除funasr_wss方法；
+
+3、rasa 支持llma3并优化接口；
+
+4、rasa支持通过vllm部署大模型；
+
+5、支持通过vllm部署的本地模型启动项目；
+
+6、采用fastchat既可以降低显存，又能提升响应速度，支持主流模型部署；
+
+7、修复类 GPT调用失败问题；
+
+8、新增metahuman-stream对接示例 https://qqk9ntwbcit.feishu.cn/wiki/Ik1kwO9X5iilnGkFwRhcnmtvn3e
+
+🌟Fay-UE5：
+
+1、增加文本输入框（与Fay会同步消息），方便网页端和移动端操作。
+
 Fay数字人2024.05.15更新：
 
 🌟Fay-带货版：
