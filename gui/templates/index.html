@@ -122,13 +122,6 @@
                                        <p style="text-align: left;" v-if="play_sound_enabled">是</p>
                                        <p style="text-align: left;" v-else>否</p>
                                     </li>
-                                    <br>
-                                    <li>
-                                        <p> 远程音频：</p>
-                                        <p style = "text-align: left;color: #67c23a" v-if="remote_audio_connect" >已连接 </p>
-                                        <p style = "text-align: left;"  v-else>未连接 </p>
-                                    </li>
-
                                 </ul>
                             </div>
                         </div>
@@ -169,7 +162,9 @@
                             </li>
                             <li class="p_red" >
                                 <p v-if="is_connect" style="color: #67c23a;"> 数字人：已连接 </p>
-                                <p v-else > 数字人：未连接 </p>
+                                <p v-else > &nbsp; </p>
+                                <p v-if="remote_audio_connect" style="color: #67c23a;"> 远程音频：已连接 </p>
+                                <p v-else > &nbsp; </p>
                             </li>
                         </ul>
                     </div>
