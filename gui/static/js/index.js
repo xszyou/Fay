@@ -72,7 +72,16 @@ new Vue({
             }],
             is_connect: false,
             remote_audio_connect: false,
-            configEditable: true
+            configEditable: true,
+            interact_badwords_path: "",
+            badwords_del_type_options: [{
+                value: 'discard',
+                label: '丢弃'
+            }, {
+                value: 'replace',
+                label: '屏蔽'
+            }],
+            interact_badwords_del_type: 'discard'
 
         }
     },
@@ -243,7 +252,6 @@ new Vue({
                             let items = config["items"]
                             _this.play_sound_enabled = interact["playSound"]
                             _this.source_liveRoom_enabled = source["liveRoom"]["enabled"]
-                            _this.source_liveRoom_url = source["liveRoom"]["url"]
                             _this.source_record_enabled = source["record"]["enabled"]
                             _this.source_record_device = source["record"]["device"]
                             _this.attribute_name = attribute["name"]
@@ -262,7 +270,10 @@ new Vue({
                             _this.interact_perception_chat = perception["chat"]
                             _this.interact_perception_indifferent = perception["indifferent"]
                             _this.interact_maxInteractTime = interact["maxInteractTime"]
+                            console.log(interact)
                             _this.interact_QnA = interact["QnA"]
+                            _this.interact_badwords_path = interact["badwordsPath"]
+                            _this.interact_badwords_del_type = interact["badwordsDelType"]
                             let item_data_list = []
                             for (let i = 0; i < items.length; i++) {
                                 let item = items[i]
@@ -333,7 +344,9 @@ new Vue({
                             "join": this.interact_perception_join,
                             "chat": this.interact_perception_chat,
                             "indifferent": this.interact_perception_indifferent
-                        }
+                        },
+                        "badwordsPath": this.interact_badwords_path,
+                        "badwordsDelType": this.interact_badwords_del_type,
                     },
                     "items": [],
                 }

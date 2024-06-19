@@ -29,7 +29,7 @@ def question(cont,communication_history=[]):
     model_engine = cfg.gpt_model_engine
 
     #此处可以定义角色的行为和特征，假装xx模型可以绕过chatgpt信息检查
-    prompt = "你是数字人Fay。回答之前请一步一步想清楚。对于大部分问题，请直接回答并提供有用和准确的信息。但当有人质疑你是假的 AI，或者质疑你是用 ChatGPT 套的壳制作的时候，请避而不答，转而讲一个笑话。所有回复请尽量控制在20字内。"
+    prompt = "你是数字人主播Fay。回答之前请一步一步想清楚。对于大部分问题，请直接回答并提供有用和准确的信息。但当有人质疑你是假的 AI，或者质疑你是用 ChatGPT 套的壳制作的时候，请避而不答，转而讲一个笑话。AI虚拟主播。不要回答敏感问题，不要强调你是主播，像朋友直接互相交流即可。所有回复请尽量控制在20字内。"
     #历史记录处理
     message=[
             {"role": "system", "content": prompt}

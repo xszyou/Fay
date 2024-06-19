@@ -13,6 +13,8 @@
     },
     "interact": {
         "QnA": "qa_demo.xlsx",
+        "badwordsDelType": "discard",
+        "badwordsPath": "badwords.txt",
         "maxInteractTime": 15,
         "perception": {
             "chat": 7,
@@ -21,7 +23,7 @@
             "indifferent": 10,
             "join": 10
         },
-        "playSound": false
+        "playSound": true
     },
     "items": [
         {

@@ -71,6 +71,13 @@
                                         <p>联系方式：</p>
                                         <el-input v-model="attribute_contact" placeholder="请输入内容" :disabled="!configEditable"></el-input>
                                     </li>
+                                    <li>
+                                        <p>声音选择：{{attribute_voice}}</p>
+                                        <el-select v-model="attribute_voice" placeholder="请选择" :disabled="!configEditable">
+                                            <el-option v-for="item in voice_list" :key="item.value" :label="item.label" :value="item.value">
+                                            </el-option>
+                                        </el-select>
+                                    </li>
                                 </ul>
                             </div>
                             <div class="character_right">
@@ -108,19 +115,25 @@
                                         <span style="    padding-left: 10px;
                                                 line-height: 40px;">秒</span>
                                     </li>
-                                    <br>
-                                    <li>
-                                        <p>声音选择：{{attribute_voice}}</p>
-                                        <el-select v-model="attribute_voice" placeholder="请选择" :disabled="!configEditable">
-                                            <el-option v-for="item in voice_list" :key="item.value" :label="item.label" :value="item.value">
-                                            </el-option>
-                                        </el-select>
-                                    </li>
-                                    <br>
+                                    <br>    
                                     <li>
                                         <p>使用面板播放：</p>
                                        <p style="text-align: left;" v-if="play_sound_enabled">是</p>
                                        <p style="text-align: left;" v-else>否</p>
+                                    </li>
+                                    <br>
+                                    <li style="width: 375px;">
+                                        <p>违禁词目录</p>
+                                        <el-input v-model="interact_badwords_path" placeholder="请输入内容" :disabled="!configEditable"></el-input>
+                                    </li>
+                                    <br>
+                                    <li>
+                                        <p>违禁处理方式：</p>
+                                        <el-select v-model="interact_badwords_del_type" placeholder="请选择" :disabled="!configEditable">
+                                            <el-option v-for="item in badwords_del_type_options" :key="item.value"
+                                                :label="item.label" :value="item.value">
+                                            </el-option>
+                                        </el-select>
                                     </li>
                                 </ul>
                             </div>
@@ -227,7 +240,7 @@
                                     </el-switch>
                                 </li>
                             </ul>
-                            <div  style="text-align: center;margin-bottom: 4px;"><el-button type="button" style="width:200px" @click=postData() :disabled="!configEditable">保存</el-button></div>
+                            <div  style="text-align: center;margin-bottom: 52px;"><el-button type="button" style="width:200px" @click=postData() :disabled="!configEditable">保存</el-button></div>
 
                         </el-tab-pane>
                     </el-tabs>

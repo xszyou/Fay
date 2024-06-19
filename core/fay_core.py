@@ -198,42 +198,54 @@ class FeiFei:
 
                         elif interact_type == 2:
                             self.a_msg = random.choice([
-                                '新来的宝贝记得点点关注噢！么么哒！',
-                                f'我的宝贝{user_name}欢迎你来到直播间，欢迎欢迎！',
-                                f'欢迎{user_name}宝贝来到我们的直播间，记得点点关注，给主播加加油噢！',
-                                f'咦！我看见{user_name}观众姥爷来到我们的直播间，你好啊！',
-                                f'欢迎{user_name}观众姥爷！记得多点来看看我噢！',
-                                f'亲爱的{user_name}，欢迎来到我的直播间！希望你在这里玩的开心！',
-                                f'嘿嘿，{user_name}来啦！欢迎欢迎，记得点个关注哦！',
-                                f'欢迎{user_name}来到直播间！希望你喜欢这里的内容，记得多多互动哦！',
-                                f'欢迎欢迎{user_name}！谢谢你来支持我，别忘了点关注哦！',
-                                f'欢迎亲爱的{user_name}！谢谢你！终于记起大明湖畔的我了！',
-                                f'{user_name}你来啦！你是小哥哥还是小姐姐啊！',
-                                f'嘿嘿，{user_name}小可爱，欢迎来到我的直播间！记得点关注，不然我可要捣蛋啦！',
-                                f'哇哦，{user_name}，你是风儿我是沙，快来点关注，么么哒！',
-                                f'欢迎欢迎{user_name}！点关注，给我点动力，不然我就要耍赖啦！',
-                                f'欢迎{user_name}宝宝！快点关注，不然我要撒娇啦！',
-                                f'咦？是{user_name}大驾光临！快点关注，不然我就不让你走啦！',
-                                f'哇哦，{user_name}你终于来了！记得多多互动，不然我要哭给你看啦！',
-                                f'呀，{user_name}宝宝，欢迎你来玩！别忘了点关注哦，不然我就要闹脾气啦！'
+                                f"哈喽，{user_name}！看到你的名字出现在我的直播间，我的心都快跳出来了！快来跟我互动吧！",
+                                f"{user_name}说句话呗，这里好冷，呜呜呜",
+                                f"咦！我看见{user_name}来了！终于等到你了！今天我们一起聊聊你感兴趣的话题吧！",
+                                f"{user_name}客官里面请！",
+                                f"欢迎{user_name}！雅座一位，请~",
+                                f"哇塞！{user_name}！你的名字就像一缕阳光，照亮了我的直播间！快来跟我一起享受这美好的时刻吧！",
+                                f"欢迎{user_name}！终于等到你了！今天我们一起聊聊你感兴趣的话题吧！",
+                                f"哈喽，{user_name}！我觉得你很有气质，可以和你交个朋友吗？",
+                                f"咦！亲爱的{user_name}！你终于记起大明湖畔的我了！",
+                                f"{user_name}你来啦！你是小哥哥还是小姐姐啊！，你今天看起来好好看啊！快坐下来，让我好好看看你！",
+                                f"嘿嘿，{user_name}，，好久不见！你最近过得怎么样？有没有想我啊？记得点关注，不然我可要捣蛋啦！",
+                                f"哇哦，{user_name}，你是风儿我是沙，快来点关注，么么哒！",
+                                f"嗨，{user_name}！盼星星盼月亮，终于把你盼来了！今天我们要聊点什么呢？",
+                                f"哇！{user_name}你来啦！我的直播间里有你才完整！快点关注，不然我要撒娇啦！",
+                                f"咦？是{user_name}大驾光临！快点关注，不然我就不让你走啦！",
+                                f"哇哦，{user_name}你终于来了！记得多多互动，不然我要哭给你看啦！",
+                                f"呀，{user_name}宝宝，欢迎你来玩！别忘了点关注哦，不然我就要闹脾气啦！",
+                                f"{user_name}，你来啦！今天我们来聊点什么呢？有什么好玩的事情要和我分享吗？",
+                                f"{user_name}来了啊，吃我一拳！",
+                                f"哟，{user_name}，今天想聊点什么有趣的呢？",
+                                f"嘿，{user_name}，快进来，我刚才还在想着你呢！",
+                                f"嘿嘿，{user_name}，终于来了，准备好被我调戏了吗？",
+                                f"哇，{user_name}，今天你就是我的超神BUFF！",
+                                f"嘿，{user_name}，你来了！今天要不要一起搞个“内卷”局？",
+                                f"嘿嘿，{user_name}，你来啦！准备好一起“社交牛逼症”了吗？",
+                                f"哇哦，{user_name}，你来了！快来一起“打工人”吧！",
+                                f"嗨，{user_name}，有你在，简直就是“安排得明明白白”！",
+                                f"哇，{user_name}，你终于来了！我刚刚还和空气聊天呢！",
+                                f"喵，{user_name}，准备好一起做可爱爆表的小可爱吗？",
+                                f"嘻嘻，{user_name}，你终于来了！你就是我的‘锦鲤’本鲤啊！"
                             ])
 
                         elif interact_type == 3:
                             gift = interact.data["gift"]
                             self.a_msg = random.choice([
-                                f'太感谢宝宝 {user_name}送我的{gift}！祝宝宝财运追着跑！运气乐逍遥！',
+                                f'太感谢 {user_name}送我的{gift}！祝宝宝财运追着跑！运气乐逍遥！',
                                 f'太感谢我的小可爱 {user_name}送我的{gift}！宝贝你真牛！真大气！',
-                                f'哇！太感谢宝宝{user_name}送我的{gift}！不服天！不服地！就服宝宝的实力！',
+                                f'哇！太感谢宝{user_name}送我的{gift}！不服天！不服地！就服宝宝的实力！',
                                 f'太感谢{user_name}老板送我的{gift}！老板破费了！老板大气！',
                                 f'太感谢我的好朋友{user_name}送我的{gift}！祝您福气满满！微笑甜甜！',
                                 f'哇！太感谢{user_name}送我的{gift}！太感谢了！我的好朋友！祝您才华四溢！',
-                                f'感谢{user_name}送我的{gift}！太感谢了！我的好朋友！主播好开心！么么哒！',
+                                f'感谢{user_name}送我的{gift}！太感谢了！我的好朋友！我好开心！么么哒！',
                                 f'哇！太感谢我的小可爱{user_name}送我的{gift}！祝您元气满满！开心快乐！',
                                 '一口气感谢了那么多礼物！真的太开心了！谢谢宝宝们的礼物！',
-                                f'哇，{user_name}送的{gift}真是让主播惊喜连连！谢谢你！',
-                                f'谢谢{user_name}的{gift}！你的支持是主播前进的动力！'
+                                f'哇，{user_name}送的{gift}真是让我惊喜连连！谢谢你！',
+                                f'谢谢{user_name}的{gift}！你的支持是我前进的动力！',
                                 f'哇，感谢{user_name}送的{gift}！愿你每天都充满快乐和惊喜！'
-                                f'谢谢{user_name}的{gift}！你的慷慨让主播感到非常感动！',
+                                f'谢谢{user_name}的{gift}！你的慷慨让我感到非常感动！',
                                 f'感谢亲爱的{user_name}送的{gift}，你是不是偷偷喜欢我呀？嘿嘿！',
                                 f'哇，{user_name}送的{gift}让我激动到原地转圈圈！',
                                 f'谢谢{user_name}送的{gift}，你这么宠我，我都要飘了！',
@@ -245,16 +257,16 @@ class FeiFei:
 
                         elif interact_type == 4:
                             self.a_msg = random.choice([
-                                f'太感谢我的{user_name}小可爱的关注！主播好开心！么么哒！',
-                                f'我的天啊！太感谢{user_name}宝贝的关注！宝贝宝贝6！6！6！主播给你一路护航！',
+                                f'太感谢我的{user_name}小可爱的关注！我好开心！么么哒！',
+                                f'我的天啊！太感谢{user_name}宝贝的关注！宝贝宝贝6！6！6！我给你一路护航！',
                                 f'太开心了！谢谢{user_name}宝宝的关注！祝宝宝天天开心！'
                             ])
 
                         elif interact_type == 5:
                             self.a_msg = random.choice([
-                                '收到那么多礼物！主播真的太开心了！谢谢宝宝们的礼物！不服天！不服地！就服宝宝们的实力',
-                                '哇！收到这么多礼物！主播好开心！谢谢宝宝们！',
-                                '哇塞，太多礼物了！简直开心得让主播飞起来了！谢谢观众姥爷们！'
+                                '收到那么多礼物！我真的太开心了！谢谢宝宝们的礼物！不服天！不服地！就服宝宝们的实力',
+                                '哇！收到这么多礼物！我好开心！谢谢宝宝们！',
+                                '哇塞，太多礼物了！简直开心得让我飞起来了！谢谢观众姥爷们！'
                             ])
 
                         elif interact_type == 6:
@@ -267,27 +279,26 @@ class FeiFei:
 
                         elif interact_type == 7:
                             self.a_msg = random.choice([
-                                '看见下面不要钱的辣条了吗？点一点！就是主播的好朋友!',
-                                '咦?怎么没人点赞啦?点点支持一下主播!主播十分需要你这个朋友!',
-                                '给个小礼物！主播给你画个心喔！',
-                                '主播这么勤快！还不点点关注？',
-                                '宝宝们！快来点点赞！谁能点够100下就是主播最好最好的朋友了！',
-                                '各位宝宝们！点点赞，给主播加加油吧！',
-                                '观众姥爷们!快关注起来！助力主播进步一点点！',
-                                '亲爱的观众朋友们，关注一下，支持主播进步多多！',
-                                '宝宝们，点赞和关注对主播来说是最好的支持哦！',
-                                '宝宝们，看到下面的礼物吗？点一点，让主播感受到你的爱！',
-                                '有没有小可爱愿意送个小礼物？感谢你们的支持！',
-                                '点点关注，不仅支持主播，还能第一时间看到最新直播内容哦！',
-                                '宝宝们，点赞和关注对主播来说真的很重要，感谢大家的支持！',
-                                '各位亲爱的朋友们，给主播送点小礼物吧，让我们一起嗨起来！',
-                                '亲爱的观众朋友们，关注一下，支持主播，不然我要闹小脾气啦！',
-                                '有没有小可爱愿意送个小礼物？主播会开心到飞起来哦！',
-                                '嘿，看到没人点关注，主播心里可是会嘀咕嘀咕的哦！',
-                                '观众姥爷们，关注一下吧，支持主播搞笑不停，不然我要耍赖啦！',
-                                '各位宝宝们，送点小礼物，给主播加加油，不然我要假哭啦！',
-                                '宝宝们，看见不要钱的点赞按钮了吗？快点一下，主播会给你一个大大的wink！',
-                                '各位小可爱们，送送礼物，给主播加加油，不然主播要假装哭泣啦！'
+                                '看见下面不要钱的辣条了吗？点一点！就是我的好朋友!',
+                                '咦?多跟我聊聊天啊！一起来玩耍！',
+                                '给个小礼物！我给你画个心喔！',
+                                '我这么勤快！还不点点关注？',
+                                '各位宝宝们！点点赞，给我加加油吧！',
+                                '观众姥爷们!快关注起来！助力我进步一点点！',
+                                '亲爱的观众朋友们，关注一下，支持我进步多多！',
+                                '大家咋整？我今天状态爆表，不来点个关注撑撑场面吗？',
+                                '宝宝们，看到下面的礼物吗？点一点，让我感受到你的爱！',
+                                '有没有人来支持一下我啊，让她觉得自己不是一个人在打野!',
+                                '点点关注，不仅支持我，还能第一时间看到最新直播内容哦！',
+                                '宝宝们，点赞和关注对我来说真的很重要，感谢大家的支持！',
+                                '各位亲爱的朋友们，给我送点小礼物吧，让我们一起嗨起来！',
+                                '亲爱的观众朋友们，关注一下，支持我一下，不然我要闹小脾气啦！',
+                                '有没有小可爱愿意送个小礼物？我会开心到飞起来哦！',
+                                '嘿，看到没人点关注，我心里可是会嘀咕嘀咕的哦！',
+                                '观众姥爷们，关注一下吧，支持我搞笑不停，不然我要耍赖啦！',
+                                '各位宝宝们，送点小礼物，给我加加油，不然我要假哭啦！',
+                                '宝宝们，看见不要钱的点赞按钮了吗？快点一下，我会给你一个大大的wink！',
+                                '各位小可爱们，送送礼物，给我加加油，不然我要假装哭泣啦！'
                             ])
 
                         self.last_speak_data = self.a_msg
@@ -343,18 +354,54 @@ class FeiFei:
             return "usage"
         return None
 
+    def check_interact(self, content):
+
+        if util.is_url_check(content):
+            return False
+        
+        if util.profanity_content(content):
+            return False
+
+        if util.is_punctuation_string(content):
+            return False
+        
+        #本地违禁词
+        bad_word =  util.check_sensitive_words(config_util.config["interact"]["badwordsPath"], content)
+        if bad_word is not None:
+            if config_util.config["interact"]["badwordsDelType"] == "discard":
+                return False
+            else:
+                content = content.replace(bad_word, "*")
+                return self.check_interact(content)
+        
+        return content
+        
+
+    def replace_interact(self, content):
+        content = content.replace('\n', ',')
+        # 表情弹幕过滤
+        content = util.replace_emoji(content)
+        return content
+ 
+
+
     def on_interact(self, interact: Interact):
 
         if interact.interact_type == 1:
-            if self.chat_list.get(interact.data["user"]) is None:
-                self.chat_list[interact.data["user"]] = dict()
-                self.chat_list[interact.data["user"]]["history"] = []  
-            user_history = dict()
-            user_history["role"] = "user"
-            user_history["content"] = interact.data["msg"]            
-            self.chat_list[interact.data["user"]]["history"].append(user_history)
-            self.chat_list[interact.data["user"]]["last_time"] = time.time()
-            self.interactive.append(interact)
+            content = self.check_interact(interact.data["msg"])
+            if content is not False:
+                content = self.replace_interact(interact.data["msg"])
+                username = self.check_interact(interact.data["user"])
+                if username is not False:
+                    if self.chat_list.get(interact.data["user"]) is None:
+                        self.chat_list[interact.data["user"]] = dict()
+                        self.chat_list[interact.data["user"]]["history"] = []  
+                    user_history = dict()
+                    user_history["role"] = "user"
+                    user_history["content"] = interact.data["msg"]            
+                    self.chat_list[interact.data["user"]]["history"].append(user_history)
+                    self.chat_list[interact.data["user"]]["last_time"] = time.time()
+                    self.interactive.append(interact)
             
         # 合并同类交互
         # 进入
