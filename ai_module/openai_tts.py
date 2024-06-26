@@ -24,7 +24,7 @@ class Speech:
         history = self.__get_history(text)
         if history is not None:
             return history
-        print(222222)
+        
         headers = {
             'Authorization': f'Bearer {self.api_key}',
             'Content-Type': 'application/json'
