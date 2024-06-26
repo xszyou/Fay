@@ -2,18 +2,20 @@ import os
 from typing import Any
 
 from langchain.tools import BaseTool
-from langchain.document_loaders import PyPDFLoader
-from langchain.embeddings.openai import OpenAIEmbeddings
+from langchain_community.document_loaders import PyPDFLoader
+from langchain_community.embeddings.openai import OpenAIEmbeddings
 from langchain.indexes.vectorstore import VectorstoreIndexCreator, VectorStoreIndexWrapper
-from langchain.vectorstores.chroma import Chroma
-from langchain.chat_models import ChatOpenAI
+from langchain_community.vectorstores.chroma import Chroma
+from langchain_openai import ChatOpenAI
 import hashlib
-
+#若要使用请自行配置
+os.environ["OPENAI_API_KEY"] = ""
+os.environ["OPENAI_API_BASE"] = "https://api.openai.com/v1"
 index_name = "knowledge_data"
 folder_path = "agent/tools/KnowledgeBaseResponder/knowledge_base"  
 local_persist_path = "agent/tools/KnowledgeBaseResponder"
 md5_file_path = os.path.join(local_persist_path, "pdf_md5.txt")
-
+#
 class KnowledgeBaseResponder(BaseTool):
     name = "KnowledgeBaseResponder"
     description = """此工具用于连接本地知识库获取问题答案，使用时请传入相关问题作为参数，例如：“草梅最适合的生长温度”"""

@@ -11,7 +11,6 @@ import logging
 # 适应模型使用
 import numpy as np
 import fay_booter
-from ai_module.openai_tts import Speech
 from core import wsa_server
 from core.interact import Interact
 from scheduler.thread_manager import MyThread
@@ -19,6 +18,11 @@ from utils import util, config_util
 
 import pygame
 from utils import config_util as cfg
+if cfg.tts_module =='openai':
+    from ai_module.openai_tts import Speech
+else:
+    from ai_module.ms_tts_sdk import Speech
+
 import platform
 from ai_module import yolov8
 from agent import agent_service

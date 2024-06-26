@@ -15,6 +15,7 @@ from core import wsa_server
 from core import fay_core
 from core import content_db
 from ai_module import yolov8
+from core import tts_voice
 
 
 __app = Flask(__name__)
@@ -74,16 +75,29 @@ def api_get_data():
     else:
         config_data['interact']['playSound'] = True
     config_util.save_config(config_data)
-    wsa_server.get_web_instance().add_cmd({
-        "voiceList": [
-            {"id": "alloy", "name": "alloy"},
-            {"id": "echo", "name": "echo"},
-            {"id": "fable", "name": "fable"},
-            {"id": "onyx", "name": "onyx"},
-            {"id": "nova", "name": "nova"},
-            {"id": "shimmer", "name": "shimmer"}
-        ]
-    })
+
+    if config_util.tts_module == 'openai':
+        wsa_server.get_web_instance().add_cmd({
+            "voiceList": [
+                {"id": "alloy", "name": "alloy"},
+                {"id": "echo", "name": "echo"},
+                {"id": "fable", "name": "fable"},
+                {"id": "onyx", "name": "onyx"},
+                {"id": "nova", "name": "nova"},
+                {"id": "shimmer", "name": "shimmer"}
+            ]
+        })
+    else:
+        voice_list = tts_voice.get_voice_list()
+        send_voice_list = []
+        for voice in voice_list: 
+            voice_data = voice.value 
+            send_voice_list.append({"id": voice_data['name'], "name": voice_data['name']})
+        wsa_server.get_web_instance().add_cmd({
+            "voiceList": send_voice_list
+        })
+
+
     wsa_server.get_web_instance().add_cmd({"deviceList": __get_device_list()})
     return json.dumps({'config': config_util.config})
 

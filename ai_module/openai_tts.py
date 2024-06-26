@@ -5,7 +5,7 @@ from utils import util, config_util
 
 class Speech:
     def __init__(self):
-        self.api_key = config_util.key_gpt_api_key
+        self.api_key = config_util.key_gpt_tts_key
         self.history_data = []
 
     def __get_history(self, text):
@@ -24,12 +24,12 @@ class Speech:
         history = self.__get_history(text)
         if history is not None:
             return history
-
+        print(222222)
         headers = {
             'Authorization': f'Bearer {self.api_key}',
             'Content-Type': 'application/json'
         }
-        url = config_util.gpt_base_url + "/audio/speech"
+        url = config_util.gpt_tts_base_url + "/audio/speech"
         query = {
             "model": "tts-1-hd",#tts-1、tts-1-hd
             "input": text,
