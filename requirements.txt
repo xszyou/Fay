@@ -1,4 +1,4 @@
-requests~=2.26.0    
+requests~=2.28   
 numpy
 pyaudio~=0.2.11
 websockets~=10.2
@@ -19,8 +19,6 @@ gevent~=22.10.1
 eyed3
 ultralytics~=8.0.2
 pydub
-cemotion
-langchain==0.0.336
 faiss-cpu
 openai
 tiktoken
