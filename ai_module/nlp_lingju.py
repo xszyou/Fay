@@ -30,11 +30,11 @@ class Lingju:
                 expiry_datetime = updated_datetime + expires_timedelta
                 expiry_timestamp_in_seconds = expiry_datetime.timestamp()
                 expiry_timestamp_in_milliseconds = int(expiry_timestamp_in_seconds) * 1000
-                token = token_info['data']['accessToken']
                 if token == 'expired':
                     self.authorize_tb.update_by_userid(self.userid, token_info['data']['accessToken'], expiry_timestamp_in_milliseconds)
                 else:
                     self.authorize_tb.add(self.userid, token_info['data']['accessToken'], expiry_timestamp_in_milliseconds)
+                token = token_info['data']['accessToken']
             else:
                 token = None
    
