@@ -2,12 +2,19 @@ import sqlite3
 import time
 import threading
 import functools
+import os
 def synchronized(func):
   @functools.wraps(func)
   def wrapper(self, *args, **kwargs):
     with self.lock:
       return func(self, *args, **kwargs)
   return wrapper
+
+
+script_dir = os.path.dirname(os.path.abspath(__file__))
+root_dir = os.path.abspath(os.path.join(script_dir, os.pardir))
+db_path = os.path.join(root_dir, 'fay.db')
+
 class Authorize_Tb:
 
     def __init__(self) -> None:
@@ -17,27 +24,23 @@ class Authorize_Tb:
 
     #初始化
     def init_tb(self):
-        conn = sqlite3.connect('fay.db')
+        conn = sqlite3.connect(db_path)
         c = conn.cursor()
-        try:
-            c.execute('SELECT * FROM T_Authorize')
-        except sqlite3.OperationalError:
-            c.execute('''
-                CREATE TABLE T_Authorize
-                (id INTEGER PRIMARY KEY     autoincrement,
-                userid        char(100),
-                accesstoken           TEXT,
-                expirestime           BigInt,
-                createtime         Int);
-            ''')
-            conn.commit()
-        finally:
-            conn.close()
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS T_Authorize
+            (id INTEGER PRIMARY KEY     autoincrement,
+            userid        char(100),
+            accesstoken           TEXT,
+            expirestime           BigInt,
+            createtime         Int);
+        ''')
+        conn.commit()
+        conn.close()
 
     #添加
     @synchronized
     def add(self,userid,accesstoken,expirestime):
-        conn = sqlite3.connect("fay.db")
+        conn = sqlite3.connect(db_path)
         cur = conn.cursor()
         cur.execute("insert into T_Authorize (userid,accesstoken,expirestime,createtime) values (?,?,?,?)",(userid,accesstoken,expirestime,int(time.time())))
         
@@ -48,7 +51,7 @@ class Authorize_Tb:
     #查询
     @synchronized
     def find_by_userid(self,userid):
-        conn = sqlite3.connect("fay.db")
+        conn = sqlite3.connect(db_path)
         cur = conn.cursor()
         cur.execute("select accesstoken,expirestime from T_Authorize where userid = ? order by id desc limit 1",(userid,))
         info = cur.fetchone()
@@ -58,7 +61,7 @@ class Authorize_Tb:
     # 更新token
     @synchronized
     def update_by_userid(self, userid, new_accesstoken, new_expirestime):
-        conn = sqlite3.connect("fay.db")
+        conn = sqlite3.connect(db_path)
         cur = conn.cursor()
         cur.execute("UPDATE T_Authorize SET accesstoken = ?, expirestime = ? WHERE userid = ?", 
                     (new_accesstoken, new_expirestime, userid))

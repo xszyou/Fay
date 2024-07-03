@@ -69,7 +69,7 @@ class Speech:
                    '{}' \
                    '</mstts:express-as>' \
                    '</voice>' \
-                   '</speak>'.format(voice_name, style, 1.8, text)
+                   '</speak>'.format(voice_name, style, 1.8, "<break time='0.2s'/>" + text)
             result = self.__synthesizer.speak_ssml(ssml)
             audio_data_stream = speechsdk.AudioDataStream(result)
 

@@ -16,7 +16,6 @@ import numpy as np
 import fay_booter
 
 from ai_module import baidu_emotion
-from ai_module.ms_tts_sdk import Speech
 from core import wsa_server, tts_voice, song_player
 from core.interact import Interact
 from core.tts_voice import EnumVoice
@@ -24,6 +23,11 @@ from scheduler.thread_manager import MyThread
 from utils import util, storer, config_util
 import pygame
 from utils import config_util as cfg
+cfg.load_config()
+if cfg.tts_module =='ali':
+    from ai_module.ali_tss import Speech
+else:
+    from ai_module.ms_tts_sdk import Speech
 from core import qa_service
 from ai_module import nlp_cemotion
 

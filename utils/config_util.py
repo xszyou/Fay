@@ -22,6 +22,11 @@ gpt_model_engine = None
 key_chat_module = None
 ltp_mode = None
 proxy_config = None
+key_ali_tss_key_id = None
+key_ali_tss_key_secret = None
+key_ali_tss_app_key = None
+tts_module = None
+
 
 def load_config():
     global config
@@ -43,6 +48,11 @@ def load_config():
     global key_lingju_api_authcode
     global ltp_mode 
     global proxy_config
+    global key_ali_tss_key_id
+    global key_ali_tss_key_secret
+    global key_ali_tss_app_key
+    global tts_module
+
 
 
     system_config = ConfigParser()
@@ -50,6 +60,9 @@ def load_config():
     key_ali_nls_key_id = system_config.get('key', 'ali_nls_key_id')
     key_ali_nls_key_secret = system_config.get('key', 'ali_nls_key_secret')
     key_ali_nls_app_key = system_config.get('key', 'ali_nls_app_key')
+    key_ali_tss_key_id = system_config.get('key', 'ali_tss_key_id')
+    key_ali_tss_key_secret = system_config.get('key', 'ali_tss_key_secret')
+    key_ali_tss_app_key = system_config.get('key', 'ali_tss_app_key')
     key_ms_tts_key = system_config.get('key', 'ms_tts_key')
     key_ms_tts_region  = system_config.get('key', 'ms_tts_region')
     baidu_emotion_app_id = system_config.get('key', 'baidu_emotion_app_id')
@@ -63,6 +76,7 @@ def load_config():
     key_lingju_api_key = system_config.get('key', 'lingju_api_key')
     key_lingju_api_authcode = system_config.get('key', 'lingju_api_authcode')
     ltp_mode = system_config.get('key', 'ltp_mode')
+    tts_module = system_config.get('key', 'tts_module')
     proxy_config = system_config.get('key', 'proxy_config')
 
     config = json.load(codecs.open('config.json', encoding='utf-8'))
