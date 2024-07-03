@@ -26,11 +26,11 @@ class Emotion:
                 expires_timedelta = token_info['expires_in']
                 expiry_timestamp_in_seconds = updated_in_seconds + expires_timedelta
                 expiry_timestamp_in_milliseconds = expiry_timestamp_in_seconds * 1000
-                token = token_info['access_token']
                 if token == 'expired':
                     self.authorize_tb.update_by_userid(self.app_id, token_info['access_token'], expiry_timestamp_in_milliseconds)
                 else:
                     self.authorize_tb.add(self.app_id, token_info['access_token'], expiry_timestamp_in_milliseconds)
+                token = token_info['access_token']
             else:
                 token = None
    
