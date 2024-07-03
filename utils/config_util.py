@@ -22,6 +22,10 @@ key_ms_tts_key = None
 key_ms_tts_region = None
 tts_module = None
 proxy_config = None
+max_history_num = 0
+key_ali_tss_key_id = None
+key_ali_tss_key_secret = None
+key_ali_tss_app_key = None
 
 def load_config():
     global config
@@ -43,12 +47,19 @@ def load_config():
     global local_asr_port
     global proxy_config
     global gpt_model_engine
+    global max_history_num
+    global key_ali_tss_key_id
+    global key_ali_tss_key_secret
+    global key_ali_tss_app_key
 
     system_config = ConfigParser()
     system_config.read('system.conf', encoding='UTF-8')
     key_ali_nls_key_id = system_config.get('key', 'ali_nls_key_id')
     key_ali_nls_key_secret = system_config.get('key', 'ali_nls_key_secret')
     key_ali_nls_app_key = system_config.get('key', 'ali_nls_app_key')
+    key_ali_tss_key_id = system_config.get('key', 'ali_tss_key_id')
+    key_ali_tss_key_secret = system_config.get('key', 'ali_tss_key_secret')
+    key_ali_tss_app_key = system_config.get('key', 'ali_tss_app_key')
     key_ngrok_cc_id = system_config.get('key', 'ngrok_cc_id')
     key_gpt_api_key = system_config.get('key', 'gpt_api_key')
     key_gpt_tts_key = system_config.get('key', 'gpt_tts_key')
@@ -63,6 +74,7 @@ def load_config():
     proxy_config = system_config.get('key', 'proxy_config')
     gpt_model_engine = system_config.get('key', 'gpt_model_engine')
     tavily_api_key = system_config.get('key', 'tavily_api_key')
+    max_history_num = system_config.get('key', 'max_history_num')
     config = json.load(codecs.open('config.json', encoding='utf-8'))
 
 def save_config(config_data):

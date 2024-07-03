@@ -12,6 +12,7 @@ from core import wsa_server
 from scheduler.thread_manager import MyThread
 from utils import util
 from utils import config_util as cfg
+from core.authorize_tb import Authorize_Tb
 
 __running = True
 __my_thread = None
@@ -31,7 +32,14 @@ def __post_token():
     __request.set_domain('nls-meta.cn-shanghai.aliyuncs.com')
     __request.set_version('2019-02-28')
     __request.set_action_name('CreateToken')
-    _token = json.loads(__client.do_action_with_exception(__request))['Token']['Id']
+    info = json.loads(__client.do_action_with_exception(__request))
+    _token = info['Token']['Id']
+    authorize = Authorize_Tb()
+    authorize_info = authorize.find_by_userid(cfg.key_ali_nls_key_id)
+    if authorize_info is not None:
+       authorize.update_by_userid(cfg.key_ali_nls_key_id, _token, info['Token']['ExpireTime']*1000)
+    else:
+       authorize.add(cfg.key_ali_nls_key_id, _token, info['Token']['ExpireTime']*1000) 
 
 
 def __runnable():

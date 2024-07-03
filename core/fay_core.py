@@ -18,8 +18,11 @@ from utils import util, config_util
 
 import pygame
 from utils import config_util as cfg
+cfg.load_config()
 if cfg.tts_module =='openai':
     from ai_module.openai_tts import Speech
+elif  cfg.tts_module =='ali':
+    from ai_module.ali_tss import Speech
 else:
     from ai_module.ms_tts_sdk import Speech
 
