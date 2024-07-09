@@ -15,6 +15,7 @@ def new_instance():
     global __content_tb
     if __content_tb is None:
         __content_tb = Content_Db()
+        __content_tb.init_db()
     return __content_tb
 
 
