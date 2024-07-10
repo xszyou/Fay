@@ -39,16 +39,19 @@ class FayAgentCore():
         self.chat_history = []
         if int(utils.max_history_num) >0:
             old_history = content_db.new_instance().get_list('all','desc', int(utils.max_history_num))
-            i = len(old_history) - 1
-            if len(old_history)>1:
-                while i >= 0:
-                    if old_history[i][0] == "member":
-                        self.chat_history.append(HumanMessage(content=old_history[i][2]))
-                    else:
-                        self.chat_history.append(AIMessage(content=old_history[i][2]))
-                    i -= 1
+            if old_history and old_history != None and isinstance(old_history, list):
+                i = len(old_history) - 1
+                if len(old_history)>1:
+                    while i >= 0:
+                        if old_history[i][0] == "member":
+                            self.chat_history.append(HumanMessage(content=old_history[i][2]))
+                        else:
+                            self.chat_history.append(AIMessage(content=old_history[i][2]))
+                        i -= 1
+                else:
+                    self.chat_history = []
             else:
-                self.chat_history = []
+                    self.chat_history = []
         #创建agent chain
         my_timer = MyTimer()
         weather_tool = Weather()

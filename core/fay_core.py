@@ -23,6 +23,8 @@ if cfg.tts_module =='openai':
     from ai_module.openai_tts import Speech
 elif  cfg.tts_module =='ali':
     from ai_module.ali_tss import Speech
+elif cfg.tts_module == 'gptsovits':
+    from ai_module.gptsovits import Speech
 else:
     from ai_module.ms_tts_sdk import Speech
 
