@@ -26,6 +26,8 @@ from utils import config_util as cfg
 cfg.load_config()
 if cfg.tts_module =='ali':
     from ai_module.ali_tss import Speech
+elif cfg.tts_module == 'gptsovits':
+    from ai_module.gptsovits import Speech
 else:
     from ai_module.ms_tts_sdk import Speech
 from core import qa_service

@@ -19,7 +19,7 @@ def question(cont,communication_history=[]):
     session = requests.Session()
     session.verify = False
 
-    if httpproxy != None:
+    if httpproxy != None and httpproxy != '':
             session.proxies = {
                 "https": "https://" + httpproxy,
                 "http": "http://" + httpproxy
