@@ -9,6 +9,7 @@ from agent.tools.QueryTime import QueryTime
 from agent.tools.PythonExecutor import PythonExecutor
 from agent.tools.WebPageRetriever import WebPageRetriever
 from agent.tools.WebPageScraper import WebPageScraper
+from agent.tools.ToRemind import ToRemind
 from langchain import hub
 from langchain.agents import AgentExecutor, create_react_agent, Tool
 from langchain_community.tools.tavily_search import TavilySearchResults
@@ -60,7 +61,7 @@ class FayAgentCore():
         python_executor = PythonExecutor()
         web_page_retriever = WebPageRetriever()
         web_page_scraper = WebPageScraper()
-
+        to_remind = ToRemind()
         
         self.tools = [
             Tool(
@@ -97,6 +98,11 @@ class FayAgentCore():
                 name=web_page_scraper.name,
                 func=web_page_scraper.run,
                 description=web_page_scraper.description
+            ),
+            Tool(
+                name=to_remind.name,
+                func=to_remind.run,
+                description=to_remind.description
             )
         ]
         if str(utils.tavily_api_key) != '':
