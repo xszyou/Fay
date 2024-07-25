@@ -23,3 +23,4 @@ revChatGPT
 cemotion
 profanity==1.1
 pyahocorasick
+pydub
