@@ -38,10 +38,10 @@ def question(cont,communication_history=[]):
     
         for info in communication_history:
                 answer_info = dict()
-                if info['role'] == "member":
+                if info['role'] == "user":
                     answer_info["role"] = "user"
                     answer_info["content"] = info['content']
-                elif info['role'] == "fay":
+                elif info['role'] == "bot":
                     answer_info["role"] = "assistant"
                     answer_info["content"] = info['content']
                 message.append(answer_info)
