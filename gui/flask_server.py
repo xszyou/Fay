@@ -3,7 +3,7 @@ import json
 import time
 
 import pyaudio
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, jsonify, Response
 from flask_cors import CORS
 
 import fay_booter
@@ -167,6 +167,17 @@ def api_get_data():
             {"id": "aikan", "name": "艾侃"}
         ]
     })
+    elif config_util.tts_module == 'volcano':
+        wsa_server.get_web_instance().add_cmd({
+        "voiceList": [
+            {"id": "BV001_streaming", "name": "通用女声"},
+            {"id": "BV002_streaming", "name": "通用男声"},
+            {"id": "zh_male_jingqiangkanye_moon_bigtts", "name": "京腔侃爷/Harmony"},
+            {"id": "zh_female_shuangkuaisisi_moon_bigtts", "name": "爽快思思/Skye"},
+            {"id": "zh_male_wennuanahu_moon_bigtts", "name": "温暖阿虎/Alvin"},
+            {"id": "zh_female_wanwanxiaohe_moon_bigtts", "name": "湾湾小何"},
+        ]
+    })  
     else:
         voice_list = tts_voice.get_voice_list()
         send_voice_list = []
@@ -209,38 +220,76 @@ def api_send():
 @__app.route('/v1/chat/completions', methods=['post'])
 @__app.route('/api/send/v1/chat/completions', methods=['post'])
 def api_send_v1_chat_completions():
-    data = request.json  # 解析JSON数据
-    # 检查'messages'键是否存在于数据中
+    data = request.json  
     last_content = ""
     if 'messages' in data and data['messages']:
-        last_message = data['messages'][-1]  # 获取最后一条消息
-        last_content = last_message.get('content', 'No content provided')  # 获取'content'字段
+        last_message = data['messages'][-1]  
+        last_content = last_message.get('content', 'No content provided')  
     else:
         last_content = 'No messages found'
-    text = fay_core.send_for_answer("主人文字说了：" + last_content)
-    return {
-  "id": "chatcmpl-8jqorq6Fw1Vi5XoH7pddGGpQeuPe0",
-  "object": "chat.completion",
-  "created": 1705938489,
-  "model": "fay-agent",
-  "choices": [
-    {
-      "index": 0,
-      "message": {
-        "role": "assistant",
-        "content": text
-      },
-      "logprobs": "",
-      "finish_reason": "stop"
-    }
-  ],
-  "usage": {
-    "prompt_tokens": len(last_content),
-    "completion_tokens": len(text),
-    "total_tokens": len(last_content) + len(text)
-  },
-  "system_fingerprint": "fp_04de91a479"
-}
+    
+    model = data.get('model', 'fay')
+    text = fay_core.send_for_answer(last_content)
+
+    if model == 'fay-streaming':
+        return stream_response(text)
+    else:
+        return non_streaming_response(last_content, text)
+
+def stream_response(text):
+    def generate():
+        for chunk in text_chunks(text):
+            message = {
+                "id": "chatcmpl-8jqorq6Fw1Vi5XoH7pddGGpQeuPe0",
+                "object": "chat.completion.chunk",
+                "created": int(time.time()),
+                "model": "fay-streaming",
+                "choices": [
+                    {
+                        "delta": {
+                            "content": chunk
+                        },
+                        "index": 0,
+                        "finish_reason": None
+                    }
+                ]
+            }
+            yield f"data: {json.dumps(message)}\n\n"
+            time.sleep(0.1)
+        # 发送最终的结束信号
+        yield 'data: [DONE]\n\n'
+    
+    return Response(generate(), mimetype='text/event-stream')
+
+def non_streaming_response(last_content, text):
+    return jsonify({
+        "id": "chatcmpl-8jqorq6Fw1Vi5XoH7pddGGpQeuPe0",
+        "object": "chat.completion",
+        "created": int(time.time()),
+        "model": "fay",
+        "choices": [
+            {
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": text
+                },
+                "logprobs": "",
+                "finish_reason": "stop"
+            }
+        ],
+        "usage": {
+            "prompt_tokens": len(last_content),
+            "completion_tokens": len(text),
+            "total_tokens": len(last_content) + len(text)
+        },
+        "system_fingerprint": "fp_04de91a479"
+    })
+
+def text_chunks(text, chunk_size=20):
+    for i in range(0, len(text), chunk_size):
+        yield text[i:i + chunk_size]
+
 
 @__app.route('/api/get-msg', methods=['post'])
 def api_get_Msg():

@@ -26,6 +26,10 @@ max_history_num = 0
 key_ali_tss_key_id = None
 key_ali_tss_key_secret = None
 key_ali_tss_app_key = None
+volcano_tts_appid = None
+volcano_tts_access_token = None
+volcano_tts_cluster = None
+volcano_tts_voice_type = None
 
 def load_config():
     global config
@@ -51,6 +55,10 @@ def load_config():
     global key_ali_tss_key_id
     global key_ali_tss_key_secret
     global key_ali_tss_app_key
+    global volcano_tts_appid
+    global volcano_tts_access_token
+    global volcano_tts_cluster
+    global volcano_tts_voice_type
 
     system_config = ConfigParser()
     system_config.read('system.conf', encoding='UTF-8')
@@ -75,6 +83,10 @@ def load_config():
     gpt_model_engine = system_config.get('key', 'gpt_model_engine')
     tavily_api_key = system_config.get('key', 'tavily_api_key')
     max_history_num = system_config.get('key', 'max_history_num')
+    volcano_tts_appid = system_config.get('key', 'volcano_tts_appid')
+    volcano_tts_access_token = system_config.get('key', 'volcano_tts_access_token')
+    volcano_tts_cluster = system_config.get('key', 'volcano_tts_cluster')
+    volcano_tts_voice_type = system_config.get('key', 'volcano_tts_voice_type')
     config = json.load(codecs.open('config.json', encoding='utf-8'))
 
 def save_config(config_data):
