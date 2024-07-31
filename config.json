@@ -13,8 +13,9 @@
     },
     "interact": {
         "QnA": "qa_demo.xlsx",
-        "badwordsDelType": "discard",
+        "badwordsDelType": "close",
         "badwordsPath": "badwords.txt",
+        "historyToExcel": false,
         "maxInteractTime": 15,
         "perception": {
             "chat": 7,
@@ -29,7 +30,7 @@
         {
             "QnA": "qa_demo.xlsx",
             "demoVideo": "",
-            "enabled": true,
+            "enabled": false,
             "explain": {
                 "character": "",
                 "discount": "\u5f88\u4fbf\u5b9c",

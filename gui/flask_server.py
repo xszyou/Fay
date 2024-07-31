@@ -144,6 +144,17 @@ def api_get_data():
             {"id": "aikan", "name": "艾侃"}
         ]
     })
+    elif config_util.tts_module == 'volcano':
+        wsa_server.get_web_instance().add_cmd({
+        "voiceList": [
+            {"id": "BV001_streaming", "name": "通用女声"},
+            {"id": "BV002_streaming", "name": "通用男声"},
+            {"id": "zh_male_jingqiangkanye_moon_bigtts", "name": "京腔侃爷/Harmony"},
+            {"id": "zh_female_shuangkuaisisi_moon_bigtts", "name": "爽快思思/Skye"},
+            {"id": "zh_male_wennuanahu_moon_bigtts", "name": "温暖阿虎/Alvin"},
+            {"id": "zh_female_wanwanxiaohe_moon_bigtts", "name": "湾湾小何"},
+        ]
+    }) 
     else:
         voice_list = tts_voice.get_voice_list()
         send_voice_list = []

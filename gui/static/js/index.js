@@ -80,8 +80,12 @@ new Vue({
             }, {
                 value: 'replace',
                 label: '屏蔽'
+            }, {
+                value: 'close',
+                label: '关闭'
             }],
-            interact_badwords_del_type: 'discard'
+            interact_badwords_del_type: 'discard',
+            history_to_excel:false
 
         }
     },
@@ -252,6 +256,7 @@ new Vue({
                             let items = config["items"]
                             _this.play_sound_enabled = interact["playSound"]
                             _this.source_liveRoom_enabled = source["liveRoom"]["enabled"]
+                            _this.source_liveRoom_url = source["liveRoom"]["url"]
                             _this.source_record_enabled = source["record"]["enabled"]
                             _this.source_record_device = source["record"]["device"]
                             _this.attribute_name = attribute["name"]
@@ -274,6 +279,7 @@ new Vue({
                             _this.interact_QnA = interact["QnA"]
                             _this.interact_badwords_path = interact["badwordsPath"]
                             _this.interact_badwords_del_type = interact["badwordsDelType"]
+                            _this.history_to_excel = interact["historyToExcel"]
                             let item_data_list = []
                             for (let i = 0; i < items.length; i++) {
                                 let item = items[i]
@@ -347,6 +353,7 @@ new Vue({
                         },
                         "badwordsPath": this.interact_badwords_path,
                         "badwordsDelType": this.interact_badwords_del_type,
+                        "historyToExcel": this.history_to_excel
                     },
                     "items": [],
                 }

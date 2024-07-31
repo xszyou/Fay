@@ -108,6 +108,13 @@
                                         </el-select>
                                     </li>
                                     <br>
+                                    <li style="width: 375px;">
+                                        <p>记录生成到excel：</p>
+                                        <el-switch v-model="history_to_excel" active-color="#13ce66"
+                                        inactive-color="#ff4949" :disabled="!configEditable">
+                                    </el-switch>
+                                    </li>
+                                    <br>
                                     <li>
                                         <p>送礼敏感度：</p>
 

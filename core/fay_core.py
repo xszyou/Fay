@@ -28,6 +28,8 @@ if cfg.tts_module =='ali':
     from ai_module.ali_tss import Speech
 elif cfg.tts_module == 'gptsovits':
     from ai_module.gptsovits import Speech
+elif cfg.tts_module == 'volcano':
+    from ai_module.volcano_tts import Speech
 else:
     from ai_module.ms_tts_sdk import Speech
 from core import qa_service
@@ -38,6 +40,9 @@ from ai_module import nlp_gpt
 from ai_module import nlp_lingju
 from ai_module import nlp_rasa
 from ai_module import nlp_ChatGLM2
+from ai_module import nlp_coze
+from core.excel_history import ExcelHistory
+
 
 import platform
 if platform.system() == "Windows":
@@ -50,23 +55,26 @@ modules = {
     "nlp_lingju": nlp_lingju,
     "nlp_rasa": nlp_rasa,
     "nlp_chatglm2": nlp_ChatGLM2,
+    "nlp_coze": nlp_coze,
 }
 
 
 
 
-def determine_nlp_strategy(msg,history):
+def determine_nlp_strategy(msg, history, user_name):
     text = ''
     try:
         util.log(1, '自然语言处理...')
         tm = time.time()
         cfg.load_config()
-       
         module_name = "nlp_" + cfg.key_chat_module
         selected_module = modules.get(module_name)
         if selected_module is None:
             raise RuntimeError('灵聚key、yuan key、gpt key都没有配置！')   
-        text = selected_module.question(msg,history)    
+        if cfg.key_chat_module == "coze":
+            text = selected_module.question(msg, history, user_name)
+        else:
+            text = selected_module.question(msg,history)     
         util.log(1, '自然语言处理完成. 耗时: {} ms'.format(math.floor((time.time() - tm) * 1000)))
         if text == '哎呀，你这么说我也不懂，详细点呗' or text == '':
             util.log(1, '[!] 自然语言无语了！')
@@ -191,17 +199,24 @@ class FeiFei:
                     for interact in interactions_to_handle:
                         i += 1
                         self.interactive.remove(interact)
-                        user_name = interact.data.get("user", "")
+                        user_name = interact.data.get("user", "user")
                         interact_type = interact.interact_type
                         self.q_msg = interact.data.get("msg", "")
                         if interact_type == 1:
+                            question_time = time.time()
+                            answer = self.__get_answer(interact.interleaver, self.q_msg)
+                            text = answer if answer and answer != 'NO_ANSWER' else determine_nlp_strategy(self.q_msg, self.chat_list[user_name]["history"], user_name)
+                            if text.strip() == 'False':
+                                continue
                             if not config_util.config["interact"]["playSound"]:
                                 wsa_server.get_instance().add_cmd({'Topic': 'Unreal', 'Data': {'Key': 'question', 'Value': self.q_msg}})
-                            answer = self.__get_answer(interact.interleaver, self.q_msg)
-                            text = answer if answer and answer != 'NO_ANSWER' else determine_nlp_strategy(self.q_msg, self.chat_list[user_name]["history"])
                             self.a_msg = f"{user_name}，{text}" if user_name else text
                             self.chat_list[user_name]["history"].append({"role": "bot", "content": text})
-
+                            if config_util.config["interact"]["historyToExcel"]:
+                                excel_history = ExcelHistory()
+                                answer_time = time.time()
+                                query_time = answer_time - question_time
+                                excel_history.insert_data(user_name, self.q_msg, text, query_time)
                         elif interact_type == 2:
                             self.a_msg = random.choice([
                                 f"哈喽，{user_name}！看到你的名字出现在我的直播间，我的心都快跳出来了！快来跟我互动吧！",
@@ -372,13 +387,14 @@ class FeiFei:
             return False
         
         #本地违禁词
-        bad_word =  util.check_sensitive_words(config_util.config["interact"]["badwordsPath"], content)
-        if bad_word is not None:
-            if config_util.config["interact"]["badwordsDelType"] == "discard":
-                return False
-            else:
-                content = content.replace(bad_word, "*")
-                return self.check_interact(content)
+        if config_util.config["interact"]["badwordsDelType"] != "close":
+            bad_word =  util.check_sensitive_words(config_util.config["interact"]["badwordsPath"], content)
+            if bad_word is not None:
+                if config_util.config["interact"]["badwordsDelType"] == "discard":
+                    return False
+                else:
+                    content = content.replace(bad_word, "*")
+                    return self.check_interact(content)
         
         return content
         
