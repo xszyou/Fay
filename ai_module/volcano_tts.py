@@ -5,6 +5,7 @@ import requests
 import time
 from utils import util, config_util
 from utils import config_util as cfg
+import wave
 
 
 class Speech:
@@ -47,7 +48,7 @@ class Speech:
                 },
                 "audio": {
                     "voice_type": voice,
-                    "encoding": "mp3",
+                    "encoding": "wav",
                     "speed_ratio": 1.0,
                     "volume_ratio": 1.0,
                     "pitch_ratio": 1.0,
@@ -65,9 +66,12 @@ class Speech:
             response = requests.post(api_url, json.dumps(request_json), headers=header)
             if "data" in response.json():
                 data = response.json()["data"]
-                file_url = './samples/sample-' + str(int(time.time() * 1000)) + '.mp3'
-                with open(file_url, mode='wb') as f:
-                    f.write(base64.b64decode(data))
+                file_url = './samples/sample-' + str(int(time.time() * 1000)) + '.wav'
+                with wave.open(file_url, 'wb') as wf:
+                        wf.setnchannels(1)
+                        wf.setsampwidth(2)
+                        wf.setframerate(16000)
+                        wf.writeframes(base64.b64decode(data))
             else :
                 util.log(1, "[x] 语音转换失败！")
                 file_url = None

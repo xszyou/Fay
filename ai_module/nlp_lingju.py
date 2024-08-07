@@ -15,7 +15,7 @@ def question(cont,communication_history=[]):
 class Lingju:
 
     def __init__(self):
-        self.userid = str(uuid.getnode())
+        self.userid = cfg.key_lingju_api_authcode
         self.authorize_tb = Authorize_Tb()
 
     def question(self, cont):

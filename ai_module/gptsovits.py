@@ -1,7 +1,7 @@
 import requests
 import time
 from utils import util
-
+import wave
 class Speech:
 
     def connect(self):
@@ -22,9 +22,13 @@ class Speech:
             response = requests.post(url, json=data)
             file_url = './samples/sample-' + str(int(time.time() * 1000)) + '.wav'
             if response.status_code == 200:
-                with open(file_url, "wb") as f:
-                    f.write(response.content)
+                with wave.open(file_url, 'wb') as wf:
+                        wf.setnchannels(1)
+                        wf.setsampwidth(2)
+                        wf.setframerate(16000)
+                        wf.writeframes(response.content)
                 return file_url
+            
             else:
                 util.log(1, "[x] 语音转换失败！")
                 util.log(1, "[x] 原因: " + str(response.text))
