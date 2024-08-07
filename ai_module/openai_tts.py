@@ -2,6 +2,7 @@ import requests
 import json
 import time
 from utils import util, config_util
+import wave
 
 class Speech:
     def __init__(self):
@@ -20,7 +21,7 @@ class Speech:
     def close(self):
         pass
 
-    def to_sample(self, text, voice="nova", response_format="mp3", speed=1):
+    def to_sample(self, text, voice="nova", response_format="wav", speed=1):
         history = self.__get_history(text)
         if history is not None:
             return history
@@ -40,9 +41,12 @@ class Speech:
         try:
             response = requests.post(url=url, data=json.dumps(query), headers=headers)
 
-            file_url = './samples/sample-' + str(int(time.time() * 1000)) + '.mp3'
-            with open(file_url, "wb") as audio_file:
-                audio_file.write(response.content)
+            file_url = './samples/sample-' + str(int(time.time() * 1000)) + '.wav'
+            with wave.open(file_url, 'wb') as wf:
+                wf.setnchannels(1)
+                wf.setsampwidth(2)
+                wf.setframerate(16000)
+                wf.writeframes(response.content)
 
             self.history_data.append((text, file_url))
         except Exception as e :

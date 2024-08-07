@@ -19,13 +19,6 @@ class LipSyncGenerator:
         self.viseme = []
         self.exe_path = os.path.join(os.getcwd(), "test", "ovr_lipsync", "ovr_lipsync_exe", "ProcessWAV.exe")
 
-    def convert_mp3_to_wav(self, mp3_filepath):
-        audio = AudioSegment.from_mp3(mp3_filepath)
-        # 使用 set_frame_rate 方法设置采样率
-        audio = audio.set_frame_rate(44100)
-        wav_filepath = mp3_filepath.rsplit(".", 1)[0] + ".wav"
-        audio.export(wav_filepath, format="wav")
-        return wav_filepath
 
     def run_exe_and_get_output(self, arguments):
         process = subprocess.Popen([self.exe_path] + arguments, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -46,10 +39,7 @@ class LipSyncGenerator:
                 new_viseme.append(v)
         return new_viseme
 
-    def generate_visemes(self, mp3_filepath):
-        
-
-        wav_filepath = self.convert_mp3_to_wav(mp3_filepath)
+    def generate_visemes(self, wav_filepath):
         arguments = ["--print-viseme-name", wav_filepath]
         self.run_exe_and_get_output(arguments)
         
@@ -85,25 +75,8 @@ class LipSyncGenerator:
 if __name__ == "__main__":
     start_time = time.time()
     lip_sync_generator = LipSyncGenerator()
-    viseme_list = lip_sync_generator.generate_visemes(R"E:\\github\\Fay assistant\\samples\\sample-1701224060795.mp3")
+    viseme_list = lip_sync_generator.generate_visemes("E:\\github\\Fay\\samples\\fay-man.mp3")
     print(viseme_list)
     consolidated_visemes = lip_sync_generator.consolidate_visemes(viseme_list)
     print(json.dumps(consolidated_visemes))
     print(time.time() - start_time)
-
-    audio = AudioSegment.from_file("E:\\github\\Fay assistant\\samples\\sample-1701224060795.wav")
-    audio_length = len(audio)  # 持续时间，单位为毫秒
-    
-    interface_text = f"""{{
-            "Topic": "Unreal",
-            "Data": {{
-                "Key": "audio",
-                "Value": "E:\\github\\Fay assistant\\samples\\sample-1701224060795.mp3",
-                "Text" : "我叫Fay,我今年18岁，很年青。"
-                "Lips":{consolidated_visemes},
-                "Time": {audio_length / 1000},
-                "Type": "interact"
-            }}
-        }}"""
-    with open("notepad.txt", "w") as f:
-        f.write(interface_text)

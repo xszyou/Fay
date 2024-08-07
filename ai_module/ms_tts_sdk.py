@@ -8,9 +8,7 @@ from utils import util, config_util
 from utils import config_util as cfg
 import pygame
 import edge_tts
-
-
-
+from pydub import AudioSegment
 
 class Speech:
     def __init__(self):
@@ -47,6 +45,15 @@ class Speech:
         communicate = edge_tts.Communicate(text, voice)
         await communicate.save(file_url)
 
+    def convert_mp3_to_wav(self, mp3_filepath):
+        audio = AudioSegment.from_mp3(mp3_filepath)
+        # 使用 set_frame_rate 方法设置采样率
+        audio = audio.set_frame_rate(44100)
+        wav_filepath = mp3_filepath.rsplit(".", 1)[0] + ".wav"
+        audio.export(wav_filepath, format="wav")
+        return wav_filepath
+
+
     """
     文字转语音
     :param text: 文本信息
@@ -76,8 +83,9 @@ class Speech:
             file_url = './samples/sample-' + str(int(time.time() * 1000)) + '.mp3'
             audio_data_stream.save_to_wav_file(file_url)
             if result.reason == speechsdk.ResultReason.SynthesizingAudioCompleted:
-                self.__history_data.append((voice_name, style, text, file_url))
-                return file_url
+                wav_url = self.convert_mp3_to_wav(file_url)
+                self.__history_data.append((voice_name, style, text, wav_url))
+                return wav_url
             else:
                 util.log(1, "[x] 语音转换失败！")
                 util.log(1, "[x] 原因: " + str(result.reason))
@@ -100,12 +108,13 @@ class Speech:
             try:
                 file_url = './samples/sample-' + str(int(time.time() * 1000)) + '.mp3'
                 asyncio.new_event_loop().run_until_complete(self.get_edge_tts(text,voice_name,file_url))
-                self.__history_data.append((voice_name, style, text, file_url))
+                wav_url = self.convert_mp3_to_wav(file_url)
+                self.__history_data.append((voice_name, style, text, wav_url))
             except Exception as e :
                 util.log(1, "[x] 语音转换失败！")
                 util.log(1, "[x] 原因: " + str(str(e)))
-                file_url = None
-            return file_url
+                wav_url = None
+            return wav_url
 
 
 if __name__ == '__main__':
