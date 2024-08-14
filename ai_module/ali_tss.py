@@ -108,7 +108,7 @@ class Speech:
                     with wave.open(file_url, 'wb') as wf:
                         wf.setnchannels(1)
                         wf.setsampwidth(2)
-                        wf.setframerate(16000)
+                        wf.setframerate(24000)
                         wf.writeframes(body)
                 else :
                     util.log(1, "[x] 语音转换失败！")
