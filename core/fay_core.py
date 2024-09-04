@@ -25,6 +25,8 @@ elif  cfg.tts_module =='ali':
     from ai_module.ali_tss import Speech
 elif cfg.tts_module == 'gptsovits':
     from ai_module.gptsovits import Speech
+elif cfg.tts_module == 'gptsovits_v3':
+    from ai_module.gptsovits_v3 import Speech   
 elif cfg.tts_module == 'volcano':
     from ai_module.volcano_tts import Speech
 else:

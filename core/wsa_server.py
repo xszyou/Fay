@@ -15,6 +15,7 @@ class MyServer:
         self.__host = host  # ip
         self.__port = port  # 端口号
         self.__listCmd = []  # 要发送的信息的列表
+        self.__clients = set() 
         self.__server: Serve = None
         self.__event_loop: AbstractEventLoop = None
         self.__running = True
@@ -33,32 +34,38 @@ class MyServer:
         except websockets.exceptions.ConnectionClosedError as e:
             util.log(1, f"WebSocket 连接关闭: {e}")
             self.isConnect = False
+            self.__clients.remove(websocket)
             self.on_close_handler()
             
     async def __producer_handler(self, websocket, path):
         try:
             while self.__running:
                 await asyncio.sleep(0.01)
-                message = await self.__producer()
-                if message:
-                    await websocket.send(message)
+                if len(self.__listCmd) > 0:
+                    message = await self.__producer()
+                    if message:
+                        await asyncio.wait([client.send(message) for client in self.__clients])
         except websockets.exceptions.ConnectionClosedError as e:
             util.log(1, f"WebSocket 连接关闭: {e}")
             self.isConnect = False
+            self.__clients.remove(websocket)
             self.on_close_handler()
     
     async def __handler(self, websocket, path):
         self.isConnect = True
         util.log(1,"websocket连接上:{}".format(self.__port))
         self.on_connect_handler()
-        consumer_task = asyncio.ensure_future(self.__consumer_handler(websocket, path))#接收
-        producer_task = asyncio.ensure_future(self.__producer_handler(websocket, path))#发送
-        done, self.__pending = await asyncio.wait([consumer_task, producer_task], return_when=asyncio.FIRST_COMPLETED, )
+        self.__clients.add(websocket)
+        
+        consumer_task = asyncio.ensure_future(self.__consumer_handler(websocket, path)) # 接收
+        producer_task = asyncio.ensure_future(self.__producer_handler(websocket, path)) # 发送
+        done, self.__pending = await asyncio.wait([consumer_task, producer_task], return_when=asyncio.FIRST_COMPLETED)
         for task in self.__pending:
             task.cancel()
-            self.isConnect = False
-            util.log(1,"websocket连接断开:{}".format(self.__port))
-            self.on_close_handler()
+        self.__clients.remove(websocket)
+        self.isConnect = False
+        util.log(1, "websocket连接断开:{}".format(self.__port))
+        self.on_close_handler()
                 
     async def __consumer(self, message):
         self.on_revice_handler(message)
@@ -69,7 +76,6 @@ class MyServer:
             return message
         else:
             return None
-
 
     #Edit by xszyou on 20230113:通过继承此类来实现服务端的接收后处理逻辑
     @abstractmethod
@@ -110,6 +116,7 @@ class MyServer:
         jsonObj = json.dumps(content)
         self.__listCmd.append(jsonObj)
         # util.log('命令 {}'.format(content))
+
 
     # 开启服务
     def start_server(self):
@@ -162,12 +169,11 @@ class HumanServer(MyServer):
         super().__init__(host, port)
 
     def on_revice_handler(self, message):
-        pass
+       pass
     
     def on_connect_handler(self):
         web_server_instance = get_web_instance()  
         web_server_instance.add_cmd({"is_connect": True}) 
-        self.add_cmd({'Topic': 'Unreal', 'Data': {'Key': 'mood', 'Value': 0}})
         
 
     def on_send_handler(self, message):
