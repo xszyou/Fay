@@ -36,37 +36,40 @@ class MyServer:
         except websockets.exceptions.ConnectionClosedError as e:
             util.log(1, f"WebSocket 连接关闭: {e}")
             self.isConnect = False
+            self.__clients.remove(websocket)
             self.on_close_handler()
             
             
-    # 发送处理
+    # 发送处理 
     async def __producer_handler(self, websocket, path):
         try:
             while self.__running:
                 await asyncio.sleep(0.01)
-                message = await self.__producer()
-                if message and self.isConnect:
-                    await websocket.send(message)
+                if len(self.__listCmd) > 0:
+                    message = await self.__producer()
+                    if message and self.isConnect:
+                        await asyncio.wait([client.send(message) for client in self.__clients])
         except websockets.exceptions.ConnectionClosedError as e:
             util.log(1, f"WebSocket 连接关闭: {e}")
             self.isConnect = False
+            self.__clients.remove(websocket)
             self.on_close_handler()
     
     async def __handler(self, websocket, path):
         self.isConnect = True
-        self.__clients.add(websocket)  # 添加新连接
-        util.log(1, "websocket连接上:{}".format(self.__port))
+        util.log(1,"websocket连接上:{}".format(self.__port))
         self.on_connect_handler()
-        consumer_task = asyncio.ensure_future(self.__consumer_handler(websocket, path))
-        producer_task = asyncio.ensure_future(self.__producer_handler(websocket, path))
+        self.__clients.add(websocket)
+        
+        consumer_task = asyncio.ensure_future(self.__consumer_handler(websocket, path)) # 接收
+        producer_task = asyncio.ensure_future(self.__producer_handler(websocket, path)) # 发送
         done, self.__pending = await asyncio.wait([consumer_task, producer_task], return_when=asyncio.FIRST_COMPLETED)
         for task in self.__pending:
             task.cancel()
-            self.isConnect = False
-            util.log(1, "websocket连接断开:{}".format(self.__port))
-            self.on_close_handler()
-        self.__clients.remove(websocket)  # 移除关闭的连接
-                
+        self.__clients.remove(websocket)
+        self.isConnect = False
+        util.log(1, "websocket连接断开:{}".format(self.__port))
+        self.on_close_handler()
                 
     async def __consumer(self, message):
         self.on_revice_handler(message)
@@ -77,7 +80,6 @@ class MyServer:
             return message
         else:
             return None
-
 
     #Edit by xszyou on 20230113:通过继承此类来实现服务端的接收后处理逻辑
     @abstractmethod
@@ -113,14 +115,14 @@ class MyServer:
 
     # 往要发送的命令列表中，添加命令
     def add_cmd(self, content):
-        if not self.__running :
+        if not self.__running:
             return
         jsonObj = json.dumps(content)
         self.__listCmd.append(jsonObj)
         # util.log('命令 {}'.format(content))
 
     def clear(self):
-         self.__listCmd = []
+        self.__listCmd = []
 
     def set_fei_fei(self):
         pass
@@ -148,14 +150,12 @@ class MyServer:
             util.log(1, "Error: {}".format(e))
 
 
-
 #ui端server
 class WebServer(MyServer):
     def __init__(self, host='0.0.0.0', port=10000):
         super().__init__(host, port)
 
     def on_revice_handler(self, message):
-       
         pass
     
     def on_connect_handler(self):
@@ -189,7 +189,7 @@ class HumanServer(MyServer):
         
 
     def on_send_handler(self, message):
-        util.log(1, '向human发送 {}'.format(message))
+        # util.log(1, '向human发送 {}'.format(message))
         if not self.isConnect:
             return None
         return message
@@ -213,7 +213,7 @@ class TestServer(MyServer):
     def on_revice_handler(self, message):
         # print(message)
         pass
-    
+
     def on_connect_handler(self):
         print("连接上了")
     
@@ -225,6 +225,7 @@ class TestServer(MyServer):
 
     def set_fei_fei(self,feifei):
         pass
+
 
 #单例
 
