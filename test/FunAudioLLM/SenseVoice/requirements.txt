@@ -1,0 +1,9 @@
+torch>=1.13
+torchaudio
+modelscope
+huggingface
+huggingface_hub
+funasr>=1.1.3
+numpy<=1.26.4
+gradio
+websockets

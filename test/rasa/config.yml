@@ -1,0 +1,14 @@
+recipe: default.v1
+assistant_id: 20230416-203150-proud-texture
+language: zh
+pipeline:
+  - name: JiebaTokenizer  # 分词器，用于处理中文文本
+  - name: RegexFeaturizer  # 基于正则表达式提取特征
+  - name: LexicalSyntacticFeaturizer  # 用于提取词汇和句法特征
+  - name: CountVectorsFeaturizer  # 根据词频创建词向量
+  - name: DIETClassifier  # 支持中文的意图分类器
+    epochs: 100  # 训练轮数，可以根据需要进行调整
+    constrain_similarities: True
+policies:
+  - name: MemoizationPolicy  # 记忆策略，用于记住先前的对话状态
+  - name: RulePolicy  # 规则策略，用于处理基于规则的对话逻辑

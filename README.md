@@ -1,100 +1,119 @@
+[`English`](https://github.com/xszyou/Fay/blob/main/README_EN.md) 
+
 <div align="center">
     <br>
-    <img src="images/icon.png" alt="Fay" />
-    <h1>Fay开源数字人框架</h1></div>
+    <img src="readme/icon.png" alt="Fay">
+    <h1>FAY</h1>
+	<h3>Fay数字人框架</h3>
+</div>
+
+！！重要通知：我们会在2024年12月31日前把Fay的三个版本合并成1个，并致力提供更稳定更全面的功能。
+
+我们致力于思考面向终端的数字人落地应用，并通过完整代码把思考结果呈现给大家。Fay数字人框架，向上适配各种数字人模型技术，向下接入各式大语言模型，并且便于更换诸如TTS、ASR等模型，为单片机、app、网站提供全面的数字人应用接口。      
+
+
+
+## **功能特点**
+
+
+
+- 完全开源，商用免责
+- 支持全离线使用
+- 支持毫秒级回复
+- 自由匹配数字人模型、大语言模型、ASR、TTS模型
+- 支持数字人自动播报模式（虚拟教师、虚拟主播、新闻播报）
+- 支持任意终端使用：单片机、app、网站、大屏、成熟系统接入等
+- 支持多用户多路并发
+- 提供文字沟通接口、声音沟通接口、数字人模型接口、管理控制接口、自动播放接口
+- 支持语音指令灵活配置执行
+- 支持自定义知识库、自定义问答对、自定义人设信息
+- 支持唤醒及打断对话
+- 支持服务器及单机模式
+- 支持机器人表情输出
+
+###               
+
+## **Fay数字人框架**
+
+![](readme/chat.png)
+
+![](readme/controller.png)
 
 
 
 
 
-                   
 
-如果你需要的是一个人机交互的数字人助理（当然，你也可以命令它开关设备）或者需要把数字人集成到你的产品上，请移步 [`助理完整版`](https://github.com/TheRamU/Fay/tree/fay-assistant-edition)
-
-如果你需要是一个可以自主决策、主动联系主人的agent，请移步[`agent版`](https://github.com/TheRamU/Fay/tree/fay-agent-edition)
-
-如果你需要是一个线上线下的销售员，请移步[`带货完整版`](https://github.com/TheRamU/Fay/tree/fay-sales-edition)    
-
-使用文档：https://qqk9ntwbcit.feishu.cn/wiki/space/7321626901586411523
+## **源码启动**
 
 
+### **环境** 
+- Python 3.9、3.10、3.11、3.12
+- Windows、macos、linux
 
-“用数字人去改变成熟传统软件的交互逻辑”
+### **安装依赖**
 
+```shell
+pip install -r requirements.txt
+```
 
-Fay数字人2024.10.16更新：
+### **配置**
++ 依照说明修改 `./system.conf` 文件
 
-Fay-助理版
-
-1、更正默认配置；
-
-2、去除麦克风选项（使用系统麦克风）；
-
-3、去掉 eyes(为全新在cv架构做准备)；
-
-4、新增文字语音穿透功能（为统一带货版和agent版做好准备。穿透功能就是把输入的文字直接输出到面板、声音及声音沟通接口和数字人接口，把输入语音直接输出到面板、声音及声音沟通接口和数字人接口。）
-
-4、ollama提示词对接；
-
-5、修复Azure无法修改音色问题；
-
-6、修复wsa_server websocket客户端管理的逻辑问题；
-
-7、修复修复wsa_server websocket线程同步问题。
-
-Fay数字人2024.10.09更新：
-
-🌟Fay-助理版
-
-1、 优化文字沟通接口的流式输出逻辑
-
--- fay的文字沟通接口，按标点符号切割并通过http stream返回，这样做语音合成时，能够完整处理每个断句的语音情绪。
-
-2、 去掉内置ngrok.cc内网穿透代码
-
--- ngrok内网穿透可以让普通pc当作服务器使用，让移动端或者智能设备随时与fay通讯。如需继续使用可以外部启动ngrok或者其他穿透客户端，效果是一样的。
-
-3、优化ASR处理速度
-
--- VAD（语音活动检测）时间由700ms减小到200ms，可以降低fay识别到我们已经说完一句话的时间，从而让fay更快作出响应
-
-4、优化TTS速度
-
--- azure不使用ssml明显加速，使用azure tts平均时间可以减小700ms以上
-
--- 修复本地播放完声音再发送音频给数字人的bug，可以让面板播放音频更快让数字人作出响应（虽然不太可能本地播放和数字人播放同时使用）
-
--- 语音合成之前替换掉“*”，这是大语言模型经常作出的返回，非常影响语音合成的用户体验
-
-5、优化Q&A文件的应用逻辑
-
--- 文件格式由excel更换成csv，可以更好兼容linux环境
-
--- 配置上Q&A文件之后会自动缓存大语言模型回复，相同对话的回复时间可以降到1ms以下
-
--- csv的第3列可以配置执行脚本，可以实现RPA操作或对智能硬件的控制
-
-6、完善是否做语音合成的逻辑
-
--- 只有在需要发送远程音频或者发送给数字人或者面板播放时才合成音频，避免资源的浪费
-
-7、修正多用户同时与fay聊天时qa日志有可能混乱的问题
-
-8、 修复fay_core.py上的变量（usernmae）错识导致的远程音频传输出错
-
-9、修复pygame init时无扬声器导致出错
-
-10、去掉面板出现了"完成!"、“远程音频设备连接上”、“远程音频输入输出设备已经断开”、“服务已关闭！”等不必要的日志信息
-
-🌟Fay-UE5：
-
-- 5.4工程，与fay的对接方式更新为流式对接
-
---会从fay小段文字接收然后做tts处理，这样可以更快速作出响应。
+### **启动**
+启动Fay控制器
+```shell
+python main.py
+```
 
 
 
-更多更新日志：https://qqk9ntwbcit.feishu.cn/wiki/UlbZwfAXgiKSquk52AkcibhHngg
+## **或docker 启动**
 
-联系我们，请关注微信公众号 Fay数字人 
+1. 下载助理版
+https://github.com/xszyou/Fay
+2.  修改 `./system.conf` 文件
+3. 删除requirements.txt下pyqt5~=5.15.6
 
+build （修改配置文件后，需要重新build）
+```shell
+docker build  -t fay ./fay-assistant-edition
+```
+run
+```shell
+docker run -it --rm -p 5000:5000 -p 10001:10001 -p 10002:10002 -p 10003:10003 fay
+```
+
+
+## **后续**
+
+![interface](readme\interface.png)
+
+
+
+### ***使用数字人（非必须）***
+
+ue: https://github.com/xszyou/fay-ue5
+
+unity：https://qqk9ntwbcit.feishu.cn/wiki/Se9xw04hUiss00kb2Lmci1BVnM9
+
+metahuman-stream（2d）：https://qqk9ntwbcit.feishu.cn/wiki/Ik1kwO9X5iilnGkFwRhcnmtvn3e
+
+duix（android)：https://qqk9ntwbcit.feishu.cn/wiki/Ik1kwO9X5iilnGkFwRhcnmtvn3e()
+
+aibote(windows cpu克隆人)：[‬‍‬‍⁠﻿‍‍‍‌﻿﻿https://qqk9ntwbcit.feishu.cn/wiki/ULaywzVRti0HXWkhCzacoSPAnIg
+
+
+
+### ***集成到自家产品（非必须）***
+接口：https://qqk9ntwbcit.feishu.cn/wiki/Mcw3wbA3RiNZzwkexz6cnKCsnhh
+
+
+
+### **联系**
+
+**商务QQ: 467665317**
+
+**交流群及资料教程**关注公众号 **fay数字人**（**请先star本仓库**）
+
+![](readme/gzh.jpg)

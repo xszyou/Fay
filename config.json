@@ -1,0 +1,44 @@
+{
+    "attribute": {
+        "age": "\u6210\u5e74",
+        "birth": "Github",
+        "constellation": "\u6c34\u74f6\u5ea7",
+        "contact": "qq467665317",
+        "gender": "\u5973",
+        "hobby": "\u53d1\u5446",
+        "job": "\u52a9\u7406",
+        "name": "\u83f2\u83f2",
+        "voice": "\u6653\u6653(azure)",
+        "zodiac": "\u86c7"
+    },
+    "interact": {
+        "QnA": "",
+        "maxInteractTime": 15,
+        "perception": {
+            "chat": 10,
+            "follow": 10,
+            "gift": 10,
+            "indifferent": 10,
+            "join": 10
+        },
+        "playSound": true,
+        "visualization": false
+    },
+    "items": [],
+    "source": {
+        "automatic_player_status": false,
+        "automatic_player_url": "http://127.0.0.1:6000",
+        "liveRoom": {
+            "enabled": true,
+            "url": ""
+        },
+        "record": {
+            "channels": 0,
+            "device": "",
+            "enabled": true
+        },
+        "wake_word": "\u4f60\u597d",
+        "wake_word_enabled": true,
+        "wake_word_type": "front"
+    }
+}
