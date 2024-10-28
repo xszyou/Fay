@@ -23,3 +23,5 @@ tenacity==8.2.3
 pygame
 scipy
 flask-httpauth
+opencv-python
+psutil

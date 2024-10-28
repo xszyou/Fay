@@ -24,8 +24,6 @@ from core import content_db
 from ai_module import nlp_cemotion
 from llm import nlp_rasa
 from llm import nlp_gpt
-from ai_module import yolov8
-from llm import nlp_VisualGLM
 from llm import nlp_lingju
 from llm import nlp_xingchen
 from llm import nlp_langchain
@@ -58,7 +56,6 @@ if platform.system() == "Windows":
 modules = {
     "nlp_gpt": nlp_gpt,
     "nlp_rasa": nlp_rasa,
-    "nlp_VisualGLM": nlp_VisualGLM,
     "nlp_lingju": nlp_lingju,
     "nlp_xingchen": nlp_xingchen,
     "nlp_langchain": nlp_langchain,
