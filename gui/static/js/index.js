@@ -262,12 +262,17 @@ class FayInterface {
       loadUserList() {
         this.fayService.getUserList().then((response) => {
           if (response && response.list) {
+            if (response.list.length == 0){
+              info = [];
+              info[0] = 1;
+              info[1] = 'User';
+              this.userList.push(info)
+              this.selectUser(info);
+            }else{
             this.userList = response.list;
-  
-            if (this.userList.length > 0) {
-              this.selectUser(this.userList[0]);
-            }
+            this.selectUser(this.userList[0]);
           }
+        }
         });
       },
       selectUser(user) {

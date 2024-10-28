@@ -63,7 +63,7 @@
 
         <div class="inputmessage">
           <div class="inputmessage_voice" ><img  src="{{ url_for('static',filename='images/voice.png') }}" alt="" style="filter: grayscale(100%);" ></div>
-          <div class="inputmessage_input"> <textarea class="text_in" placeholder="请输入内容" v-model="newMessage" @keyup.enter="sendMessage"></textarea></div>
+          <div class="inputmessage_input"> <textarea class="text_in" placeholder="请输入内容" v-model="newMessage" @keyup.enter="sendMessage" style="padding-top: 13px;"></textarea></div>
           <div class="inputmessage_send"><img  src="{{ url_for('static',filename='images/send.png') }}" alt="发送信息" @click="sendMessage"></div>
 
           <div class="inputmessage_open">

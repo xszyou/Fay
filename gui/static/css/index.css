@@ -13,6 +13,7 @@ html {
 	-moz-osx-font-smoothing: grayscale;
 	width: 100%;
 	height: 100vh; 
+	min-width: 1719px;
 	overflow: hidden; 
   }
   .main_bg{
