@@ -1,4 +1,3 @@
-[`English`](https://github.com/xszyou/Fay/blob/main/README_EN.md) 
 
 <div align="center">
     <br>
@@ -85,9 +84,9 @@ docker run -it --rm -p 5000:5000 -p 10001:10001 -p 10002:10002 -p 10003:10003 fa
 ```
 
 
-## **后续**
+## **高级玩法**
 
-![interface](readme\interface.png)
+![](readme/interface.png)
 
 
 
