@@ -14,7 +14,7 @@ class EnumVoice(Enum):
         }
     }
     XIAO_XIAO = {
-        "name": "晓晓",
+        "name": "晓晓(edge)",
         "voiceName": "zh-CN-XiaoxiaoNeural",
         "styleList": {
             "angry": "angry",
