@@ -55,7 +55,6 @@ class RecorderListener(Recorder):
             device_info = self.paudio.get_device_info_by_index(device_id)
             self.channels = device_info.get('maxInputChannels', 1) #很多麦克风只支持单声道录音
             # self.sample_rate = int(device_info.get('defaultSampleRate', self.__RATE))
-            print(self.sample_rate)
 
             # 设置格式（这里以16位深度为例）
             format = pyaudio.paInt16
