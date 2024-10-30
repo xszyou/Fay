@@ -22,6 +22,7 @@
             "join": 10
         },
         "playSound": true,
+        "sound_synthesis_enabled": false,
         "visualization": false
     },
     "items": [],

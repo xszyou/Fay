@@ -7,7 +7,7 @@ from utils import util
 from utils import config_util as cfg
 from core.authorize_tb import Authorize_Tb
 
-def question(cont, uid=0):
+def question(cont, uid=0, observation=""):
     lingju = Lingju()
     answer = lingju.question(cont, uid)
     return answer

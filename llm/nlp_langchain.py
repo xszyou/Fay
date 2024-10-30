@@ -81,7 +81,7 @@ def generate_prompt(question):
     info = f"{context}\n{instruction}\n{creative_instruction}\n{complexity_handling}\n问题：{question}\n回答："
     return info
 
-def question(cont, uid=0):
+def question(cont, uid=0, observation=""):
     try:
         save_all()
         info = generate_prompt(cont)

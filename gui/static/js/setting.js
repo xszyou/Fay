@@ -73,6 +73,13 @@ class FayInterface {
         });
     }
 
+    getRunStatus() {
+        return this.fetchData(`${this.baseApiUrl}/api/get_run_status`, {
+          method: 'POST'
+        });
+      }
+  
+
     handleIncomingMessage(data) {
         const vueInstance = this.vueInstance; 
         console.log('Incoming message:', data);
@@ -80,10 +87,8 @@ class FayInterface {
             vueInstance.liveState = data.liveState;
             if (data.liveState === 1) {
                 vueInstance.configEditable = false;
-                vueInstance.sendSuccessMsg('已开启！');
             } else if (data.liveState === 0) {
                 vueInstance.configEditable = true;
-                vueInstance.sendSuccessMsg('已关闭！');
             }
         }
 
@@ -132,6 +137,7 @@ new Vue({
             visualization_detection_enabled: false,
             source_record_enabled: false,
             source_record_device: '',
+            sound_synthesis_enabled: true,
             attribute_name: "",
             attribute_gender: "",
             attribute_age: "",
@@ -165,6 +171,7 @@ new Vue({
             }],
             automatic_player_status: false,
             automatic_player_url: "",
+            host_url: "http://127.0.0.1:5000"
         };
     },
     created() {
@@ -173,10 +180,22 @@ new Vue({
     },
     methods: {
         initFayService() {
-            this.fayService = new FayInterface('ws://127.0.0.1:10003', 'http://127.0.0.1:5000', this);
+            this.fayService = new FayInterface('ws://127.0.0.1:10003', this.host_url, this);
             this.fayService.connectWebSocket();
         },
         getData() {
+            this.fayService.getRunStatus().then((data) => {
+                if (data) {
+                    if(data.status){
+                        this.liveState = 1;
+                        this.configEditable = false;
+                    }else{
+                        this.liveState = 0;
+                        this.configEditable = true;
+                    }
+                    
+                }
+            });
             this.fayService.getData().then((data) => {
                 if (data) {
                     this.voiceList =  data.voice_list.map((voice) => ({
@@ -192,6 +211,7 @@ new Vue({
             if (config.interact) {
                 this.play_sound_enabled = config.interact.playSound;
                 this.visualization_detection_enabled = config.interact.visualization;
+                this.sound_synthesis_enabled = config.interact.sound_synthesis_enabled;
                 this.QnA = config.interact.QnA;
             }
             if (config.source && config.source.record) {
@@ -224,7 +244,7 @@ new Vue({
             }
         },
         saveConfig() {
-            let url = "http://127.0.0.1:5000/api/submit";
+            let url = `${this.host_url}/api/submit`;
             let send_data = {
                 "config": {
                     "source": {
@@ -257,6 +277,7 @@ new Vue({
                     },
                     "interact": {
                         "playSound": this.play_sound_enabled,
+                        "sound_synthesis_enabled": this.sound_synthesis_enabled,
                         "visualization": this.visualization_detection_enabled,
                         "QnA": this.QnA,
                         "maxInteractTime": this.interact_maxInteractTime,
@@ -293,12 +314,14 @@ new Vue({
             this.liveState = 2
             this.fayService.startLive().then(() => {
                 this.configEditable = false;
+                this.sendSuccessMsg('已开启！');
             });
         },
         stopLive() {
+            this.liveState = 3
             this.fayService.stopLive().then(() => {
                 this.configEditable = true;
-                this.liveState = 3
+                this.sendSuccessMsg('已关闭！');
             });
         },
         sendSuccessMsg(message) {

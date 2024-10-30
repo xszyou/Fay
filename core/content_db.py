@@ -50,7 +50,7 @@ class Content_Db:
         conn = sqlite3.connect("fay.db")
         cur = conn.cursor()
         try:
-            cur.execute("insert into T_Msg (type,way,content,createtime,username,uid) values (?,?,?,?,?,?)",(type,way,content,int(time.time()),username,uid))
+            cur.execute("insert into T_Msg (type,way,content,createtime,username,uid) values (?,?,?,?,?,?)",(type, way, content, time.time(), username, uid))
             conn.commit()
         except:
                util.log(1, "请检查参数是否有误")

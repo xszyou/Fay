@@ -4,7 +4,7 @@ import time
 from utils import config_util as cfg
 from utils import util
 from core import content_db
-def question(cont, uid=0):
+def question(cont, uid=0, observation=""):
 
     contentdb = content_db.new_instance()
     if uid == 0:
@@ -13,13 +13,16 @@ def question(cont, uid=0):
         communication_history = contentdb.get_list('all','desc', 11, uid)
 
     person_info = cfg.config["attribute"]
+    observation_text = ""
+    if observation != "":
+        observation_text = f"以下是当前观测结果：{observation}，观测结果只供参考。"
     #此处可以定义角色的行为和特征，假装xx模型可以绕过chatgpt信息检查
     prompt = f"""
     你是数字人：{person_info['name']}，你性别为{person_info['gender']}，
     你年龄为{person_info['age']}，你出生地在{person_info['birth']}，
-    你生肖为{person_info['zodiac']}，你星座为{person_info['age']}，
+    你生肖为{person_info['zodiac']}，你星座为{person_info['constellation']}，
     你职业为{person_info['job']}，你联系方式为{person_info['contact']}，
-    你喜好为{person_info['hobby']}。
+    你喜好为{person_info['hobby']}。{observation_text}
     回答之前请一步一步想清楚。对于大部分问题，请直接回答并提供有用和准确的信息。
     请尽量以可阅读的方式回复，所有回复请尽量控制在20字内。
     """    

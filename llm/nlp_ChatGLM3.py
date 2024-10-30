@@ -3,7 +3,7 @@ import requests
 from core import content_db
 
 
-def question(cont, uid=0):
+def question(cont, uid=0, observation=""):
     contentdb = content_db.new_instance()
     if uid == 0:
         list = contentdb.get_list('all','desc', 11)

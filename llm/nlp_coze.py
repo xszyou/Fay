@@ -5,7 +5,7 @@ from utils import util
 from utils import config_util as cfg
 from core import content_db
 
-def question(cont, uid=0):
+def question(cont, uid=0, observation=""):
     contentdb = content_db.new_instance()
     if uid == 0:
         communication_history = contentdb.get_list('all','desc', 11)

@@ -9,7 +9,7 @@ model = RwkvForCausalLM.from_pretrained("RWKV-4-World-1.5B")
 tokenizer = TRIE_TOKENIZER('./ringrwkv/rwkv_vocab_v20230424.txt')
 
 data = ""
-def question(cont, uid=0):
+def question(cont, uid=0, observation=""):
     global data
     prompt = data + f'Question: {cont.strip()}\n\nAnswer:'
     input_ids = tokenizer.encode(prompt)

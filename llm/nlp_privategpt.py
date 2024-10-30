@@ -46,7 +46,7 @@ def load_all_pdfs(folder_path):
                         print(f"上传 {file_name} 失败: {e}")
 
 
-def question(cont, uid=0):
+def question(cont, uid=0, observation=""):
     load_all_pdfs(folder_path)
     text = client.contextual_completions.prompt_completion(
         prompt=cont

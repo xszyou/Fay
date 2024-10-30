@@ -3,7 +3,7 @@ import json
 from utils import util, config_util
 from core import content_db
 
-def question(cont, uid=0):
+def question(cont, uid=0, observation=""):
     url = 'https://nlp.aliyuncs.com/v2/api/chat/send'
 
     headers = {

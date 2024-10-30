@@ -65,7 +65,7 @@ modules = {
 }
 
 #大语言模型回复
-def handle_chat_message(msg, username='User'):
+def handle_chat_message(msg, username='User', observation=''):
     text = ''
     textlist = []
     try:
@@ -81,7 +81,7 @@ def handle_chat_message(msg, username='User'):
             text = textlist[0]['text'] 
         else:
             uid = member_db.new_instance().find_user(username)
-            text = selected_module.question(msg, uid)  
+            text = selected_module.question(msg, uid, observation)  
         util.printInfo(1, username, '自然语言处理完成. 耗时: {} ms'.format(math.floor((time.time() - tm) * 1000)))
         if text == '哎呀，你这么说我也不懂，详细点呗' or text == '':
             util.printInfo(1, username, '[!] 自然语言无语了！')
@@ -161,9 +161,9 @@ class FeiFei:
                         if wsa_server.get_instance().is_connected(username):
                             content = {'Topic': 'Unreal', 'Data': {'Key': 'log', 'Value': "思考中..."}, 'Username' : username, 'robot': f'http://{cfg.fay_url}:5000/robot/Thinking.jpg'}
                             wsa_server.get_instance().add_cmd(content)
-                        text,textlist = handle_chat_message(interact.data["msg"], username)
+                        text,textlist = handle_chat_message(interact.data["msg"], username, interact.data.get("observation", ""))
 
-                        qa_service.QAService().record_qapair(interact.data["msg"], text)#沟通记录缓存到qa文件
+                        # qa_service.QAService().record_qapair(interact.data["msg"], text)#沟通记录缓存到qa文件
                     else: 
                         text = answer
 
@@ -315,15 +315,16 @@ class FeiFei:
     def say(self, interact, text):
         try:
             result = None
-            audio_url = interact.data.get('audio')#透传的音频
-            if audio_url is not None:
-                file_name = 'sample-' + str(int(time.time() * 1000)) + '.wav'
-                result = self.download_wav(audio_url, './samples/', file_name)
-            elif config_util.config["interact"]["playSound"] or wsa_server.get_instance().is_connected(interact.data.get("user")) or self.__is_send_remote_device_audio(interact):#tts
-                util.printInfo(1,  interact.data.get('user'), '合成音频...')
-                tm = time.time()
-                result = self.sp.to_sample(text.replace("*", ""), self.__get_mood_voice())
-                util.printInfo(1,  interact.data.get('user'), '合成音频完成. 耗时: {} ms 文件:{}'.format(math.floor((time.time() - tm) * 1000), result))
+            if config_util.config["interact"]["sound_synthesis_enabled"]:
+                audio_url = interact.data.get('audio')#透传的音频
+                if audio_url is not None:
+                    file_name = 'sample-' + str(int(time.time() * 1000)) + '.wav'
+                    result = self.download_wav(audio_url, './samples/', file_name)
+                elif config_util.config["interact"]["playSound"] or wsa_server.get_instance().is_connected(interact.data.get("user")) or self.__is_send_remote_device_audio(interact):#tts
+                    util.printInfo(1,  interact.data.get('user'), '合成音频...')
+                    tm = time.time()
+                    result = self.sp.to_sample(text.replace("*", ""), self.__get_mood_voice())
+                    util.printInfo(1,  interact.data.get('user'), '合成音频完成. 耗时: {} ms 文件:{}'.format(math.floor((time.time() - tm) * 1000), result))
 
             if result is not None:            
                 MyThread(target=self.__process_output_audio, args=[result, interact, text]).start()

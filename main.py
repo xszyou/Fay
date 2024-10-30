@@ -55,6 +55,7 @@ if __name__ == '__main__':
     #ip替换
     if config_util.fay_url != "127.0.0.1":
         replace_ip_in_file("gui/static/js/index.js", config_util.fay_url)
+        replace_ip_in_file("gui/static/js/setting.js", config_util.fay_url)
 
     #启动数字人接口服务
     ws_server = wsa_server.new_instance(port=10002)
