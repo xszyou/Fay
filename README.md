@@ -9,7 +9,8 @@
 ！！重要通知：我们会在2024年12月31日前把Fay的三个版本合并成1个，并致力提供更稳定更全面的功能。
 
 我们致力于思考面向终端的数字人落地应用，并通过完整代码把思考结果呈现给大家。Fay数字人框架，向上适配各种数字人模型技术，向下接入各式大语言模型，并且便于更换诸如TTS、ASR等模型，为单片机、app、网站提供全面的数字人应用接口。      
-
+更新日志：https://qqk9ntwbcit.feishu.cn/wiki/UlbZwfAXgiKSquk52AkcibhHngg
+文档：https://qqk9ntwbcit.feishu.cn/wiki/JzMJw7AghiO8eHktMwlcxznenIg
 
 
 ## **功能特点**
@@ -110,8 +111,6 @@ aibote(windows cpu克隆人)：[‬‍‬‍⁠﻿‍‍‍‌﻿﻿https://qqk9
 
 
 ### **联系**
-
-**商务QQ: 467665317**
 
 **交流群及资料教程**关注公众号 **fay数字人**（**请先star本仓库**）
 
