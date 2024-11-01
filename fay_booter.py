@@ -48,6 +48,13 @@ class RecorderListener(Recorder):
 
     def get_stream(self):
         try:
+            #是否录音的控制是放在recorder.py的，这里的作用是防止没有麦克风的设备出错
+            while True:
+                record = config_util.config['source']['record']
+                if record['enabled']:
+                    break
+                time.sleep(0.1)
+
             self.paudio = pyaudio.PyAudio()
             device_id = 0  # 或者根据需要选择其他设备
 
@@ -221,7 +228,7 @@ def kill_process_by_port(port):
         except(psutil.NosuchProcess, psutil.AccessDenied):
             pass
 #数字人端请求获取最新的自动播放消息，若自动播放服务关闭会自动退出自动播放
-def start_auto_play_service():
+def start_auto_play_service(): #TODO 评估一下有无优化的空间
     url = f"{config_util.config['source']['automatic_player_url']}/get_auto_play_item"
     user = "User" #TODO 临时固死了
     is_auto_server_error = False
@@ -364,8 +371,8 @@ def start():
     record = config_util.config['source']['record']
     if record['enabled']:
         util.log(1, '开启录音服务...')
-        recorderListener = RecorderListener(record['device'], feiFei)  # 监听麦克风
-        recorderListener.start()
+    recorderListener = RecorderListener(record['device'], feiFei)  # 监听麦克风
+    recorderListener.start()
 
     #启动声音沟通接口服务
     util.log(1,'启动声音沟通接口服务...')

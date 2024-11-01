@@ -315,16 +315,15 @@ class FeiFei:
     def say(self, interact, text):
         try:
             result = None
-            if config_util.config["interact"]["sound_synthesis_enabled"]:
-                audio_url = interact.data.get('audio')#透传的音频
-                if audio_url is not None:
-                    file_name = 'sample-' + str(int(time.time() * 1000)) + '.wav'
-                    result = self.download_wav(audio_url, './samples/', file_name)
-                elif config_util.config["interact"]["playSound"] or wsa_server.get_instance().is_connected(interact.data.get("user")) or self.__is_send_remote_device_audio(interact):#tts
-                    util.printInfo(1,  interact.data.get('user'), '合成音频...')
-                    tm = time.time()
-                    result = self.sp.to_sample(text.replace("*", ""), self.__get_mood_voice())
-                    util.printInfo(1,  interact.data.get('user'), '合成音频完成. 耗时: {} ms 文件:{}'.format(math.floor((time.time() - tm) * 1000), result))
+            audio_url = interact.data.get('audio')#透传的音频
+            if audio_url is not None:
+                file_name = 'sample-' + str(int(time.time() * 1000)) + '.wav'
+                result = self.download_wav(audio_url, './samples/', file_name)
+            elif config_util.config["interact"]["playSound"] or wsa_server.get_instance().is_connected(interact.data.get("user")) or self.__is_send_remote_device_audio(interact):#tts
+                util.printInfo(1,  interact.data.get('user'), '合成音频...')
+                tm = time.time()
+                result = self.sp.to_sample(text.replace("*", ""), self.__get_mood_voice())
+                util.printInfo(1,  interact.data.get('user'), '合成音频完成. 耗时: {} ms 文件:{}'.format(math.floor((time.time() - tm) * 1000), result))
 
             if result is not None:            
                 MyThread(target=self.__process_output_audio, args=[result, interact, text]).start()

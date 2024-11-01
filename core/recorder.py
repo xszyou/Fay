@@ -201,6 +201,10 @@ class Recorder:
         audio_data_list = []
         while self.__running:
             try:
+                record = cfg.config['source']['record']
+                if not record['enabled']:
+                    time.sleep(0.1)
+                    continue
                 self.is_reading = True
                 data = stream.read(1024, exception_on_overflow=False)
                 self.is_reading = False

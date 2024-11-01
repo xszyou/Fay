@@ -137,7 +137,6 @@ new Vue({
             visualization_detection_enabled: false,
             source_record_enabled: false,
             source_record_device: '',
-            sound_synthesis_enabled: true,
             attribute_name: "",
             attribute_gender: "",
             attribute_age: "",
@@ -211,7 +210,6 @@ new Vue({
             if (config.interact) {
                 this.play_sound_enabled = config.interact.playSound;
                 this.visualization_detection_enabled = config.interact.visualization;
-                this.sound_synthesis_enabled = config.interact.sound_synthesis_enabled;
                 this.QnA = config.interact.QnA;
             }
             if (config.source && config.source.record) {
@@ -277,7 +275,6 @@ new Vue({
                     },
                     "interact": {
                         "playSound": this.play_sound_enabled,
-                        "sound_synthesis_enabled": this.sound_synthesis_enabled,
                         "visualization": this.visualization_detection_enabled,
                         "QnA": this.QnA,
                         "maxInteractTime": this.interact_maxInteractTime,
