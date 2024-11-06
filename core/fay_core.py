@@ -319,6 +319,9 @@ class FeiFei:
             if audio_url is not None:
                 file_name = 'sample-' + str(int(time.time() * 1000)) + '.wav'
                 result = self.download_wav(audio_url, './samples/', file_name)
+
+            elif not wsa_server.get_instance().get_client_output(interact.data.get('user')):
+                result = None
             elif config_util.config["interact"]["playSound"] or wsa_server.get_instance().is_connected(interact.data.get("user")) or self.__is_send_remote_device_audio(interact):#tts
                 util.printInfo(1,  interact.data.get('user'), '合成音频...')
                 tm = time.time()

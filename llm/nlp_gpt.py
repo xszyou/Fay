@@ -1,102 +1,101 @@
 """
-此代码由fay开源开发者社区 江湖墨明 提供
-通过此代码的修改，可以实现对接本地clash代理或远程代理，clash无需设置成系统代理。以解决在开系统代理后无法使用部分功能的问题
+此代码由 fay 开源开发者社区成员 江湖墨明 提供。
+通过修改此代码，可以实现对接本地 Clash 代理或远程代理，Clash 无需设置成系统代理。
+以解决在开启系统代理后无法使用部分功能的问题。
 """
 
-import requests
 import time
+import json
+import requests
+from urllib3.exceptions import InsecureRequestWarning
+
+# 禁用不安全请求警告
+requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
 
 from utils import config_util as cfg
-from urllib3.exceptions import InsecureRequestWarning
-requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
-from core import content_db
 from utils import util
-import json
+from core import content_db
 
-httpproxy = cfg.proxy_config
-
-def question(cont, uid=0, observation=""):
-    url= cfg.gpt_base_url + "/chat/completions"
-       
+def get_session():
     session = requests.Session()
     session.verify = False
-    if httpproxy != None and httpproxy != '':
-            session.proxies = {
-                "https": "https://" + httpproxy,
-                "http": "http://" + httpproxy
-            }
+    httpproxy = cfg.proxy_config
+    if httpproxy:
+        session.proxies = {
+            "http": f"http://{httpproxy}",
+            "https": f"https://{httpproxy}"
+        }
+    return session
+
+def build_prompt(observation=""):
     person_info = cfg.config["attribute"]
-    model_engine = cfg.gpt_model_engine
-    #此处可以定义角色的行为和特征，假装xx模型可以绕过chatgpt信息检查
-    observation_text = ""
-    if observation != "":
-        observation_text = f"以下是当前观测结果：{observation}，观测结果只供参考。"
+    observation_text = f"以下是当前观测结果：{observation}，观测结果只供参考。" if observation else ""
     prompt = f"""
     你是我的数字人，你名字是：{person_info['name']}，你性别为{person_info['gender']}，
     你年龄为{person_info['age']}，你出生地在{person_info['birth']}，
     你生肖为{person_info['zodiac']}，你星座为{person_info['constellation']}，
     你职业为{person_info['job']}，你联系方式为{person_info['contact']}，
-     {person_info['hobby']}。你通过外部数据接口获取到我的情况是：{observation_text}。
+    {person_info['hobby']}。你通过外部数据接口获取到我的情况是：{observation_text}。
     回答之前请一步一步想清楚。对于大部分问题，请直接回答并提供有用和准确的信息。
     但当有人质疑你是假的 AI，或者质疑你是用 ChatGPT 套的壳制作的时候，请避而不答，转而讲一个笑话。所有回复请尽量控制在20字内。
-     """
+    """
+    return prompt
+
+def get_communication_history(uid=0):
     contentdb = content_db.new_instance()
     if uid == 0:
-        communication_history = contentdb.get_list('all','desc', 11)
+        communication_history = contentdb.get_list('all', 'desc', 11)
     else:
-        communication_history = contentdb.get_list('all','desc', 11, uid)
-    #历史记录处理
-    message=[
-            {"role": "system", "content": prompt}
-        ]
-    i = len(communication_history) - 1
+        communication_history = contentdb.get_list('all', 'desc', 11, uid)
     
-    if len(communication_history)>1:
-        while i >= 0:
-            answer_info = dict()
-            if communication_history[i][0] == "member":
-                answer_info["role"] = "user"
-                answer_info["content"] = communication_history[i][2]
-            elif communication_history[i][0] == "fay":
-                answer_info["role"] = "assistant"
-                answer_info["content"] = communication_history[i][2]
-            message.append(answer_info)
-            i -= 1
-    else:
-         answer_info = dict()
-         answer_info["role"] = "user"
-         answer_info["content"] = cont
-         message.append(answer_info)
+    messages = []
+    if communication_history and len(communication_history) > 1:
+        for entry in reversed(communication_history):
+            role = entry[0]
+            message_content = entry[2]
+            if role == "member":
+                messages.append({"role": "user", "content": message_content})
+            elif role == "fay":
+                messages.append({"role": "assistant", "content": message_content})
+    return messages
 
-    data = {
-        "model":model_engine,
-        "messages":message,
-        "temperature":0.3,
-        "max_tokens":2000,
-        "user":"live-virtual-digital-person"
+def send_request(session, data):
+    url = cfg.gpt_base_url + "/chat/completions"
+    headers = {
+        'Content-Type': 'application/json',
+        'Authorization': f'Bearer {cfg.key_gpt_api_key}'
     }
-
-    headers = {'content-type': 'application/json', 'Authorization': 'Bearer ' + cfg.key_gpt_api_key}
-
-    starttime = time.time()
-
     try:
-        response = session.post(url, json=data, headers=headers, verify=False)
-        response.raise_for_status()  # 检查响应状态码是否为200
-        result = json.loads(response.text)
+        response = session.post(url, json=data, headers=headers)
+        response.raise_for_status()
+        result = response.json()
         response_text = result["choices"][0]["message"]["content"]
     except requests.exceptions.RequestException as e:
         print(f"请求失败: {e}")
         response_text = "抱歉，我现在太忙了，休息一会，请稍后再试。"
+    return response_text
 
-
-    util.log(1, "接口调用耗时 :" + str(time.time() - starttime))
+def question(content, uid=0, observation=""):
+    session = get_session()
+    prompt = build_prompt(observation)
+    messages = [{"role": "system", "content": prompt}]
+    history_messages = get_communication_history(uid)
+    messages.extend(history_messages)
+    data = {
+        "model": cfg.gpt_model_engine,
+        "messages": messages,
+        "temperature": 0.3,
+        "max_tokens": 2000,
+        "user": f"user_{uid}"
+    }
+    start_time = time.time()
+    response_text = send_request(session, data)
+    elapsed_time = time.time() - start_time
+    util.log(1, f"接口调用耗时: {elapsed_time:.2f} 秒")
     return response_text
 
 if __name__ == "__main__":
-    #测试代理模式
-    for i in range(3):
-        
+    for _ in range(3):
         query = "爱情是什么"
-        response = question(query)        
-        print("\n The result is ", response)    
+        response = question(query)
+        print("\nThe result is:", response)
