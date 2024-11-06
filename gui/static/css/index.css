@@ -204,19 +204,23 @@ html {
 
 .Userchange{
 	background-color: #FFFFFF;
-	height: 40px;
-	font-size: 12px;
+ 	height: 40px;
+ 	font-size: 12px;
+ 	border-top: 1px solid #bed1fc;
+ 	width: 1358px; /* 设置菜单容器的宽度，可根据实际情况调整 */
+ 	overflow: hidden; /* 隐藏超出容器的内容 */
+ 	position: relative;
 }
 
 .inputmessage{
-	margin-left:15% ;
+	margin-left:290px ;
 	width: 760px;
 	background: #f9fbff;
 	border-radius: 70px;
 	height: 73px;
 	box-shadow: -10px 0 15px rgba(0, 0, 0, 0.1);
 	position: absolute;
-    top: 70%;
+	top: 675px;
 	z-index: 2;
 }
 
@@ -277,3 +281,86 @@ html {
 	background-color: #f4f7ff;
 	color: #0064fb;
   }
+  #prevButton{background-color: #FFFFFF; border: none;
+	    z-index: 1;
+	    position: absolute;
+	     top: 50%; 
+	     transform: translateY(-50%);
+	}
+	
+	#nextButton {background-color: #FFFFFF; border: none;
+	    position: absolute;
+	     top: 50%; 
+	     transform: translateY(-50%);
+	}
+	
+	#prevButton {
+	    left: 0;
+	}
+	
+	#nextButton {
+	    right: 0;
+	}
+	
+	.menu-container {
+	    width: 800px; /* 设置菜单容器的宽度，可根据实际情况调整 */
+	    overflow: hidden; /* 隐藏超出容器的内容 */
+	    position: relative;
+	}
+	
+	.menu li {
+	    margin-right: 20px; /* 菜单项之间的间距，可调整 */
+	}
+	
+	.menu li a {
+	    text-decoration: none;
+	    color: black;
+	}
+	
+	.menu { background-color: #FFFFFF;
+	    /* display: flex; */
+	    white-space: nowrap; 
+	    display: flex;
+	    transition: transform 0.3s ease; /* 添加过渡效果，使滑动更平滑 */
+	    list-style: none;
+	    padding: 0 50px 0 50px;
+	    margin: 0;
+	    display: flex;
+	    transition: transform 0.3s ease; /* 添加过渡效果，使滑动更平滑 */
+	 }
+	
+	.adopt{border: none;background: none;}
+	
+	.what-time{vertical-align:top;line-height: 25px;}
+	
+	.answer-container {
+	    border: 1px solid #ccc;
+	    padding: 10px;
+	    margin: 10px;
+	    background-color: #f9f9f9;
+	}
+	
+	.adopt-button {
+	    display: inline-block;
+	    cursor: pointer;
+	    position: relative;
+	}
+	
+	.adopt-button img {
+	    width: 21px;
+	    height: 21px;
+	    display: block;
+	}
+	
+	.adopt-button:hover::after {
+	    content: "采纳";
+	    position: absolute;
+	    top: -30px;
+	    left: 0;
+	    background-color: #000;
+	    color: #fff;
+	    padding: 5px 10px;
+	    border-radius: 4px;
+	    font-size: 12px;
+	    white-space: nowrap;
+	}

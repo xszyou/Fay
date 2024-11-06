@@ -22,7 +22,7 @@ from core.interact import Interact
 from core import member_db
 import fay_booter
 from flask_httpauth import HTTPBasicAuth
-
+from core import qa_service
 
 __app = Flask(__name__)
 auth = HTTPBasicAuth()
@@ -233,7 +233,7 @@ def api_get_Msg():
     i = len(list)-1
     while i >= 0:
         timetext = datetime.datetime.fromtimestamp(list[i][3]).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
-        relist.append(dict(type=list[i][0], way=list[i][1], content=list[i][2], createtime=list[i][3], timetext=timetext, username=list[i][5]))
+        relist.append(dict(type=list[i][0], way=list[i][1], content=list[i][2], createtime=list[i][3], timetext=timetext, username=list[i][5], id=list[i][6], is_adopted=list[i][7]))
         i -= 1
     if fay_booter.is_running():
         wsa_server.get_web_instance().add_cmd({"liveState": 1})
@@ -276,6 +276,32 @@ def api_get_Member_list():
 def api_get_run_status():
     status = fay_booter.is_running()
     return json.dumps({'status': status})
+
+
+@__app.route('/api/adopt_msg', methods=['POST'])
+def adopt_msg():
+    data = request.get_json()
+    if not data:
+        return jsonify({'status':'error', 'msg': '未提供数据'})
+
+    id = data.get('id')
+
+    if not id:
+        return jsonify({'status':'error', 'msg': 'id不能为空'})
+
+    info = content_db.new_instance().get_content_by_id(id)
+    content = info[3]
+    if info is not None:
+        previous_info = content_db.new_instance().get_previous_user_message(id)
+        previous_content = previous_info[3]
+        result = content_db.new_instance().adopted_message(id)
+        if result:
+            qa_service.QAService().record_qapair(previous_content, content)
+            return jsonify({'status': 'success', 'msg': '采纳成功'})
+        else:
+            return jsonify({'status':'error', 'msg': '采纳失败'})
+    else:
+        return jsonify({'status':'error', 'msg': '采纳失败'})
 
 
 def stream_response(text):

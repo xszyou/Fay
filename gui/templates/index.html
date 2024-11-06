@@ -40,7 +40,15 @@
                 <img class="avatar" src="{{ url_for('static',filename='images/Fay_send.png') }}" alt="接收者头像">
                 <div class="message-content">
                   <div class="message-bubble">[[item.content]]</div>
-                  <div class="message-time">[[item.timetext]]</div>
+                  <div class="message-time"><span class="what-time">[[item.timetext]]</span>
+                    <div v-if="item.is_adopted == 0" class="adopt-button" @click="adoptText(item.id)">
+                    <img   src="{{ url_for('static',filename='images/adopt.png') }}" alt="采纳图标" class="adopt-img" />
+                  </div>
+                  <div v-else class="adopt-button">
+                    <img   src="{{ url_for('static',filename='images/adopted.png') }}" alt="采纳图标" class="adopt-img" />
+                  </div>
+
+                  </div>
                 </div>
               </div>     
 

@@ -186,7 +186,8 @@ class FayInterface {
             username: data.panelReply.username,
             content: data.panelReply.content,
             type: data.panelReply.type,
-            timetext: this.getTime()
+            timetext: this.getTime(),
+            is_adopted:0
           });
           vueInstance.$nextTick(() => {
             const chatContainer = vueInstance.$el.querySelector('.chatmessage');
@@ -308,7 +309,7 @@ class FayInterface {
       selectUser(user) {
         this.selectedUser = user;
         this.fayService.websocket.send(JSON.stringify({ "Username": user[1] }));
-        this.loadMessageHistory(user[1]); 
+        this.loadMessageHistory(user[1], 'common'); 
       },
       startLive() {
         this.liveState = 2
@@ -323,17 +324,18 @@ class FayInterface {
         });
     },
 
-      loadMessageHistory(username) {
+      loadMessageHistory(username, type) {
         this.fayService.getMessageHistory(username).then((response) => {
           if (response) {
             this.messages = response;
-            console.log(this.messages);
+            if(type == 'common'){
             this.$nextTick(() => {
               const chatContainer = this.$el.querySelector('.chatmessage');
               if (chatContainer) {
                 chatContainer.scrollTop = chatContainer.scrollHeight;
               }
             });
+          }
           }
         });
       },
@@ -344,7 +346,37 @@ class FayInterface {
             type: 'success',
         });
     
-}
+} ,
+adoptText(id) {
+  // 调用采纳接口
+  this.fayService.fetchData(`${this.base_url}/api/adopt_msg`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ id })  // 发送采纳请求
+  })
+  .then((response) => {
+    if (response && response.status === 'success') {
+      // 处理成功的响应
+      this.$notify({
+        title: '成功',
+        message: response.msg,  // 显示成功消息
+        type: 'success',
+      });
+      
+      this.loadMessageHistory(this.selectedUser[1], 'adopt');
+    } else {
+      // 处理失败的响应
+      this.$notify({
+        title: '失败',
+        message: response ? response.msg : '请求失败',
+        type: 'error',
+      });
+    }
+  })
+
+},
     }
   });
   

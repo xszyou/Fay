@@ -58,6 +58,7 @@ class ALiNls:
         self.__URL = 'wss://nls-gateway-cn-shenzhen.aliyuncs.com/ws/v1'
         self.__ws = None
         self.__frames = []
+        self.started = False
         self.__closing = False
         self.__task_id = ''
         self.done = False
@@ -86,6 +87,8 @@ class ALiNls:
             data = json.loads(message)
             header = data['header']
             name = header['name']
+            if name == 'TranscriptionStarted':
+                self.started = True
             if name == 'SentenceEnd':
                 self.done = True
                 self.finalResults = data['payload']['result']
