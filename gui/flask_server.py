@@ -22,7 +22,7 @@ from core.interact import Interact
 from core import member_db
 import fay_booter
 from flask_httpauth import HTTPBasicAuth
-
+from core import qa_service
 
 __app = Flask(__name__)
 auth = HTTPBasicAuth()
@@ -233,7 +233,7 @@ def api_get_Msg():
     i = len(list)-1
     while i >= 0:
         timetext = datetime.datetime.fromtimestamp(list[i][3]).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
-        relist.append(dict(type=list[i][0], way=list[i][1], content=list[i][2], createtime=list[i][3], timetext=timetext, username=list[i][5]))
+        relist.append(dict(type=list[i][0], way=list[i][1], content=list[i][2], createtime=list[i][3], timetext=timetext, username=list[i][5], id=list[i][6], is_adopted=list[i][7]))
         i -= 1
     if fay_booter.is_running():
         wsa_server.get_web_instance().add_cmd({"liveState": 1})
@@ -276,6 +276,95 @@ def api_get_Member_list():
 def api_get_run_status():
     status = fay_booter.is_running()
     return json.dumps({'status': status})
+
+def handle_audio(content):
+    try:
+        config_util.load_config()
+        if config_util.tts_module == 'ali':
+            from tts.ali_tss import Speech
+        elif config_util.tts_module == 'gptsovits':
+            from tts.gptsovits import Speech
+        elif config_util.tts_module == 'gptsovits_v3':
+            from tts.gptsovits_v3 import Speech    
+        elif config_util.tts_module == 'volcano':
+            from tts.volcano_tts import Speech
+        else:
+            from tts.ms_tts_sdk import Speech
+
+        sp = Speech()
+        sp.connect()
+        file_url = sp.to_sample(content.replace("*", ""), 'gentle')
+        audio_path = f'http://{config_util.fay_url}:5000/audio/' + os.path.basename(file_url)
+        sp.close()
+        return audio_path
+    except Exception as e:
+        print(f"生成音频时出错：{e}")
+        return None
+
+@__app.route('/api/adopt_msg', methods=['POST'])
+def adopt_msg():
+    data = request.get_json()
+    if not data:
+        return jsonify({'status':'error', 'msg': '未提供数据'})
+
+    id = data.get('id')
+
+    if not id:
+        return jsonify({'status':'error', 'msg': 'id不能为空'})
+
+    info = content_db.new_instance().get_content_by_id(id)
+    content = info[3]
+    if info is not None:
+        previous_info = content_db.new_instance().get_previous_user_message(id)
+        previous_content = previous_info[3]
+        result = content_db.new_instance().adopted_message(id)
+        if result:
+            qa_service.QAService().record_qapair(previous_content, content)
+            return jsonify({'status': 'success', 'msg': '采纳成功'})
+        else:
+            return jsonify({'status':'error', 'msg': '采纳失败'})
+    else:
+        return jsonify({'status':'error', 'msg': '采纳失败'})
+
+
+@__app.route('/api/generate_video', methods=['POST'])
+def generate_video():
+    data = request.get_json()
+    if not data:
+        return jsonify({'status':'error', 'msg': '未提供数据'})
+
+    flag = data.get('flag')
+    content = data.get('content')
+    audio_path = data.get('audio_path', '')
+
+    if not flag or not content:
+        return jsonify({'status':'error', 'msg': '标识和内容不能为空'})
+
+    if audio_path == '':
+        audio_path = handle_audio(content)
+        if not audio_path:
+            return jsonify({'status':'error', 'msg': '音频生成失败，请稍后再试'})
+    try:
+        send_data = {
+            'flag': flag,
+            'content': content,
+            'audio_path': audio_path,
+            'human':'num1'
+        }
+        response = requests.post('http://127.0.0.1:10010/generate', json=send_data)
+        response_data = response.json()
+
+        if response.status_code == 201:
+            return jsonify({'status': 'success', 'msg': '数据生成请求已提交'}), 201
+        elif response.status_code == 400:
+            return jsonify({'status': 'error', 'msg': response_data.get('msg')}), 400  
+        elif response.status_code == 409:
+            return jsonify({'status': 'error', 'msg': response_data.get('msg')}), 409  
+        else:
+            return jsonify({'status': 'error', 'msg': '生成失败，请稍后再试'}), response.status_code
+    except requests.exceptions.RequestException:
+        return jsonify({'status': 'error', 'msg': '生成失败，请稍后再试'})
+
 
 
 def stream_response(text):

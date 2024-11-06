@@ -202,7 +202,7 @@ class Recorder:
         while self.__running:
             try:
                 record = cfg.config['source']['record']
-                if not record['enabled']:
+                if not record['enabled'] and not self.is_remote:
                     time.sleep(0.1)
                     continue
                 self.is_reading = True
@@ -215,7 +215,6 @@ class Recorder:
                 self.__running = False
             if not data:
                 continue 
-
             #是否可以拾音,不可以就掉弃录音
             can_listen = True
             #没有开唤醒，但面板或数字人正在播音时不能拾音
@@ -229,7 +228,7 @@ class Recorder:
             if can_listen == False:#掉弃录音
                 data = None
                 continue
-            
+
             #计算音量是否满足激活拾音
             level = audioop.rms(data, 2)
             if len(self.__history_data) >= 10:#保存激活前的音频，以免信息掉失
@@ -245,9 +244,11 @@ class Recorder:
             elif history_percentage < self.__dynamic_threshold:
                 self.__dynamic_threshold += (history_percentage - self.__dynamic_threshold) * 1
             
+           
             #激活拾音
             if percentage > self.__dynamic_threshold:
                 last_speaking_time = time.time()
+
                 if not self.__processing and not isSpeaking and time.time() - last_mute_time > _ATTACK:
                     isSpeaking = True  #用户正在说话
                     util.printInfo(1, self.username,"聆听中...")
@@ -259,7 +260,9 @@ class Recorder:
                     concatenated_audio.clear()
                     self.__aLiNls = self.asrclient()
                     try:
-                        self.__aLiNls.start()
+                        task_id = self.__aLiNls.start()
+                        while not self.__aLiNls.started:
+                            time.sleep(0.01)
                     except Exception as e:
                         print(e)
                         util.printInfo(1, self.username, "aliyun asr 连接受限")

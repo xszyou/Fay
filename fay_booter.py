@@ -5,6 +5,7 @@ import pyaudio
 import socket
 import psutil
 import sys
+import asyncio
 import requests
 from core.interact import Interact
 from core.recorder import Recorder
@@ -14,6 +15,7 @@ from utils import util, config_util, stream_util
 from core.wsa_server import MyServer
 from scheduler.thread_manager import MyThread
 from core import wsa_server
+from core import socket_bridge_service
 
 feiFei: fay_core.FeiFei = None
 recorderListener: Recorder = None
@@ -21,6 +23,8 @@ __running = False
 deviceSocketServer = None
 DeviceInputListenerDict = {}
 ngrok = None
+socket_service_instance = None
+
 
 #启动状态
 def is_running():
@@ -324,6 +328,7 @@ def stop():
     global __running
     global DeviceInputListenerDict
     global ngrok
+    global socket_service_instance
 
     util.log(1, '正在关闭服务...')
     __running = False
@@ -337,6 +342,11 @@ def stop():
             value = DeviceInputListenerDict.pop(key)
             value.stop()
     deviceSocketServer.close()
+    # 关闭 socket_bridge_service
+    if socket_service_instance is not None:
+        util.log(3, '正在关闭 socket_bridge_service...')
+        future = asyncio.run_coroutine_threadsafe(socket_service_instance.shutdown(), socket_service_instance.loop)
+        future.result()  # 等待关闭完成
     util.log(1, '正在关闭核心服务...')
     feiFei.stop()
     util.log(1, '服务已关闭！')
@@ -347,6 +357,7 @@ def start():
     global feiFei
     global recorderListener
     global __running
+    global socket_service_instance
     util.log(1, '开启服务...')
     __running = True
 
@@ -378,6 +389,11 @@ def start():
     util.log(1,'启动声音沟通接口服务...')
     deviceSocketThread = MyThread(target=accept_audio_device_output_connect)
     deviceSocketThread.start()
+
+    util.log(3, '启动 socket_bridge_service...')
+    socket_service_instance = socket_bridge_service.new_instance()
+    socket_bridge_service_Thread = MyThread(target=socket_service_instance.start_service)
+    socket_bridge_service_Thread.start()
 
     #启动自动播放服务
     util.log(1,'启动自动播放服务...')

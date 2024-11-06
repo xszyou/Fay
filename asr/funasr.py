@@ -27,6 +27,7 @@ class FunASR:
         self.__reconnect_delay = 1
         self.__reconnecting = False
         self.username = username
+        self.started = True
 
     
     # 收到websocket消息的处理
