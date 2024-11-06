@@ -277,7 +277,6 @@ def api_get_run_status():
     status = fay_booter.is_running()
     return json.dumps({'status': status})
 
-
 @__app.route('/api/adopt_msg', methods=['POST'])
 def adopt_msg():
     data = request.get_json()
@@ -302,7 +301,6 @@ def adopt_msg():
             return jsonify({'status':'error', 'msg': '采纳失败'})
     else:
         return jsonify({'status':'error', 'msg': '采纳失败'})
-
 
 def stream_response(text):
     def generate():
