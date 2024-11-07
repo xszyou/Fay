@@ -201,6 +201,7 @@ class Recorder:
         audio_data_list = []
         while self.__running:
             try:
+                cfg.load_config()
                 record = cfg.config['source']['record']
                 if not record['enabled'] and not self.is_remote:
                     time.sleep(0.1)

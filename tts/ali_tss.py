@@ -93,7 +93,7 @@ class Speech:
                 httpHeaders = {
                     'Content-Type': 'application/json'
                     }
-                text = f"<speak><break time='0.2s'/>{text}</speak>"
+                text = f"<speak>{text}</speak>"
                 # 设置HTTPS Body。
                 body = {'appkey': self.ali_nls_app_key, 'token': self.token,'speech_rate':0, 'text': text, 'format': 'wav', 'sample_rate': 16000, 'voice': config_util.config["attribute"]["voice"]}
                 body = json.dumps(body)
@@ -117,8 +117,7 @@ class Speech:
                     util.log(1, "[x] 原因: " + str(body))
                     file_url = None
                     return file_url
-                conn.close()
-                print(time.time() - tt)   
+                conn.close() 
                 return file_url
             else:
                 util.log(1, "[x] 语音转换失败！")
