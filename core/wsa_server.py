@@ -31,21 +31,36 @@ class MyServer:
             async for message in websocket:
                 await asyncio.sleep(0.01)
                 try:
-                    username = json.loads(message).get("Username")
-                except json.JSONDecodeError as e:#json格式有误，不处理
-                    pass
-                if username:
+                    data = json.loads(message)
+                    username = data.get("Username")
+                    output_setting = data.get("Output")
+                except json.JSONDecodeError:
+                    pass  # Ignore invalid JSON messages
+                if username or output_setting:
                     remote_address = websocket.remote_address
                     unique_id = f"{remote_address[0]}:{remote_address[1]}"
                     async with self.lock:
-                        for i in range(len(self.__clients)): 
+                        for i in range(len(self.__clients)):
                             if self.__clients[i]["id"] == unique_id:
-                                self.__clients[i]["username"] = username
+                                if username:
+                                    self.__clients[i]["username"] = username
+                                if output_setting:
+                                    self.__clients[i]["output"] = output_setting   
                 await self.__consumer(message)
         except websockets.exceptions.ConnectionClosedError as e:
             # 从客户端列表中移除已断开的连接
             await self.remove_client(websocket)
-            util.printInfo(1, "User" if  username is None else username, f"WebSocket 连接关闭: {e}")
+            util.printInfo(1, "User" if username is None else username, f"WebSocket 连接关闭: {e}")
+
+    def get_client_output(self, username):
+        clients_with_username = [c for c in self.__clients if c.get("username") == username]
+        if not clients_with_username:
+            return False
+        for client in clients_with_username:
+            output = client.get("output", 1)
+            if output != 0 and output != '0':
+                return True 
+        return False
 
     # 发送处理        
     async def __producer_handler(self, websocket, path):

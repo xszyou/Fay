@@ -70,17 +70,23 @@
         <!-- 以上是聊天对话 -->
 
         <div class="inputmessage">
-          <div class="inputmessage_voice" ><img  src="{{ url_for('static',filename='images/voice.png') }}" alt="" style="filter: grayscale(100%);" ></div>
+          <div  class="inputmessage_voice" >
+
+            <img v-if="!source_record_enabled" src="{{ url_for('static',filename='images/recording.png') }}" alt="" @click=changeRecord() >
+            <img v-else src="{{ url_for('static',filename='images/record.png') }}" alt="" @click=changeRecord() >
+          </div>
           <div class="inputmessage_input"> <textarea class="text_in" placeholder="请输入内容" v-model="newMessage" @keyup.enter="sendMessage" style="padding-top: 13px;"></textarea></div>
           <div class="inputmessage_send"><img  src="{{ url_for('static',filename='images/send.png') }}" alt="发送信息" @click="sendMessage"></div>
 
-          <div class="inputmessage_open">
+          <div v-if="liveState == 1" class="inputmessage_open">
 
-            <img v-if="liveState == 1" src="{{ url_for('static',filename='images/close.png') }}"  @click=stopLive() >
-            <img v-else src="{{ url_for('static',filename='images/open.png') }}"  @click=startLive() >
+            <img v-if="!play_sound_enabled" src="{{ url_for('static',filename='images/sound_off.png') }}"  @click=changeSound() >
+            <img v-else src="{{ url_for('static',filename='images/sound_on.png') }}"  @click=changeSound() >
           
           </div>
-
+          <div v-else class="inputmessage_open">
+            <img  src="{{ url_for('static',filename='images/open.png') }}"  @click=startLive() >
+          </div>
         </div>
 
         <div class="Userchange">

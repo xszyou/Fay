@@ -3,7 +3,6 @@ import time
 import re
 import pyaudio
 import socket
-import psutil
 import sys
 import asyncio
 import requests
@@ -13,7 +12,6 @@ from core import fay_core
 from scheduler.thread_manager import MyThread
 from utils import util, config_util, stream_util
 from core.wsa_server import MyServer
-from scheduler.thread_manager import MyThread
 from core import wsa_server
 from core import socket_bridge_service
 
@@ -222,15 +220,6 @@ def accept_audio_device_output_connect():
         except Exception as e:
             pass
 
-def kill_process_by_port(port):
-    for proc in psutil.process_iter(['pid', 'name','cmdline']):
-        try:
-            for conn in proc.connections(kind='inet'):
-                if conn.laddr.port == port:
-                    proc.terminate()
-                    proc.wait()
-        except(psutil.NosuchProcess, psutil.AccessDenied):
-            pass
 #数字人端请求获取最新的自动播放消息，若自动播放服务关闭会自动退出自动播放
 def start_auto_play_service(): #TODO 评估一下有无优化的空间
     url = f"{config_util.config['source']['automatic_player_url']}/get_auto_play_item"
@@ -271,55 +260,7 @@ def start_auto_play_service(): #TODO 评估一下有无优化的空间
                     util.printInfo(1, user, '请求自动播放服务器失败，错误信息是：{}'.format(e))
         time.sleep(0.01)
      
-#控制台输入监听
-def console_listener():
-    global feiFei
-    while __running:
-        try:
-            text = input()
-        except EOFError:
-            util.log(1, "控制台已经关闭")
-            break
-        
-        args = text.split(' ')
 
-        if len(args) == 0 or len(args[0]) == 0:
-            continue
-
-        if args[0] == 'help':
-            util.log(1, 'in <msg> \t通过控制台交互')
-            util.log(1, 'restart \t重启服务')
-            util.log(1, 'stop \t\t关闭服务')
-            util.log(1, 'exit \t\t结束程序')
-
-        elif args[0] == 'stop':
-            stop()
-            break
-
-        elif args[0] == 'restart':
-            stop()
-            time.sleep(0.1)
-            start()
-
-        elif args[0] == 'in':
-            if len(args) == 1:
-                util.log(1, '错误的参数！')
-            msg = text[3:len(text)]
-            util.printInfo(3, "控制台", '{}: {}'.format('控制台', msg))
-            interact = Interact("console", 1, {'user': 'User', 'msg': msg})
-            thr = MyThread(target=feiFei.on_interact, args=[interact])
-            thr.start()
-
-        elif args[0]=='exit':
-            stop()
-            time.sleep(0.1)
-            util.log(1,'程序正在退出..')
-            ports =[10001,10002,10003,5000]
-            for port in ports:
-                kill_process_by_port(port)
-            sys.exit(0)
-        else:
-            util.log(1, '未知命令！使用 \'help\' 获取帮助.')
 
 #停止服务
 def stop():
@@ -329,6 +270,7 @@ def stop():
     global DeviceInputListenerDict
     global ngrok
     global socket_service_instance
+    global deviceSocketServer
 
     util.log(1, '正在关闭服务...')
     __running = False
@@ -337,14 +279,17 @@ def stop():
         recorderListener.stop()
         time.sleep(0.1)
     util.log(1, '正在关闭远程音频输入输出服务...')
-    if len(DeviceInputListenerDict) > 0:
-        for key in list(DeviceInputListenerDict.keys()):
-            value = DeviceInputListenerDict.pop(key)
-            value.stop()
-    deviceSocketServer.close()
-    if socket_service_instance is not None:
-        future = asyncio.run_coroutine_threadsafe(socket_service_instance.shutdown(), socket_service_instance.loop)
-        future.result()  
+    try:
+        if len(DeviceInputListenerDict) > 0:
+            for key in list(DeviceInputListenerDict.keys()):
+                value = DeviceInputListenerDict.pop(key)
+                value.stop()
+        deviceSocketServer.close()
+        if socket_service_instance is not None:
+            socket_service_instance.stop_server()
+            socket_service_instance = None 
+    except:
+        pass
     util.log(1, '正在关闭核心服务...')
     feiFei.stop()
     util.log(1, '服务已关闭！')
@@ -395,11 +340,7 @@ def start():
     #启动自动播放服务
     util.log(1,'启动自动播放服务...')
     MyThread(target=start_auto_play_service).start()
-            
-    #监听控制台
-    util.log(1, '注册命令...')
-    MyThread(target=console_listener).start()  # 监听控制台
-
+        
     util.log(1, '服务启动完成!')
     util.log(1, '使用 \'help\' 获取帮助.')
 
