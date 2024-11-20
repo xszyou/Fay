@@ -17,7 +17,6 @@ pytz
 gevent~=22.10.1
 edge_tts
 pydub
-langchain==0.0.336
 chromadb
 tenacity==8.2.3
 pygame
@@ -25,3 +24,7 @@ scipy
 flask-httpauth
 opencv-python
 psutil
+langchain
+langchain_openai
+langgraph
+langchain-community 

@@ -2,7 +2,7 @@ import requests
 import json
 
 def test_gpt(prompt):
-    url = 'http://faycontroller.yaheen.com:5000/v1/chat/completions'  # 替换为您的接口地址
+    url = 'http://127.0.0.1:5000/v1/chat/completions'  # 替换为您的接口地址
     headers = {
         'Content-Type': 'application/json',
         'Authorization': f'Bearer YOUR_API_KEY',  # 如果您的接口需要身份验证

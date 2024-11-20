@@ -8,11 +8,11 @@
         "hobby": "\u53d1\u5446",
         "job": "\u52a9\u7406",
         "name": "\u83f2\u83f2",
-        "voice": "\u6653\u6653(azure)",
+        "voice": "abin",
         "zodiac": "\u86c7"
     },
     "interact": {
-        "QnA": "",
+        "QnA": "qa.csv",
         "maxInteractTime": 15,
         "perception": {
             "chat": 10,
@@ -21,8 +21,7 @@
             "indifferent": 10,
             "join": 10
         },
-        "playSound": true,
-        "sound_synthesis_enabled": false,
+        "playSound": false,
         "visualization": false
     },
     "items": [],
@@ -34,12 +33,11 @@
             "url": ""
         },
         "record": {
-            "channels": 0,
             "device": "",
-            "enabled": true
+            "enabled": false
         },
         "wake_word": "\u4f60\u597d",
-        "wake_word_enabled": true,
+        "wake_word_enabled": false,
         "wake_word_type": "front"
     }
 }

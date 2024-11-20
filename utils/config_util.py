@@ -2,6 +2,16 @@ import os
 import json
 import codecs
 from configparser import ConfigParser
+import functools
+from threading import Lock
+
+lock = Lock()
+def synchronized(func):
+  @functools.wraps(func)
+  def wrapper(*args, **kwargs):
+    with lock:
+      return func(*args, **kwargs)
+  return wrapper
 
 config: json = None
 system_config: ConfigParser = None
@@ -40,6 +50,7 @@ coze_api_key = None
 start_mode = None
 fay_url = None
 
+@synchronized
 def load_config():
     global config
     global system_config
@@ -116,8 +127,11 @@ def load_config():
     coze_api_key = system_config.get('key', 'coze_api_key')
     start_mode = system_config.get('key', 'start_mode')
     fay_url = system_config.get('key', 'fay_url')
+
+    #读取用户配置
     config = json.load(codecs.open('config.json', encoding='utf-8'))
 
+@synchronized
 def save_config(config_data):
     global config
     config = config_data

@@ -14,6 +14,7 @@ from utils import util, config_util, stream_util
 from core.wsa_server import MyServer
 from core import wsa_server
 from core import socket_bridge_service
+from llm.agent import agent_service
 
 feiFei: fay_core.FeiFei = None
 recorderListener: Recorder = None
@@ -96,9 +97,10 @@ class RecorderListener(Recorder):
         try:
             while self.is_reading:
                 time.sleep(0.1)
-            self.stream.stop_stream()
-            self.stream.close()
-            self.paudio.terminate()
+            if self.stream is not None:
+                self.stream.stop_stream()
+                self.stream.close()
+                self.paudio.terminate()
         except Exception as e:
                 print(e)
                 util.log(1, "请检查设备是否有误，再重新启动!")
@@ -186,7 +188,7 @@ def device_socket_keep_alive():
                 if wsa_server.get_web_instance().is_connected(value.username):
                     wsa_server.get_web_instance().add_cmd({"remote_audio_connect": True, "Username" : value.username}) 
             except Exception as serr:
-                util.printInfo(3, value.username, "远程音频输入输出设备已经断开：{}".format(key))
+                util.printInfo(1, value.username, "远程音频输入输出设备已经断开：{}".format(key))
                 value.stop()
                 delkey = key
                 break
@@ -222,6 +224,8 @@ def accept_audio_device_output_connect():
 
 #数字人端请求获取最新的自动播放消息，若自动播放服务关闭会自动退出自动播放
 def start_auto_play_service(): #TODO 评估一下有无优化的空间
+    if config_util.config['source'].get('automatic_player_url') is None or config_util.config['source'].get('automatic_player_status') is None:
+        return
     url = f"{config_util.config['source']['automatic_player_url']}/get_auto_play_item"
     user = "User" #TODO 临时固死了
     is_auto_server_error = False
@@ -290,6 +294,11 @@ def stop():
             socket_service_instance = None 
     except:
         pass
+
+    if config_util.key_chat_module == "agent":
+        util.log(1, '正在关闭agent服务...')
+        agent_service.agent_stop()
+
     util.log(1, '正在关闭核心服务...')
     feiFei.stop()
     util.log(1, '服务已关闭！')
@@ -325,17 +334,21 @@ def start():
     record = config_util.config['source']['record']
     if record['enabled']:
         util.log(1, '开启录音服务...')
-    recorderListener = RecorderListener(record['device'], feiFei)  # 监听麦克风
+    recorderListener = RecorderListener('device', feiFei)  # 监听麦克风
     recorderListener.start()
 
     #启动声音沟通接口服务
     util.log(1,'启动声音沟通接口服务...')
     deviceSocketThread = MyThread(target=accept_audio_device_output_connect)
     deviceSocketThread.start()
-
     socket_service_instance = socket_bridge_service.new_instance()
     socket_bridge_service_Thread = MyThread(target=socket_service_instance.start_service)
     socket_bridge_service_Thread.start()
+
+    #启动agent服务
+    if config_util.key_chat_module == "agent":
+        util.log(1,'启动agent服务...')
+        agent_service.agent_start()
 
     #启动自动播放服务
     util.log(1,'启动自动播放服务...')

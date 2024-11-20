@@ -190,6 +190,7 @@ class FayInterface {
         }
         if (vueInstance.selectedUser && data.panelReply.username === vueInstance.selectedUser[1]) {
           vueInstance.messages.push({
+            id: data.panelReply.id,
             username: data.panelReply.username,
             content: data.panelReply.content,
             type: data.panelReply.type,

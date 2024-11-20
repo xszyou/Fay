@@ -33,7 +33,7 @@ class QAService:
 
     def question(self, query_type, text):
         if query_type == 'qa':
-            answer_dict = self.__read_qna(cfg.config['interact']['QnA'])
+            answer_dict = self.__read_qna(cfg.config['interact'].get('QnA'))
             answer, action = self.__get_keyword(answer_dict, text, query_type)
             if action:
                 MyThread(target=self.__run, args=[action]).start()
@@ -61,7 +61,7 @@ class QAService:
                     if len(row) >= 2:
                         qna.append([row[0].split(";"), row[1], row[2] if len(row) >= 3 else None])
         except Exception as e:
-            util.log(1, 'qa文件没有指定，不匹配qa')
+            pass
         return qna
 
     def record_qapair(self, question, answer):

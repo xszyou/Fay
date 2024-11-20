@@ -83,6 +83,7 @@ class Member_Db:
         else:
             return "notexists"
 
+    #根据username查询uid
     def find_user(self, username):
         conn = sqlite3.connect('user_profiles.db')
         c = conn.cursor()
@@ -93,6 +94,20 @@ class Member_Db:
             return 0
         else:
            return result[0]
+        
+    #根据uid查询username
+    def find_username_by_uid(self, uid):
+        conn = sqlite3.connect('user_profiles.db')
+        c = conn.cursor()
+        c.execute('SELECT username FROM T_Member WHERE id = ?', (uid,))
+        result = c.fetchone()
+        conn.close()
+        if result is None:
+            return 0
+        else:
+           return result[0]
+
+
 
     @synchronized
     def query(self, sql):

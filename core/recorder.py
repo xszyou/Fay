@@ -46,6 +46,8 @@ class Recorder:
         self.username = 'User' #默认用户，子类实现时会重写
         self.channels = 1
         self.sample_rate = 16000
+        self.is_reading = False
+        self.stream = None
 
     def asrclient(self):
         if self.ASRMode == "ali":
@@ -204,7 +206,7 @@ class Recorder:
                 cfg.load_config()
                 record = cfg.config['source']['record']
                 if not record['enabled'] and not self.is_remote:
-                    time.sleep(0.1)
+                    time.sleep(1)
                     continue
                 self.is_reading = True
                 data = stream.read(1024, exception_on_overflow=False)

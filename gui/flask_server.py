@@ -46,6 +46,7 @@ def verify_password(username, password):
     if username in users and users[username] == password:
         return username
 
+
 def __get_template():
     try:
         return render_template('index.html')
@@ -67,6 +68,7 @@ def __get_device_list():
     except Exception as e:
         print(f"Error getting device list: {e}")
         return []
+
 
 @__app.route('/api/submit', methods=['post'])
 def api_submit():
@@ -252,7 +254,7 @@ def api_send():
         if not username or not msg:
             return jsonify({'result': 'error', 'message': '用户名和消息内容不能为空'})
         interact = Interact("text", 1, {'user': username, 'msg': msg})
-        util.printInfo(3, "文字发送按钮", '{}'.format(interact.data["msg"]), time.time())
+        util.printInfo(1, username, '[文字发送按钮]{}'.format(interact.data["msg"]), time.time())
         fay_booter.feiFei.on_interact(interact)
         return '{"result":"successful"}'
     except json.JSONDecodeError:
@@ -263,11 +265,12 @@ def api_send():
 # 获取指定用户的消息记录
 @__app.route('/api/get-msg', methods=['post'])
 def api_get_Msg():
-    data = request.form.get('data')
-    if not data:
-        return jsonify({'list': [], 'message': '未提供数据'})
     try:
-        data = json.loads(data)
+        data = request.form.get('data')
+        if data is None:
+            data = request.get_json()
+        else:
+            data = json.loads(data)
         uid = member_db.new_instance().find_user(data["username"])
         contentdb = content_db.new_instance()
         if uid == 0:
@@ -310,7 +313,7 @@ def api_send_v1_chat_completions():
         model = data.get('model', 'fay')
         observation = data.get('observation', '')
         interact = Interact("text", 1, {'user': username, 'msg': last_content, 'observation': observation})
-        util.printInfo(3, "文字沟通接口", '{}'.format(interact.data["msg"]), time.time())
+        util.printInfo(1, username, '[文字沟通接口]{}'.format(interact.data["msg"]), time.time())
         text = fay_booter.feiFei.on_interact(interact)
 
         if model == 'fay-streaming':
@@ -393,7 +396,7 @@ def stream_response(text):
             yield f"data: {json.dumps(message)}\n\n"
             time.sleep(0.1)
         yield 'data: [DONE]\n\n'
-
+    
     return Response(generate(), mimetype='text/event-stream')
 
 def non_streaming_response(last_content, text):
