@@ -138,6 +138,4 @@ def save_config(config_data):
     file = codecs.open('config.json', mode='w', encoding='utf-8')
     file.write(json.dumps(config, sort_keys=True, indent=4, separators=(',', ': ')))
     file.close()
-    load_config()
-    # for line in json.dumps(config, sort_keys=True, indent=4, separators=(',', ': ')).split("\n"):
-    #     print(line)
+

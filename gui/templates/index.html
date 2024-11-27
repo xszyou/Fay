@@ -6,10 +6,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Fay数字人</title>
     <link rel="stylesheet" href="{{ url_for('static',filename='css/index.css') }}" />
+    <link rel="icon" href="{{ url_for('static',filename='images/favicon.ico') }}" type="image/x-icon">
     <script src="{{ url_for('static',filename='js/vue.js') }}"></script>
-    <script src="https://cdn.jsdelivr.net/npm/element-ui@2.15.6/lib/index.js"></script>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/element-ui@2.15.6/lib/theme-chalk/index.css" />
+    <script src="{{ url_for('static',filename='js/element-ui.js') }}"></script>
+    <link rel="stylesheet" href="{{ url_for('static',filename='css/element/theme-chalk.css') }}" />
     <script src="{{ url_for('static',filename='js/index.js') }}" defer></script>
+    <script src="{{ url_for('static',filename='js/script.js') }}" defer></script>
   </head>
   <body >
     <div  id="app" class="main_bg">  
@@ -89,12 +91,15 @@
           </div>
         </div>
 
+       
         <div class="Userchange">
-          <div class="tag-container">
+          <button id="prevButton" ><img  src="{{ url_for('static',filename='images/scrollleft.png') }}" alt="向左滑动" ></button>
+          <div class="menu" ref="menuContainer">
             <div class="tag" v-for="user in userList" :key="user[0]" :class="{'selected': selectedUser && selectedUser[0] === user[0]}" @click="selectUser(user)">
               [[ user[1] ]]
-            </div>
-          </div>
+            </div>    
+                    </div>
+          <button id="nextButton" ><img  src="{{ url_for('static',filename='images/scrollright.png') }}" alt="向右滑动" ></button>
         </div>
 
 
@@ -102,20 +107,5 @@
 <!-- 以上是多用户切换 -->
 
       </div>
-
-
-
-
-
-
-
-
     </div>
-
-
-
-
-
-
-
     </body>

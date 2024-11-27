@@ -2,11 +2,11 @@ import asyncio
 import websockets
 import argparse
 import json
+import logging
 from funasr import AutoModel
 import os
 
 # 设置日志级别
-import logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.CRITICAL)
 
@@ -57,7 +57,7 @@ async def worker():
         task_queue.task_done()
 
 async def process_wav_file(websocket, url):
-    #热词
+    # 热词
     param_dict = {"sentence_timestamp": False}
     with open("data/hotword.txt", "r", encoding="utf-8") as f:
         lines = f.readlines()
@@ -67,7 +67,7 @@ async def process_wav_file(websocket, url):
     param_dict["hotword"] = hotword
     wav_path = url
     try:
-        res = asr_model.generate(input=wav_path,is_final=True, **param_dict)
+        res = asr_model.generate(input=wav_path, is_final=True, **param_dict)
         if res:
             if 'text' in res[0] and websocket.open:
                 await websocket.send(res[0]['text'])
@@ -78,7 +78,7 @@ async def process_wav_file(websocket, url):
             os.remove(wav_path)
 
 async def main():
-    start_server = websockets.serve(ws_serve, args.host, args.port, subprotocols=["binary"], ping_interval=10)
+    start_server = websockets.serve(ws_serve, args.host, args.port, ping_interval=10)
     await start_server
     worker_task = asyncio.create_task(worker())
     await worker_task

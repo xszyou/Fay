@@ -179,6 +179,8 @@ html {
 	padding: 8px;
 	font-size: 15px;
 	color: #333;
+	white-space: pre-wrap; 
+	word-wrap: break-word;
   }
 
 .sender-message.message-bubble {

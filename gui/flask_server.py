@@ -8,6 +8,7 @@ from flask import Flask, render_template, request, jsonify, Response, send_file
 from flask_cors import CORS
 import requests
 import datetime
+import pytz
 
 import fay_booter
 
@@ -96,6 +97,7 @@ def api_submit():
         merge_configs(existing_config, config_data['config'])
 
         config_util.save_config(existing_config)
+        config_util.load_config()
 
         return jsonify({'result': 'successful'})
     except json.JSONDecodeError:
@@ -280,7 +282,8 @@ def api_get_Msg():
         relist = []
         i = len(list) - 1
         while i >= 0:
-            timetext = datetime.datetime.fromtimestamp(list[i][3]).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+            timezone = pytz.timezone('Asia/Shanghai')
+            timetext = datetime.datetime.fromtimestamp(list[i][3], timezone).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
             relist.append(dict(type=list[i][0], way=list[i][1], content=list[i][2], createtime=list[i][3], timetext=timetext, username=list[i][5], id=list[i][6], is_adopted=list[i][7]))
             i -= 1
         if fay_booter.is_running():
@@ -312,7 +315,7 @@ def api_send_v1_chat_completions():
 
         model = data.get('model', 'fay')
         observation = data.get('observation', '')
-        interact = Interact("text", 1, {'user': username, 'msg': last_content, 'observation': observation})
+        interact = Interact("text", 1, {'user': username, 'msg': last_content, 'observation': str(observation)})
         util.printInfo(1, username, '[文字沟通接口]{}'.format(interact.data["msg"]), time.time())
         text = fay_booter.feiFei.on_interact(interact)
 

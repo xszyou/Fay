@@ -28,3 +28,4 @@ langchain
 langchain_openai
 langgraph
 langchain-community 
+bs4

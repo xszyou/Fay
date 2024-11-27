@@ -102,7 +102,7 @@ class FunASR:
         self.done = False
         self.__frames.clear()
         websocket.enableTrace(False)
-        self.__ws = websocket.WebSocketApp(self.__URL, on_message=self.on_message,on_close=self.on_close,on_error=self.on_error,subprotocols=["binary"])
+        self.__ws = websocket.WebSocketApp(self.__URL, on_message=self.on_message,on_close=self.on_close,on_error=self.on_error)
         self.__ws.on_open = self.on_open
 
         self.__ws.run_forever(sslopt={"cert_reqs": ssl.CERT_NONE})
