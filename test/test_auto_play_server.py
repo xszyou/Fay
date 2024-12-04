@@ -10,8 +10,8 @@ app = Flask(__name__)
 @app.route('/get_auto_play_item', methods=['POST'])
 def get_wav():
     # 获取用户标识（例如，通过POST请求中的JSON数据）
-    data = request.json
-    user = data.get('user', 'User')
+    # data = request.json
+    # user = data.get('user', 'User')
 
     # 模拟WAV文件的URL（这里假设是某个静态文件服务的URL）
     wav_url = ""#f"http://120.79.187.154:5000/audio/sample-1729231423801.wav"

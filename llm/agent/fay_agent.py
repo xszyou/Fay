@@ -10,7 +10,7 @@ from llm.agent.tools.WebPageRetriever import WebPageRetriever
 from llm.agent.tools.WebPageScraper import WebPageScraper
 from llm.agent.tools.ToRemind import ToRemind
 from langgraph.prebuilt import create_react_agent
-from langchain_openai import ChatOpenAI
+from langchain_community.chat_models import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
 import utils.config_util as cfg
 from utils import util
@@ -26,8 +26,8 @@ class FayAgentCore():
         os.environ["OPENAI_API_BASE"] = cfg.gpt_base_url
         os.environ["LANGCHAIN_TRACING_V2"] = "true"
         os.environ["LANGCHAIN_ENDPOINT"] = "https://api.smith.langchain.com"
-        os.environ["LANGCHAIN_API_KEY"] = "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"
-        os.environ["LANGCHAIN_PROJECT"] = "pr-best-artist-21"
+        os.environ["LANGCHAIN_API_KEY"] = "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"
+        os.environ["LANGCHAIN_PROJECT"] = "my-agent"
 
         #创建llm
         self.llm = ChatOpenAI(model=cfg.gpt_model_engine)

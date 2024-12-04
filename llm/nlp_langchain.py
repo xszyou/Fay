@@ -1,11 +1,11 @@
 import hashlib
 import os
 
-from langchain.document_loaders import PyPDFLoader
-from langchain.embeddings.openai import OpenAIEmbeddings
+from langchain_community.document_loaders import PyPDFLoader
+from langchain_community.embeddings import OpenAIEmbeddings
 from langchain.indexes.vectorstore import VectorstoreIndexCreator, VectorStoreIndexWrapper
-from langchain.vectorstores.chroma import Chroma
-from langchain.chat_models import ChatOpenAI
+from langchain_community.vectorstores import Chroma
+from langchain_community.chat_models import ChatOpenAI
 
 from utils import config_util as cfg
 from utils import util
