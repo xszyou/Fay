@@ -5,6 +5,7 @@ import sys
 import time
 import psutil
 import re
+import argparse
 from utils import config_util, util
 from asr import ali_nls
 from core import wsa_server
@@ -142,6 +143,14 @@ if __name__ == '__main__':
     #监听控制台
     util.log(1, '注册命令...')
     MyThread(target=console_listener).start()
+
+    parser = argparse.ArgumentParser(description="start自启动")
+    parser.add_argument('command', nargs='?', default='', help="start")
+
+    parsed_args = parser.parse_args()
+    if parsed_args.command.lower() == 'start':
+        MyThread(target=fay_booter.start).start()
+
 
     #普通模式下启动窗口
     if config_util.start_mode == 'common':    

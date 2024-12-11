@@ -63,7 +63,6 @@ modules = {
     "nlp_ollama_api": nlp_ollama_api,
     "nlp_coze": nlp_coze,
     "nlp_agent": fay_agent
-
 }
 
 #大语言模型回复
@@ -121,9 +120,11 @@ class FeiFei:
     def __get_answer(self, interleaver, text):
         answer = None
         # 全局问答
-        answer = qa_service.QAService().question('qa',text)
+        answer, type = qa_service.QAService().question('qa',text)
         if answer is not None:
-            return answer
+            return answer, type
+        else:
+            return None, None
         
        
     #语音消息处理
@@ -152,8 +153,8 @@ class FeiFei:
                         wsa_server.get_web_instance().add_cmd({"panelReply": {"type":"member","content":interact.data["msg"], "username":username, "uid":uid, "id":content_id}, "Username" : username})
                     
                     #确定是否命中q&a
-                    answer = self.__get_answer(interact.interleaver, interact.data["msg"])
-
+                    answer, type = self.__get_answer(interact.interleaver, interact.data["msg"])
+                    
                     #大语言模型回复    
                     text = ''
                     textlist = []
@@ -167,7 +168,7 @@ class FeiFei:
 
                     else: 
                         text = answer
-
+                           
                     #记录回复    
                     self.write_to_file("./logs", "answer_result.txt", text)
                     content_id = content_db.new_instance().add_content('fay','speak',text, username, uid)
@@ -175,7 +176,10 @@ class FeiFei:
                     #文字输出：面板、聊天窗、log、数字人
                     if wsa_server.get_web_instance().is_connected(username):
                         wsa_server.get_web_instance().add_cmd({"panelMsg": text, "Username" : username, 'robot': f'http://{cfg.fay_url}:5000/robot/Speaking.jpg'})
-                        wsa_server.get_web_instance().add_cmd({"panelReply": {"type":"fay","content":text, "username":username, "uid":uid, "id":content_id}, "Username" : username})
+                        if type == 'qa':
+                            wsa_server.get_web_instance().add_cmd({"panelReply": {"type":"fay","content":text, "username":username, "uid":uid, "id":content_id, "is_adopted":True}, "Username" : username})
+                        else:
+                            wsa_server.get_web_instance().add_cmd({"panelReply": {"type":"fay","content":text, "username":username, "uid":uid, "id":content_id, "is_adopted":False}, "Username" : username})
                     if len(textlist) > 1:
                         i = 1
                         while i < len(textlist):

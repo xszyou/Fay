@@ -8,6 +8,8 @@ import time
 import json
 import requests
 from urllib3.exceptions import InsecureRequestWarning
+from datetime import datetime
+import pytz
 
 # 禁用不安全请求警告
 requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
@@ -42,6 +44,9 @@ def build_prompt(observation=""):
     return prompt
 
 def get_communication_history(uid=0):
+    tz = pytz.timezone('Asia/Shanghai')
+    thistime = datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')
+
     contentdb = content_db.new_instance()
     if uid == 0:
         communication_history = contentdb.get_list('all', 'desc', 11)
@@ -57,6 +62,9 @@ def get_communication_history(uid=0):
                 messages.append({"role": "user", "content": message_content})
             elif role == "fay":
                 messages.append({"role": "assistant", "content": message_content})
+    
+    if messages:
+        messages[-1]["content"] += f" 当前时间：{thistime}。"
     return messages
 
 def send_request(session, data):

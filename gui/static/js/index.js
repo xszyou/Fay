@@ -189,14 +189,26 @@ class FayInterface {
           vueInstance.userList.push([data.panelReply.uid, data.panelReply.username]);
         }
         if (vueInstance.selectedUser && data.panelReply.username === vueInstance.selectedUser[1]) {
+          if ('is_adopted' in data.panelReply && data.panelReply.is_adopted === true) {
+            vueInstance.messages.push({
+                id: data.panelReply.id,
+                username: data.panelReply.username,
+                content: data.panelReply.content,
+                type: data.panelReply.type,
+                timetext: this.getTime(),
+                is_adopted: 1
+            });
+        } else {
           vueInstance.messages.push({
             id: data.panelReply.id,
             username: data.panelReply.username,
             content: data.panelReply.content,
             type: data.panelReply.type,
             timetext: this.getTime(),
-            is_adopted:0
-          });
+            is_adopted: 0
+        });
+        }
+
           vueInstance.$nextTick(() => {
             const chatContainer = vueInstance.$el.querySelector('.chatmessage');
             if (chatContainer) {
