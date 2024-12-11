@@ -355,7 +355,14 @@ def start():
     MyThread(target=start_auto_play_service).start()
         
     util.log(1, '服务启动完成!')
+    util.log(1, 'in <msg> \t通过控制台交互')
+    util.log(1, 'restart \t重启服务')
+    util.log(1, 'start \t\t启动服务')
+    util.log(1, 'stop \t\t关闭服务')
+    util.log(1, 'exit \t\t结束程序')
     util.log(1, '使用 \'help\' 获取帮助.')
+    if config_util.start_mode == 'web':
+        util.log(1, '请通过浏览器访问 http://127.0.0.1:5000/ 管理您的Fay')
 
     
 

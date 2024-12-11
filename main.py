@@ -77,12 +77,15 @@ def console_listener():
         if args[0] == 'help':
             util.log(1, 'in <msg> \t通过控制台交互')
             util.log(1, 'restart \t重启服务')
+            util.log(1, 'start \t\t启动服务')
             util.log(1, 'stop \t\t关闭服务')
             util.log(1, 'exit \t\t结束程序')
 
         elif args[0] == 'stop' and fay_booter.is_running():
             fay_booter.stop()
-            break
+        
+        elif args[0] == 'start' and not fay_booter.is_running():
+            fay_booter.start()
 
         elif args[0] == 'restart' and fay_booter.is_running():
             fay_booter.stop()

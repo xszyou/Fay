@@ -26,7 +26,6 @@ from llm import nlp_rasa
 from llm import nlp_gpt
 from llm import nlp_lingju
 from llm import nlp_xingchen
-from llm import nlp_langchain
 from llm import nlp_ollama_api
 from llm import nlp_coze
 from llm.agent import fay_agent
@@ -59,7 +58,6 @@ modules = {
     "nlp_rasa": nlp_rasa,
     "nlp_lingju": nlp_lingju,
     "nlp_xingchen": nlp_xingchen,
-    "nlp_langchain": nlp_langchain,
     "nlp_ollama_api": nlp_ollama_api,
     "nlp_coze": nlp_coze,
     "nlp_agent": fay_agent

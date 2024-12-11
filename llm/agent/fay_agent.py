@@ -10,7 +10,7 @@ from llm.agent.tools.WebPageRetriever import WebPageRetriever
 from llm.agent.tools.WebPageScraper import WebPageScraper
 from llm.agent.tools.ToRemind import ToRemind
 from langgraph.prebuilt import create_react_agent
-from langchain_community.chat_models import ChatOpenAI
+from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
 import utils.config_util as cfg
 from utils import util
