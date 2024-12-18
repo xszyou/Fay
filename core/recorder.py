@@ -205,7 +205,7 @@ class Recorder:
             try:
                 cfg.load_config()
                 record = cfg.config['source']['record']
-                if not record['enabled'] and not self.is_remote:
+                if not record['enabled'] and not self.is_remote():
                     time.sleep(1)
                     continue
                 self.is_reading = True

@@ -27,6 +27,7 @@ class MyServer:
     # 接收处理
     async def __consumer_handler(self, websocket, path):
         username = None
+        output_setting = None
         try:
             async for message in websocket:
                 await asyncio.sleep(0.01)

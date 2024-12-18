@@ -476,6 +476,18 @@ def serve_gif(filename):
     else:
         return jsonify({'error': '文件未找到'}), 404
 
+#打招呼
+@__app.route('/to_greet', methods=['POST'])
+def to_greet():
+    data = request.get_json()
+    username = data.get('username', 'User')
+    observation = data.get('observation', '')
+    interact = Interact("hello", 1, {'user': username, 'msg': '按观测要求打个招呼', 'observation': str(observation)})
+    text = fay_booter.feiFei.on_interact(interact)
+    return jsonify({'status': 'success', 'data': text, 'msg': '已进行打招呼'}), 200 
+
+
+
 def run():
     server = pywsgi.WSGIServer(('0.0.0.0',5000), __app)
     server.serve_forever()
