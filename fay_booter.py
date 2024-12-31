@@ -196,7 +196,7 @@ def device_socket_keep_alive():
              value =  DeviceInputListenerDict.pop(delkey)
              if wsa_server.get_web_instance().is_connected(value.username):
                 wsa_server.get_web_instance().add_cmd({"remote_audio_connect": False, "Username" : value.username})
-        time.sleep(1)
+        time.sleep(10)
 
 #远程音频连接
 def accept_audio_device_output_connect():

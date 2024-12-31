@@ -93,7 +93,7 @@ class Speech:
                 httpHeaders = {
                     'Content-Type': 'application/json'
                     }
-                text = f"<speak>{text}</speak>"
+                # text = f"<speak>{text}</speak>"
                 # 设置HTTPS Body。
                 body = {'appkey': self.ali_nls_app_key, 'token': self.token,'speech_rate':0, 'text': text, 'format': 'wav', 'sample_rate': 16000, 'voice': config_util.config["attribute"]["voice"]}
                 body = json.dumps(body)

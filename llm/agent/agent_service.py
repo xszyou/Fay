@@ -60,7 +60,7 @@ def execute_task(task_time, id, content, uid):
     username = member_db.new_instance().find_username_by_uid(uid=uid)
     if not username:
         username = "User"
-    interact = Interact("text", 1, {'user': username, 'msg': "执行任务->\n" + content, 'observation': ""})
+    interact = Interact("text", 1, {'user': username, 'msg': "执行任务->立刻\n" + content, 'observation': ""})
     util.printInfo(3, "系统", '执行任务：{}'.format(interact.data["msg"]), time.time())
     text = fay_booter.feiFei.on_interact(interact)
     if text is not None and id in scheduled_tasks:

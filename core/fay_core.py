@@ -116,6 +116,7 @@ class FeiFei:
         self.__running = True
         self.sp.connect()  #TODO 预连接
         self.cemotion = None
+        self.timer = None
 
     #语音消息处理检查是否命中q&a
     def __get_answer(self, interleaver, text):
@@ -222,7 +223,7 @@ class FeiFei:
                     
                     #声音输出
                     MyThread(target=self.say, args=[interact, text]).start()  
-                
+                    return 'success'
    
             except BaseException as e:
                 print(e)
@@ -433,6 +434,9 @@ class FeiFei:
             global auto_play_lock
             global can_auto_play
             with auto_play_lock:
+                if self.timer is not None:
+                    self.timer.cancel()
+                    self.timer = None
                 can_auto_play = False
 
             self.speaking = True
@@ -474,13 +478,26 @@ class FeiFei:
         if config_util.config["interact"]["playSound"]:
             util.printInfo(1, interact.data.get('user'), '结束播放！')
         
-        #恢复自动播放(如何有)
+        self.speaking = False
+        global can_auto_play
+        global auto_play_lock
+        with auto_play_lock:
+            if self.timer:
+                self.timer.cancel()
+                self.timer = None
+            if interact.interleaver != 'auto_play': #交互后暂停自动播放30秒
+                self.timer = threading.Timer(30, self.set_auto_play)
+                self.timer.start()
+            else:
+                can_auto_play = True
+
+    #恢复自动播放(如果有)   
+    def set_auto_play(self):
         global auto_play_lock
         global can_auto_play
         with auto_play_lock:
             can_auto_play = True
-        
-        self.speaking = False
+            self.timer = None
 
     #启动核心服务
     def start(self):
