@@ -445,7 +445,7 @@ class FeiFei:
 
             #发送音频给数字人接口
             if wsa_server.get_instance().is_connected(interact.data.get("user")):
-                content = {'Topic': 'Unreal', 'Data': {'Key': 'audio', 'Value': os.path.abspath(file_url), 'HttpValue': f'http://{cfg.fay_url}:5000/audio/' + os.path.basename(file_url),  'Text': text, 'Time': audio_length, 'Type': 'hello' if interact.interleaver == 'hello' else ('interact' if interact.interact_type == 1 else 'auto_play')}, 'Username' : interact.data.get('user')}
+                content = {'Topic': 'Unreal', 'Data': {'Key': 'audio', 'Value': os.path.abspath(file_url), 'HttpValue': f'http://{cfg.fay_url}:5000/audio/' + os.path.basename(file_url),  'Text': text, 'Time': audio_length, 'Type': interact.interleaver}, 'Username' : interact.data.get('user')}
                 #计算lips
                 if platform.system() == "Windows":
                     try:

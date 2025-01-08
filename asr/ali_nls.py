@@ -114,12 +114,11 @@ class ALiNls:
     def on_close(self, ws, code, msg):
         self.__endding = True
         self.__is_close = True
-        if msg:
-            print("aliyun asr服务不太稳定:", msg)
 
     # 收到websocket错误的处理
     def on_error(self, ws, error):
         print("aliyun asr error:", error)
+        self.started = True #避免在aliyun asr出错时，recorder一直等待start状态返回
 
     # 收到websocket连接建立的处理
     def on_open(self, ws):

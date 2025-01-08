@@ -1,4 +1,5 @@
 #核心启动模块
+import os
 import time
 import re
 import pyaudio
@@ -15,6 +16,7 @@ from core.wsa_server import MyServer
 from core import wsa_server
 from core import socket_bridge_service
 from llm.agent import agent_service
+import subprocess
 
 feiFei: fay_core.FeiFei = None
 recorderListener: Recorder = None
@@ -34,13 +36,12 @@ class RecorderListener(Recorder):
 
     def __init__(self, device, fei):
         self.__device = device
-        self.__RATE = 16000
         self.__FORMAT = pyaudio.paInt16
         self.__running = False
         self.username = 'User'
-        self.channels = 1
-        self.sample_rate = 16000
-
+        # 这两个参数会在 get_stream 中根据实际设备更新
+        self.channels = None
+        self.sample_rate = None
         super().__init__(fei)
 
     def on_speaking(self, text):
@@ -51,51 +52,59 @@ class RecorderListener(Recorder):
 
     def get_stream(self):
         try:
-            #是否录音的控制是放在recorder.py的，这里的作用是防止没有麦克风的设备出错
             while True:
                 record = config_util.config['source']['record']
                 if record['enabled']:
                     break
                 time.sleep(0.1)
-
+    
             self.paudio = pyaudio.PyAudio()
-            device_id = 0  # 或者根据需要选择其他设备
-
-            # 获取设备信息
-            device_info = self.paudio.get_device_info_by_index(device_id)
-            self.channels = device_info.get('maxInputChannels', 1) #很多麦克风只支持单声道录音
-            # self.sample_rate = int(device_info.get('defaultSampleRate', self.__RATE))
-
-            # 设置格式（这里以16位深度为例）
-            format = pyaudio.paInt16
-
-            # 打开音频流，使用设备的最大声道数和默认采样率
+            
+            # 获取默认输入设备的信息
+            default_device = self.paudio.get_default_input_device_info()
+            self.channels = min(int(default_device.get('maxInputChannels', 1)), 2)  # 最多使用2个通道
+            # self.sample_rate = int(default_device.get('defaultSampleRate', 16000))
+            
+            util.printInfo(1, "系统", f"默认麦克风信息 - 采样率: {self.sample_rate}Hz, 通道数: {self.channels}")
+            
+            # 使用系统默认麦克风
             self.stream = self.paudio.open(
-                input_device_index=device_id,
-                rate=self.sample_rate,
-                format=format,
+                format=self.__FORMAT,
                 channels=self.channels,
+                rate=self.sample_rate,
                 input=True,
-                frames_per_buffer=4096
+                frames_per_buffer=1024
             )
-
+            
             self.__running = True
             MyThread(target=self.__pyaudio_clear).start()
+            
         except Exception as e:
-            print(f"Error: {e}")
+            util.log(1, f"打开麦克风时出错: {str(e)}")
+            util.printInfo(1, self.username, "请检查录音设备是否有误，再重新启动!")
             time.sleep(10)
         return self.stream
 
-
     def __pyaudio_clear(self):
-        while self.__running:
-            time.sleep(30)
+        try:
+            while self.__running:
+                time.sleep(30)
+        except Exception as e:
+            util.log(1, f"音频清理线程出错: {str(e)}")
+        finally:
+            if hasattr(self, 'stream') and self.stream:
+                try:
+                    self.stream.stop_stream()
+                    self.stream.close()
+                except Exception as e:
+                    util.log(1, f"关闭音频流时出错: {str(e)}")
     
     def stop(self):
         super().stop()
         self.__running = False
+        time.sleep(0.1)#给清理线程一点处理时间
         try:
-            while self.is_reading:
+            while self.is_reading:#是为了确保停止的时候麦克风没有刚好在读取音频的
                 time.sleep(0.1)
             if self.stream is not None:
                 self.stream.stop_stream()
@@ -250,6 +259,8 @@ def start_auto_play_service(): #TODO 评估一下有无优化的空间
                         if not audio_url or audio_url.strip()[0:4] != "http":
                             audio_url = None   
                         response_text = data.get('text')
+                        if audio_url is None and (response_text is None or '' == response_text.strip()):
+                            continue
                         timestamp = data.get('timestamp')
                         interact = Interact("auto_play", 2, {'user': user, 'text': response_text, 'audio': audio_url})
                         util.printInfo(1, user, '自动播放：{}，{}'.format(response_text, audio_url), time.time())
@@ -275,6 +286,13 @@ def stop():
     global ngrok
     global socket_service_instance
     global deviceSocketServer
+
+    #停止外部应用
+    util.log(1, '停止外部应用...')
+    startup_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'shell', 'run_startup.py')
+    if os.path.exists(startup_script):
+        from shell.run_startup import stop_all_processes
+        stop_all_processes()
 
     util.log(1, '正在关闭服务...')
     __running = False
@@ -310,6 +328,14 @@ def start():
     global recorderListener
     global __running
     global socket_service_instance
+
+    #启动外部应用
+    util.log(1,'启动外部应用...')
+    startup_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'shell', 'run_startup.py')
+    if os.path.exists(startup_script):
+        subprocess.Popen([sys.executable, startup_script], 
+                        creationflags=subprocess.CREATE_NEW_CONSOLE)
+    
     util.log(1, '开启服务...')
     __running = True
 

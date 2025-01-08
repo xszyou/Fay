@@ -62,9 +62,7 @@ def get_communication_history(uid=0):
                 messages.append({"role": "user", "content": message_content})
             elif role == "fay":
                 messages.append({"role": "assistant", "content": message_content})
-    
-    if messages:
-        messages[-1]["content"] += f" 当前时间：{thistime}。"
+
     return messages
 
 def send_request(session, data):

@@ -16,11 +16,11 @@ import tempfile
 import wave
 from core import fay_core
 from core import interact
-# 启动时间 (秒)
-_ATTACK = 0.2
+# 麦克风启动时间 (秒)
+_ATTACK = 0.1
 
-# 释放时间 (秒)
-_RELEASE = 0.7
+# 麦克风释放时间 (秒)
+_RELEASE = 0.5
 
 
 class Recorder:
@@ -48,6 +48,10 @@ class Recorder:
         self.sample_rate = 16000
         self.is_reading = False
         self.stream = None
+
+        self.__last_ws_notify_time = 0
+        self.__ws_notify_interval = 0.5  # 最小通知间隔（秒）
+        self.__ws_notify_thread = None
 
     def asrclient(self):
         if self.ASRMode == "ali":
@@ -196,8 +200,8 @@ class Recorder:
                 util.printInfo(1, self.username, "请检查设备是否有误，再重新启动!")
                 return
         isSpeaking = False
-        last_mute_time = time.time()
-        last_speaking_time = time.time()
+        last_mute_time = time.time() #用户上次说话完话的时刻，用于VAD的开始判断（也会影响fay说完话到收听用户说话的时间间隔） 
+        last_speaking_time = time.time()#用户上次说话的时刻，用于VAD的结束判断
         data = None
         concatenated_audio = bytearray()
         audio_data_list = []
@@ -248,56 +252,84 @@ class Recorder:
                 self.__dynamic_threshold += (history_percentage - self.__dynamic_threshold) * 1
             
            
-            #激活拾音
-            if percentage > self.__dynamic_threshold:
-                last_speaking_time = time.time()
+            #用户正在说话，激活拾音
+            try:
+                if percentage > self.__dynamic_threshold:
+                    last_speaking_time = time.time() 
 
-                if not self.__processing and not isSpeaking and time.time() - last_mute_time > _ATTACK:
-                    isSpeaking = True  #用户正在说话
-                    util.printInfo(1, self.username,"聆听中...")
-                    if wsa_server.get_web_instance().is_connected(self.username):
-                        wsa_server.get_web_instance().add_cmd({"panelMsg": "聆听中...", 'Username' : self.username, 'robot': f'http://{cfg.fay_url}:5000/robot/Listening.jpg'})
-                    if wsa_server.get_instance().is_connected(self.username):
-                        content = {'Topic': 'Unreal', 'Data': {'Key': 'log', 'Value': "聆听中..."}, 'Username' : self.username, 'robot': f'http://{cfg.fay_url}:5000/robot/Listening.jpg'}
-                        wsa_server.get_instance().add_cmd(content)
-                    concatenated_audio.clear()
-                    self.__aLiNls = self.asrclient()
-                    try:
+                    if not self.__processing and not isSpeaking and time.time() - last_mute_time > _ATTACK:
+                        isSpeaking = True  #用户正在说话
+                        util.printInfo(1, self.username,"聆听中...")
+                        self.__notify_listening_status()  # 使用新方法发送通知
+                        concatenated_audio.clear()
+                        self.__aLiNls = self.asrclient()
                         task_id = self.__aLiNls.start()
                         while not self.__aLiNls.started:
                             time.sleep(0.01)
-                    except Exception as e:
-                        print(e)
-                        util.printInfo(1, self.username, "aliyun asr 连接受限")
-                    for i in range(len(self.__history_data) - 1): #当前data在下面会做发送，这里是发送激活前的音频数据，以免漏掉信息
-                        buf = self.__history_data[i]
-                        audio_data_list.append(self.__process_audio_data(buf, self.channels))
-                        if self.ASRMode == "ali":
-                            self.__aLiNls.send(self.__process_audio_data(buf, self.channels).tobytes())
-                        else:
-                            concatenated_audio.extend(self.__process_audio_data(buf, self.channels).tobytes())
-                    self.__history_data.clear()
-            else:#结束拾音
-                last_mute_time = time.time()
-                if isSpeaking:
-                    if time.time() - last_speaking_time > _RELEASE: #TODO 更换的vad更靠谱
-                        isSpeaking = False
-                        self.__aLiNls.end()
-                        util.printInfo(1, self.username, "语音处理中...")
-                        self.__waitingResult(self.__aLiNls, concatenated_audio)
+                        for i in range(len(self.__history_data) - 1): #当前data在下面会做发送，这里是发送激活前的音频数据，以免漏掉信息
+                            buf = self.__history_data[i]
+                            audio_data_list.append(self.__process_audio_data(buf, self.channels))
+                            if self.ASRMode == "ali":
+                                self.__aLiNls.send(self.__process_audio_data(buf, self.channels).tobytes())
+                            else:
+                                concatenated_audio.extend(self.__process_audio_data(buf, self.channels).tobytes())
+                        self.__history_data.clear()
+                else:#结束拾音
+                    last_mute_time = time.time()
+                    if isSpeaking:
+                        if time.time() - last_speaking_time > _RELEASE: 
+                            isSpeaking = False
+                            self.__aLiNls.end()
+                            util.printInfo(1, self.username, "语音处理中...")
+                            self.__waitingResult(self.__aLiNls, concatenated_audio)
 
-                        mono_data = self.__concatenate_audio_data(audio_data_list)
-                        self.__save_audio_to_wav(mono_data, self.sample_rate, "cache_data/input.wav")
-                        audio_data_list = []
-            
-            #拾音中
-            if isSpeaking:
-                audio_data_list.append(self.__process_audio_data(data, self.channels))
-                if self.ASRMode == "ali":
-                    self.__aLiNls.send(self.__process_audio_data(data, self.channels).tobytes())
-                else:
-                    concatenated_audio.extend(self.__process_audio_data(data, self.channels).tobytes())
+                            mono_data = self.__concatenate_audio_data(audio_data_list)
+                            self.__save_audio_to_wav(mono_data, self.sample_rate, "cache_data/input.wav")
+                            audio_data_list = []
+                
+                #拾音中
+                if isSpeaking:
+                    audio_data_list.append(self.__process_audio_data(data, self.channels))
+                    if self.ASRMode == "ali":
+                        self.__aLiNls.send(self.__process_audio_data(data, self.channels).tobytes())
+                    else:
+                        concatenated_audio.extend(self.__process_audio_data(data, self.channels).tobytes())
+            except Exception as e:
+                printInfo(1, self.username, "录音失败: " + str(e))
+
+    #异步发送 WebSocket 通知
+    def __notify_listening_status(self):
+        current_time = time.time()
+        if current_time - self.__last_ws_notify_time < self.__ws_notify_interval:
+            return
         
+        def send_ws_notification():
+            try:
+                if wsa_server.get_web_instance().is_connected(self.username):
+                    wsa_server.get_web_instance().add_cmd({
+                        "panelMsg": "聆听中...", 
+                        'Username': self.username, 
+                        'robot': f'http://{cfg.fay_url}:5000/robot/Listening.jpg'
+                    })
+                if wsa_server.get_instance().is_connected(self.username):
+                    content = {
+                        'Topic': 'Unreal', 
+                        'Data': {'Key': 'log', 'Value': "聆听中..."}, 
+                        'Username': self.username, 
+                        'robot': f'http://{cfg.fay_url}:5000/robot/Listening.jpg'
+                    }
+                    wsa_server.get_instance().add_cmd(content)
+            except Exception as e:
+                util.log(1, f"发送 WebSocket 通知失败: {e}")
+        
+        # 如果之前的通知线程还在运行，就不启动新的
+        if self.__ws_notify_thread is None or not self.__ws_notify_thread.is_alive():
+            self.__ws_notify_thread = threading.Thread(target=send_ws_notification)
+            self.__ws_notify_thread.daemon = True
+            self.__ws_notify_thread.start()
+            self.__last_ws_notify_time = current_time
+
+
     def __save_audio_to_wav(self, data, sample_rate, filename):
         # 确保数据类型为 int16
         if data.dtype != np.int16:

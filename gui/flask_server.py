@@ -9,6 +9,7 @@ from flask_cors import CORS
 import requests
 import datetime
 import pytz
+import logging
 
 import fay_booter
 
@@ -26,6 +27,13 @@ from flask_httpauth import HTTPBasicAuth
 from core import qa_service
 
 __app = Flask(__name__)
+# 禁用 Flask 默认日志
+__app.logger.disabled = True
+log = logging.getLogger('werkzeug')
+log.disabled = True
+# 禁用请求日志中间件
+__app.config['PROPAGATE_EXCEPTIONS'] = True
+
 auth = HTTPBasicAuth()
 CORS(__app, supports_credentials=True)
 
@@ -69,7 +77,6 @@ def __get_device_list():
     except Exception as e:
         print(f"Error getting device list: {e}")
         return []
-
 
 @__app.route('/api/submit', methods=['post'])
 def api_submit():
@@ -336,7 +343,7 @@ def api_get_Member_list():
     except Exception as e:
         return jsonify({'list': [], 'message': f'获取成员列表时出错: {e}'}), 500
 
-@__app.route('/api/get_run_status', methods=['post'])
+@__app.route('/api/get-run-status', methods=['post'])
 def api_get_run_status():
     # 获取运行状态
     try:
@@ -486,6 +493,37 @@ def to_greet():
     text = fay_booter.feiFei.on_interact(interact)
     return jsonify({'status': 'success', 'data': text, 'msg': '已进行打招呼'}), 200 
 
+#唤醒:在普通唤醒模式，进行大屏交互才有意义
+@__app.route('/to_wake', methods=['POST'])
+def to_wake():
+    data = request.get_json()
+    username = data.get('username', 'User')
+    observation = data.get('observation', '')
+    fay_booter.recorderListener.wakeup_matched = True
+    return jsonify({'status': 'success', 'msg': '已唤醒'}), 200 
+
+#打断
+@__app.route('/to_stop_talking', methods=['POST'])
+def to_stop_talking():
+    try:
+        data = request.get_json()
+        username = data.get('username', 'User')
+        message = data.get('text', '你好，请说？')
+        observation = data.get('observation', '')
+        interact = Interact("stop_talking", 2, {'user': username, 'text': message, 'observation': str(observation)})
+        result = fay_booter.feiFei.on_interact(interact)
+        return jsonify({
+            'status': 'success',
+            'data': str(result) if result is not None else '',
+            'msg': '已停止说话'
+        }), 200
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'msg': str(e)
+        }), 500
+
+
 #消息透传接口
 @__app.route('/transparent_pass', methods=['post'])
 def transparent_pass():
@@ -509,7 +547,14 @@ def transparent_pass():
 
 
 def run():
-    server = pywsgi.WSGIServer(('0.0.0.0',5000), __app)
+    class NullLogHandler:
+        def write(self, *args, **kwargs):
+            pass
+    server = pywsgi.WSGIServer(
+        ('0.0.0.0', 5000), 
+        __app,
+        log=NullLogHandler()  
+    )
     server.serve_forever()
 
 def start():
