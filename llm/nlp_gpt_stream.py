@@ -1,15 +1,10 @@
-"""
-此代码由 fay 开源开发者社区成员 江湖墨明 提供。
-通过修改此代码，可以实现对接本地 Clash 代理或远程代理，Clash 无需设置成系统代理。
-以解决在开启系统代理后无法使用部分功能的问题。
-"""
-
 import time
 import json
 import requests
 from urllib3.exceptions import InsecureRequestWarning
 from datetime import datetime
 import pytz
+from core import stream_manager
 
 # 禁用不安全请求警告
 requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
@@ -19,6 +14,9 @@ from utils import util
 from core import content_db
 
 def get_session():
+    """
+    获取 HTTP 会话，并设置代理（如果有的话）。
+    """
     session = requests.Session()
     session.verify = False
     httpproxy = cfg.proxy_config
@@ -30,10 +28,15 @@ def get_session():
     return session
 
 def build_prompt(observation=""):
+    """
+    构建对话场景里的 system 提示信息。
+    """
     person_info = cfg.config["attribute"]
-    observation_text = f"以下是当前观测结果：{observation}，观测结果只供参考。" if observation else ""
-    prompt = f"""
-    你是定位为{person_info['position']}的数字人：{person_info['name']}，目标为了{person_info['goal']}，你名字是：{person_info['name']}，你性别为{person_info['gender']}，
+    observation_text = (
+        f"以下是当前观测结果：{observation}，观测结果只供参考。"
+        if observation else ""
+    )
+    prompt = f"""你是我的数字人，你名字是：{person_info['name']}，你性别为{person_info['gender']}，
     你年龄为{person_info['age']}，你出生地在{person_info['birth']}，
     你生肖为{person_info['zodiac']}，你星座为{person_info['constellation']}，
     你职业为{person_info['job']}，你联系方式为{person_info['contact']}，
@@ -44,8 +47,11 @@ def build_prompt(observation=""):
     return prompt
 
 def get_communication_history(uid=0):
+    """
+    从数据库中获取最近的对话历史，以便在对话时带入上下文。
+    """
     tz = pytz.timezone('Asia/Shanghai')
-    thistime = datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')
+    _ = datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')
 
     contentdb = content_db.new_instance()
     if uid == 0:
@@ -65,28 +71,71 @@ def get_communication_history(uid=0):
 
     return messages
 
-def send_request(session, data):
+def send_request_stream(session, data, uid, cache):
     url = cfg.gpt_base_url + "/chat/completions"
     headers = {
         'Content-Type': 'application/json',
         'Authorization': f'Bearer {cfg.key_gpt_api_key}'
     }
+
+    # 开启流式传输
+    data["stream"] = True
+    
     try:
-        response = session.post(url, json=data, headers=headers)
+        response = session.post(url, json=data, headers=headers, stream=True)
         response.raise_for_status()
-        result = response.json()
-        response_text = result["choices"][0]["message"]["content"]
+
+        full_response_text = ""
+        accumulated_text = ""
+        punctuation_marks = ["。", "！", "？", ".", "!", "?", "\n"]  
+        for raw_line in response.iter_lines(decode_unicode=False):
+            line = raw_line.decode('utf-8', errors='ignore')
+            if not line or line.strip() == "":
+                continue
+
+            if line.startswith("data: "):
+                chunk = line[len("data: "):].strip()
+                try:
+                    json_data = json.loads(chunk)
+                    finish_reason = json_data["choices"][0].get("finish_reason")
+                    if finish_reason is not None:
+                        if finish_reason == "stop":
+                            if accumulated_text:
+                                stream_manager.new_instance().write_sentence(uid, accumulated_text)
+                            break
+                    
+                    flush_text = json_data["choices"][0]["delta"].get("content", "")
+                    accumulated_text += flush_text
+                    
+                    for mark in punctuation_marks:
+                        if mark in accumulated_text:
+                            last_punct_pos = max(accumulated_text.rfind(p) for p in punctuation_marks if p in accumulated_text)
+                            if last_punct_pos != -1:
+                                to_write = accumulated_text[:last_punct_pos + 1]
+                                accumulated_text = accumulated_text[last_punct_pos + 1:]
+                                stream_manager.new_instance().write_sentence(uid, to_write)
+                            break
+
+                    full_response_text += flush_text
+                except json.JSONDecodeError:
+                    continue
+
+        return full_response_text
+
     except requests.exceptions.RequestException as e:
         print(f"请求失败: {e}")
-        response_text = "抱歉，我现在太忙了，休息一会，请稍后再试。"
-    return response_text
+        return "抱歉，我现在太忙了，休息一会，请稍后再试。"
 
-def question(content, uid=0, observation=""):
+def question(content, uid=0, observation="", cache=None):
     session = get_session()
     prompt = build_prompt(observation)
+    
     messages = [{"role": "system", "content": prompt}]
     history_messages = get_communication_history(uid)
     messages.extend(history_messages)
+
+    messages.append({"role": "user", "content": content})
+
     data = {
         "model": cfg.gpt_model_engine,
         "messages": messages,
@@ -94,14 +143,18 @@ def question(content, uid=0, observation=""):
         "max_tokens": 2000,
         "user": f"user_{uid}"
     }
+    
     start_time = time.time()
-    response_text = send_request(session, data)
+    response_text = send_request_stream(session, data, uid, cache)
     elapsed_time = time.time() - start_time
+
     util.log(1, f"接口调用耗时: {elapsed_time:.2f} 秒")
+
     return response_text
 
 if __name__ == "__main__":
+    # 测试示例
     for _ in range(3):
         query = "爱情是什么"
-        response = question(query)
-        print("\nThe result is:", response)
+        resp = question(query)
+        print("\nThe streaming result is:", resp)

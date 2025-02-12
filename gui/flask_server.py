@@ -343,7 +343,7 @@ def api_get_Member_list():
     except Exception as e:
         return jsonify({'list': [], 'message': f'获取成员列表时出错: {e}'}), 500
 
-@__app.route('/api/get-run-status', methods=['post'])
+@__app.route('/api/get_run_status', methods=['post'])
 def api_get_run_status():
     # 获取运行状态
     try:
@@ -453,7 +453,6 @@ def home_get():
 @auth.login_required
 def home_post():
     try:
-        wsa_server.get_web_instance().add_cmd({"is_connect": wsa_server.get_instance().isConnect})  # TODO 不应放这里，同步数字人连接状态
         return __get_template()
     except Exception as e:
         return f"Error processing request: {e}", 500

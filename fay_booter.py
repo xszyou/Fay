@@ -53,6 +53,7 @@ class RecorderListener(Recorder):
     def get_stream(self):
         try:
             while True:
+                config_util.load_config()
                 record = config_util.config['source']['record']
                 if record['enabled']:
                     break
@@ -288,11 +289,12 @@ def stop():
     global deviceSocketServer
 
     #停止外部应用
-    util.log(1, '停止外部应用...')
-    startup_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'shell', 'run_startup.py')
-    if os.path.exists(startup_script):
-        from shell.run_startup import stop_all_processes
-        stop_all_processes()
+    if os.name == 'nt':  
+        util.log(1, '停止外部应用...')
+        startup_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'shell', 'run_startup.py')
+        if os.path.exists(startup_script):
+            from shell.run_startup import stop_all_processes
+            stop_all_processes()
 
     util.log(1, '正在关闭服务...')
     __running = False
@@ -381,17 +383,7 @@ def start():
     MyThread(target=start_auto_play_service).start()
         
     util.log(1, '服务启动完成!')
-    util.log(1, 'in <msg> \t通过控制台交互')
-    util.log(1, 'restart \t重启服务')
-    util.log(1, 'start \t\t启动服务')
-    util.log(1, 'stop \t\t关闭服务')
-    util.log(1, 'exit \t\t结束程序')
-    util.log(1, '使用 \'help\' 获取帮助.')
-    if config_util.start_mode == 'web':
-        util.log(1, '请通过浏览器访问 http://127.0.0.1:5000/ 管理您的Fay')
-
     
-
 if __name__ == '__main__':
     ws_server: MyServer = None
     feiFei: fay_core.FeiFei = None

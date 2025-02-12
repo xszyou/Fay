@@ -144,9 +144,11 @@ new Vue({
             attribute_zodiac: "",
             attribute_constellation: "",
             attribute_job: "",
-            attribute_hobby: "",
+            attribute_additional: "", 
             attribute_contact: "",
             attribute_voice: "",
+            attribute_position: "",
+            attribute_goal: "",
             QnA:"",
             interact_perception_gift: 0,
             interact_perception_follow: 0,
@@ -232,10 +234,11 @@ new Vue({
                 this.attribute_zodiac = config.attribute.zodiac;
                 this.attribute_constellation = config.attribute.constellation;
                 this.attribute_job = config.attribute.job;
-                this.attribute_hobby = config.attribute.hobby;
+                this.attribute_additional = config.attribute.additional; 
                 this.attribute_contact = config.attribute.contact;
                 this.attribute_voice = config.attribute.voice;
-
+                this.attribute_position = config.attribute.position || "客服"; 
+                this.attribute_goal = config.attribute.goal || "解决问题"; 
             }
             if (config.interact.perception) {
                 this.interact_perception_follow = config.interact.perception.follow;
@@ -270,8 +273,10 @@ new Vue({
                         "zodiac": this.attribute_zodiac,
                         "constellation": this.attribute_constellation,
                         "job": this.attribute_job,
-                        "hobby": this.attribute_hobby,
-                        "contact": this.attribute_contact
+                        "additional": this.attribute_additional, 
+                        "contact": this.attribute_contact,
+                        "position": this.attribute_position, 
+                        "goal": this.attribute_goal, 
                     },
                     "interact": {
                         "playSound": this.play_sound_enabled,

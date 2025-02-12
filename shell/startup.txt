@@ -1,2 +1,0 @@
-C:\Program Files\bililive\livehime\livehime.exe
-D:\anaconda3\envs\fay_cv\python.exe H:\fay_cv\gesture_detection.py

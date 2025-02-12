@@ -43,14 +43,34 @@
               <li> <span class="font_name">出生地:</span><input class="section_1" :disabled="!configEditable"  v-model="attribute_birth" placeholder="请输入内容" /></li>                    
               <li> <span class="font_name">生&nbsp;&nbsp;&nbsp;肖:</span><input class="section_1" :disabled="!configEditable"  v-model="attribute_zodiac" placeholder="请输入内容" /></li>
               <li> <span class="font_name">星&nbsp;&nbsp;&nbsp;座:</span><input class="section_1" :disabled="!configEditable"  v-model="attribute_constellation" placeholder="请输入内容" /></li>  
+              <li> <span class="font_name">定&nbsp;&nbsp;&nbsp;位:</span>
+                <select class="section_1" :disabled="!configEditable" v-model="attribute_position" placeholder="请选择定位">
+                  <option value="客服">客服</option>
+                  <option value="陪伴">陪伴</option>
+                  <option value="教培">教培</option>
+                  <option value="娱乐">娱乐</option>
+                  <option value="销售">销售</option>
+                  <option value="助理">助理</option>
+                </select>
+              </li>
+              
             </ul>
           </div>
           <div class="setting_work">
             <ul>
+              <li> <span class="font_name">目&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;标:</span>
+                <select class="section_1" :disabled="!configEditable" v-model="attribute_goal" placeholder="请选择目标">
+                  <option value="解决问题">解决问题</option>
+                  <option value="陪伴情感">陪伴情感</option>
+                  <option value="提供知识">提供知识</option>
+                  <option value="促成交易">促成交易</option>
+                  <option value="工作协助">工作协助</option>
+                </select>
+              </li>
               <li> <span class="font_name">职&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;业:</span><input class="section_1" :disabled="!configEditable"  v-model="attribute_job" placeholder="请输入内容"/></li>
               <li> <span class="font_name">&nbsp;联系方式:</span><input class="section_1" :disabled="!configEditable" v-model="attribute_contact" placeholder="请输入内容" /></li>
               <li> <span class="font_name">Q&A文件:</span><input class="section_1" :disabled="!configEditable" v-model="QnA" placeholder="请输入内容" /></li>
-              <li> <span class="font_name">补&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;充:</span><textarea  v-model="attribute_hobby" class="section_1" style="height: 165px;vertical-align: middle;"></textarea></li>           
+              <li> <span class="font_name">补&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;充:</span><textarea  v-model="attribute_additional" class="section_1" style="height: 165px;vertical-align: middle;"></textarea></li>           
             </ul>
           </div>
           <div class="setting_rup">      
@@ -96,6 +116,7 @@
                 <el-slider  style="width: 230px;" v-model="interact_perception_follow" :disabled="!configEditable"></el-slider></li>           
             </ul>
           </div>
+         
         </div>
 
         </div>

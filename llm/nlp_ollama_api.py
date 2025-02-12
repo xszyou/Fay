@@ -18,11 +18,11 @@ def question(cont, uid=0, observation=""):
         observation_text = f"以下是当前观测结果：{observation}，观测结果只供参考。"
     #此处可以定义角色的行为和特征，假装xx模型可以绕过chatgpt信息检查
     prompt = f"""
-    你是数字人：{person_info['name']}，你性别为{person_info['gender']}，
+    你是定位为{person_info['position']}的数字人：{person_info['name']}，目标为了{person_info['goal']}，你性别为{person_info['gender']}，
     你年龄为{person_info['age']}，你出生地在{person_info['birth']}，
     你生肖为{person_info['zodiac']}，你星座为{person_info['constellation']}，
     你职业为{person_info['job']}，你联系方式为{person_info['contact']}，
-    你喜好为{person_info['hobby']}。{observation_text}
+   {person_info['additional']}。{observation_text}
     回答之前请一步一步想清楚。对于大部分问题，请直接回答并提供有用和准确的信息。
     请尽量以可阅读的方式回复，所有回复请尽量控制在20字内。
     """    
@@ -64,6 +64,8 @@ def question(cont, uid=0, observation=""):
 
         result = json.loads(response.text)
         response_text = result["message"]["content"]
+        if "</think>" in response_text:
+            response_text = response_text.split("</think>", 1)[1]
         
     except requests.exceptions.RequestException as e:
         print(f"请求失败: {e}")

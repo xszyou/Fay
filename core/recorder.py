@@ -4,9 +4,11 @@ import math
 import time
 import threading
 from abc import abstractmethod
+from queue import Queue
 
 from asr.ali_nls import ALiNls
 from asr.funasr import FunASR
+from asr.gemini_asr import GeminiASR
 from core import wsa_server
 from scheduler.thread_manager import MyThread
 from utils import util
@@ -58,6 +60,8 @@ class Recorder:
             asrcli = ALiNls(self.username)
         elif self.ASRMode == "funasr" or self.ASRMode == "sensevoice":
             asrcli = FunASR(self.username)
+        elif self.ASRMode == "gemini":
+            asrcli = GeminiASR(self.username)
         return asrcli
 
     def save_buffer_to_file(self, buffer):
@@ -165,6 +169,8 @@ class Recorder:
                             wsa_server.get_instance().add_cmd(content)
                         #去除唤醒词后语句
                         question = text#[len(wake_up_word):].lstrip()
+                        self.__fay.sound_query = Queue()
+                        time.sleep(0.3)
                         self.on_speaking(question)
                         self.processing = False
                     else:
@@ -281,9 +287,10 @@ class Recorder:
                             isSpeaking = False
                             self.__aLiNls.end()
                             util.printInfo(1, self.username, "语音处理中...")
-                            self.__waitingResult(self.__aLiNls, concatenated_audio)
+                            
 
                             mono_data = self.__concatenate_audio_data(audio_data_list)
+                            self.__waitingResult(self.__aLiNls, mono_data)
                             self.__save_audio_to_wav(mono_data, self.sample_rate, "cache_data/input.wav")
                             audio_data_list = []
                 
@@ -295,7 +302,7 @@ class Recorder:
                     else:
                         concatenated_audio.extend(self.__process_audio_data(data, self.channels).tobytes())
             except Exception as e:
-                printInfo(1, self.username, "录音失败: " + str(e))
+                util.printInfo(1, self.username, "录音失败: " + str(e))
 
     #异步发送 WebSocket 通知
     def __notify_listening_status(self):

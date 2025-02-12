@@ -7,6 +7,7 @@ import wave
 import pygame
 import requests
 from pydub import AudioSegment
+from queue import Queue
 
 # 适应模型使用
 import numpy as np
@@ -30,6 +31,9 @@ from llm import nlp_ollama_api
 from llm import nlp_coze
 from llm.agent import fay_agent
 from llm import nlp_qingliu
+from llm import nlp_return
+from llm import nlp_gpt_stream
+from core import stream_manager
 
 from core import member_db
 import threading
@@ -63,11 +67,14 @@ modules = {
     "nlp_ollama_api": nlp_ollama_api,
     "nlp_coze": nlp_coze,
     "nlp_agent": fay_agent,
-    "nlp_qingliu": nlp_qingliu
+    "nlp_qingliu": nlp_qingliu,
+    "nlp_return": nlp_return,
+    "nlp_gpt_stream": nlp_gpt_stream
+
 }
 
 #大语言模型回复
-def handle_chat_message(msg, username='User', observation=''):
+def handle_chat_message(msg, username='User', observation='', cache=None):
     text = ''
     textlist = []
     try:
@@ -81,6 +88,9 @@ def handle_chat_message(msg, username='User', observation=''):
         if cfg.key_chat_module == 'rasa':
             textlist = selected_module.question(msg)
             text = textlist[0]['text'] 
+        elif cfg.key_chat_module == 'gpt_stream' and cache is not None:
+            uid = member_db.new_instance().find_user(username)
+            text = selected_module.question(msg, uid, observation, cache)  
         else:
             uid = member_db.new_instance().find_user(username)
             text = selected_module.question(msg, uid, observation)  
@@ -117,6 +127,8 @@ class FeiFei:
         self.sp.connect()  #TODO 预连接
         self.cemotion = None
         self.timer = None
+        self.sound_query = Queue()
+
 
     #语音消息处理检查是否命中q&a
     def __get_answer(self, interleaver, text):
@@ -222,7 +234,8 @@ class FeiFei:
                             wsa_server.get_instance().add_cmd(content)
                     
                     #声音输出
-                    MyThread(target=self.say, args=[interact, text]).start()  
+                    if cfg.key_chat_module != 'gpt_stream':
+                        MyThread(target=self.say, args=[interact, text]).start()  
                     return 'success'
    
             except BaseException as e:
@@ -372,22 +385,30 @@ class FeiFei:
 
 
     #面板播放声音
-    def __play_sound(self, file_url, audio_length, interact):
-        util.printInfo(1,  interact.data.get('user'), '播放音频...')
-        pygame.mixer.init()
-        pygame.mixer.music.load(file_url)
-        pygame.mixer.music.play()
+    def __play_sound(self):
+        
+        pygame.mixer.init()  # 初始化pygame.mixer，只需要在此处初始化一次
+        
+        while self.__running:
+            time.sleep(0.1)
+            if not self.sound_query.empty():  # 如果队列不为空则播放音频
+                file_url, audio_length, interact = self.sound_query.get()
+                util.printInfo(1, interact.data.get('user'), '播放音频...')
+                
+                pygame.mixer.music.load(file_url)
+                pygame.mixer.music.play()
 
-        #等待音频播放完成，唤醒模式不用等待        
-        length = 0
-        while True:
-            if audio_length + 0.01 > length:
-                length = length + 0.01
-                time.sleep(0.01)
-            else:
-                break
-        if wsa_server.get_instance().is_connected(interact.data.get("user")):
-            wsa_server.get_web_instance().add_cmd({"panelMsg": "", 'Username' : interact.data.get('user')})
+                # 播放过程中计时，直到音频播放完毕
+                length = 0
+                while length < audio_length:
+                    length += 0.01
+                    time.sleep(0.01)
+                
+                util.printInfo(1, interact.data.get('user'), '结束播放！')
+                
+                # 播放完毕后通知
+                if wsa_server.get_web_instance().is_connected(interact.data.get("user")):
+                    wsa_server.get_web_instance().add_cmd({"panelMsg": "", 'Username': interact.data.get('user')})
     
     #推送远程音频
     def __send_remote_device_audio(self, file_url, interact):
@@ -463,8 +484,9 @@ class FeiFei:
             threading.Timer(audio_length, self.send_play_end_msg, [interact]).start()
 
             #面板播放
+            config_util.load_config()
             if config_util.config["interact"]["playSound"]:
-                 self.__play_sound(file_url, audio_length, interact)
+                  self.sound_query.put((file_url, audio_length, interact))
             
         except Exception as e:
             print(e)
@@ -505,6 +527,7 @@ class FeiFei:
             from cemotion import Cemotion
             self.cemotion = Cemotion()
         MyThread(target=self.__send_mood).start()
+        MyThread(target=self.__play_sound).start()
 
     #停止核心服务
     def stop(self):
