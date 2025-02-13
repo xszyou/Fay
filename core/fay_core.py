@@ -31,7 +31,6 @@ from llm import nlp_ollama_api
 from llm import nlp_coze
 from llm.agent import fay_agent
 from llm import nlp_qingliu
-from llm import nlp_return
 from llm import nlp_gpt_stream
 from core import stream_manager
 
@@ -68,7 +67,6 @@ modules = {
     "nlp_coze": nlp_coze,
     "nlp_agent": fay_agent,
     "nlp_qingliu": nlp_qingliu,
-    "nlp_return": nlp_return,
     "nlp_gpt_stream": nlp_gpt_stream
 
 }
