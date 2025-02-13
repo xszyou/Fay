@@ -9,10 +9,6 @@ from llm.agent.tools.PythonExecutor import PythonExecutor
 from llm.agent.tools.WebPageRetriever import WebPageRetriever
 from llm.agent.tools.WebPageScraper import WebPageScraper
 from llm.agent.tools.ToRemind import ToRemind
-from llm.agent.tools.StrategyControl import StrategyControl
-from llm.agent.tools.TradeAnalyzer import TradeAnalyzer
-from llm.agent.tools.PositionMonitor import PositionMonitor
-from llm.agent.tools.StrategyLogger import StrategyLogger
 from langgraph.prebuilt import create_react_agent
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
@@ -52,8 +48,6 @@ class FayAgentCore():
   
         self.tools = [my_timer, weather_tool, query_timer_db_tool, delete_timer_tool, 
                      python_executor, web_page_retriever, web_page_scraper, to_remind]
-
-
 
         self.attr_info = ", ".join(f"{key}: {value}" for key, value in cfg.config["attribute"].items())
         self.prompt_template = """
