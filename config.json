@@ -1,13 +1,16 @@
 {
     "attribute": {
+        "additional": "\u53d1\u5446",
         "age": "\u6210\u5e74",
         "birth": "Github",
         "constellation": "\u6c34\u74f6\u5ea7",
         "contact": "qq467665317",
         "gender": "\u5973",
+        "goal": "\u89e3\u51b3\u95ee\u9898",
         "hobby": "\u53d1\u5446",
         "job": "\u52a9\u7406",
         "name": "\u83f2\u83f2",
+        "position": "\u5ba2\u670d",
         "voice": "\u6653\u6653(edge)",
         "zodiac": "\u86c7"
     },

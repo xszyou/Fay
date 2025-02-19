@@ -8,7 +8,6 @@ from queue import Queue
 
 from asr.ali_nls import ALiNls
 from asr.funasr import FunASR
-from asr.gemini_asr import GeminiASR
 from core import wsa_server
 from scheduler.thread_manager import MyThread
 from utils import util
@@ -60,8 +59,6 @@ class Recorder:
             asrcli = ALiNls(self.username)
         elif self.ASRMode == "funasr" or self.ASRMode == "sensevoice":
             asrcli = FunASR(self.username)
-        elif self.ASRMode == "gemini":
-            asrcli = GeminiASR(self.username)
         return asrcli
 
     def save_buffer_to_file(self, buffer):
