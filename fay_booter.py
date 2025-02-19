@@ -288,14 +288,6 @@ def stop():
     global socket_service_instance
     global deviceSocketServer
 
-    #停止外部应用
-    if os.name == 'nt':  
-        util.log(1, '停止外部应用...')
-        startup_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'shell', 'run_startup.py')
-        if os.path.exists(startup_script):
-            from shell.run_startup import stop_all_processes
-            stop_all_processes()
-
     util.log(1, '正在关闭服务...')
     __running = False
     if recorderListener is not None:
@@ -330,13 +322,6 @@ def start():
     global recorderListener
     global __running
     global socket_service_instance
-
-    #启动外部应用
-    util.log(1,'启动外部应用...')
-    startup_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'shell', 'run_startup.py')
-    if os.path.exists(startup_script):
-        subprocess.Popen([sys.executable, startup_script], 
-                        creationflags=subprocess.CREATE_NEW_CONSOLE)
     
     util.log(1, '开启服务...')
     __running = True

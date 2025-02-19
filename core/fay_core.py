@@ -204,8 +204,11 @@ class FeiFei:
                         content = {'Topic': 'Unreal', 'Data': {'Key': 'text', 'Value': text}, 'Username' : username, 'robot': f'http://{cfg.fay_url}:5000/robot/Speaking.jpg'}
                         wsa_server.get_instance().add_cmd(content)
                 
-                    #声音输出
-                    MyThread(target=self.say, args=[interact, text]).start()
+                    #声音输出(gpt_stream在stream_manager.py中调用了say函数)
+                    if cfg.key_chat_module != 'gpt_stream':
+                        if text in "</think>":
+                            text = text.split("</think>")[1]
+                        MyThread(target=self.say, args=[interact, text]).start()  
                     
                     return text      
                 

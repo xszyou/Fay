@@ -1,4 +1,3 @@
-
 html {
 	font-size: 14px;
 }
@@ -366,3 +365,59 @@ html {
 	    font-size: 12px;
 	    white-space: nowrap;
 	}
+.think-panel-container {
+	position: fixed;
+	top: 100px; /* 保证不与顶部导航栏重叠 */
+	right: 120px;
+	width: 250px;
+	height: auto;
+	padding: 10px;
+	background: #fff;
+	border: 1px solid #ccc;
+	border-radius: 4px;
+	z-index: 1000;
+	}
+	.think-panel {
+	margin-top: 10px;
+	padding: 10px;
+	background: #f9f9f9;
+	border: 1px dashed #ccc;
+	border-radius: 4px;
+	max-height: 620px;
+	overflow-y: auto;
+	white-space: pre-wrap; /* 保持原始格式 */
+	}
+
+.think-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-right: 10px;
+}
+
+.think-panel-minimize {
+  background: none;
+  border: none;
+  color: #617bab;
+  cursor: pointer;
+  padding: 5px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.think-panel-minimize:hover {
+  color: #0064fb;
+}
+
+.think-panel-icon {
+  font-size: 16px;
+  display: inline-block;
+  line-height: 1;
+}
+
+.think-panel.minimized {
+  height: 40px;
+  overflow: hidden;
+}

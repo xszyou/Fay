@@ -13,99 +13,118 @@
     <script src="{{ url_for('static',filename='js/index.js') }}" defer></script>
     <script src="{{ url_for('static',filename='js/script.js') }}" defer></script>
   </head>
-  <body >
-    <div  id="app" class="main_bg">  
-      <div class="main_left">  
-        <div class="main_left_logo" ><img   src="{{ url_for('static',filename='images/Logo.png') }}" alt=""> 
+  <body>
+    <div id="app" class="main_bg">
+      <div class="main_left">
+        <div class="main_left_logo">
+          <img src="{{ url_for('static',filename='images/Logo.png') }}" alt="">
         </div>
 
-      <div class="main_left_menu">
-        <ul>
-          <li class="changeImg"><a href="/"><span class="iconimg1">消息</span></a></li>
-          <li class="changeImg2"><a href="/setting"><span class="iconimg2">设置</span></a></li>
-        </ul>
-      </div>
-      
-      <div class="main_left_emoji"><img style="padding-top: 60px;    max-width: 140px;"  :src="robot" alt="" >
+        <div class="main_left_menu">
+          <ul>
+            <li class="changeImg"><a href="/"><span class="iconimg1">消息</span></a></li>
+            <li class="changeImg2"><a href="/setting"><span class="iconimg2">设置</span></a></li>
+          </ul>
+        </div>
         
-      </div>
+        <div class="main_left_emoji">
+          <img style="padding-top: 60px; max-width: 140px;" :src="robot" alt="">
+        </div>
       </div>
 
       <div class="main_right">
-        <div class="top_info"><span  class="top_info_text">消息：</span>[[panelMsg]]</div>
-        <!-- 以上是即时信息显示 -->
-        <div class="chatmessage">
-          <div class="chat-container" id="user0" >
-            <div  v-for="(item, index) in messages" :key="index" >
+        <div class="top_info">
+          <span class="top_info_text">消息：</span>[[panelMsg]]
+        </div>
 
+        <div class="chatmessage">
+          <div class="chat-container" id="user0">
+            <div v-for="(item, index) in messages" :key="index">
               <div class="message receiver-message" v-if="item.type == 'fay'">
                 <img class="avatar" src="{{ url_for('static',filename='images/Fay_send.png') }}" alt="接收者头像">
                 <div class="message-content">
                   <div class="message-bubble">[[item.content]]</div>
-                  <div class="message-time"><span class="what-time">[[item.timetext]]</span>
+                  <div class="message-time">
+                    <span class="what-time">[[item.timetext]]</span>
                     <div v-if="item.is_adopted == 0" class="adopt-button" @click="adoptText(item.id)">
-                    <img   src="{{ url_for('static',filename='images/adopt.png') }}" alt="采纳图标" class="adopt-img" />
-                  </div>
-                  <div v-else class="adopt-button">
-                    <img   src="{{ url_for('static',filename='images/adopted.png') }}" alt="采纳图标" class="adopt-img" />
-                  </div>
-
+                      <img src="{{ url_for('static',filename='images/adopt.png') }}" alt="采纳图标" class="adopt-img" />
+                    </div>
+                    <div v-else class="adopt-button">
+                      <img src="{{ url_for('static',filename='images/adopted.png') }}" alt="采纳图标" class="adopt-img" />
+                    </div>
                   </div>
                 </div>
               </div>     
-
-            <div class="message sender-message" v-else>
-              <div class="message-content">
-                <div class="sender-message message-bubble">[[item.content]]</div>
-                <div class="sender-message-time">[[item.timetext]]</div>
+              <div class="message sender-message" v-else>
+                <div class="message-content">
+                  <div class="sender-message message-bubble">[[item.content]]</div>
+                  <div class="sender-message-time">[[item.timetext]]</div>
+                </div>
+                <img class="avatar" src="{{ url_for('static',filename='images/User_send.png') }}" alt="发送者头像">
               </div>
-              <img class="avatar" src="{{ url_for('static',filename='images/User_send.png') }}" alt="发送者头像">
             </div>
           </div>
-          <div >
-                 
-          </div>
-          
-          </div>
         </div>
-
-        <!-- 以上是聊天对话 -->
 
         <div class="inputmessage">
-          <div  class="inputmessage_voice" >
-
-            <img v-if="!source_record_enabled" src="{{ url_for('static',filename='images/recording.png') }}" alt="" @click=changeRecord() >
-            <img v-else src="{{ url_for('static',filename='images/record.png') }}" alt="" @click=changeRecord() >
+          <div class="inputmessage_voice">
+            <img v-if="!source_record_enabled" src="{{ url_for('static',filename='images/recording.png') }}" alt="" @click="changeRecord()">
+            <img v-else src="{{ url_for('static',filename='images/record.png') }}" alt="" @click="changeRecord()">
           </div>
-          <div class="inputmessage_input"> <textarea class="text_in" placeholder="请输入内容" v-model="newMessage" @keyup.enter="sendMessage" style="padding-top: 13px;"></textarea></div>
-          <div class="inputmessage_send"><img  src="{{ url_for('static',filename='images/send.png') }}" alt="发送信息" @click="sendMessage"></div>
+          <div class="inputmessage_input">
+            <textarea class="text_in" placeholder="请输入内容" v-model="newMessage" @keyup.enter="sendMessage" style="padding-top: 13px;"></textarea>
+          </div>
+          <div class="inputmessage_send">
+            <img src="{{ url_for('static',filename='images/send.png') }}" alt="发送信息" @click="sendMessage">
+          </div>
 
           <div v-if="liveState == 1" class="inputmessage_open">
-
-            <img v-if="!play_sound_enabled" src="{{ url_for('static',filename='images/sound_off.png') }}"  @click=changeSound() >
-            <img v-else src="{{ url_for('static',filename='images/sound_on.png') }}"  @click=changeSound() >
-          
+            <img v-if="!play_sound_enabled" src="{{ url_for('static',filename='images/sound_off.png') }}" @click="changeSound()">
+            <img v-else src="{{ url_for('static',filename='images/sound_on.png') }}" @click="changeSound()">
           </div>
           <div v-else class="inputmessage_open">
-            <img  src="{{ url_for('static',filename='images/open.png') }}"  @click=startLive() >
+            <img src="{{ url_for('static',filename='images/open.png') }}" @click="startLive()">
           </div>
         </div>
 
-       
         <div class="Userchange">
-          <button id="prevButton" ><img  src="{{ url_for('static',filename='images/scrollleft.png') }}" alt="向左滑动" ></button>
+          <button id="prevButton">
+            <img src="{{ url_for('static',filename='images/scrollleft.png') }}" alt="向左滑动">
+          </button>
           <div class="menu" ref="menuContainer">
             <div class="tag" v-for="user in userList" :key="user[0]" :class="{'selected': selectedUser && selectedUser[0] === user[0]}" @click="selectUser(user)">
               [[ user[1] ]]
             </div>    
-                    </div>
-          <button id="nextButton" ><img  src="{{ url_for('static',filename='images/scrollright.png') }}" alt="向右滑动" ></button>
+          </div>
+          <button id="nextButton">
+            <img src="{{ url_for('static',filename='images/scrollright.png') }}" alt="向右滑动">
+          </button>
         </div>
-
-
-</div>
-<!-- 以上是多用户切换 -->
-
       </div>
+
+      <!-- 固定在右侧的 think 信息面板 -->
+      <div class="think-panel-container" v-show="thinkContent">
+        <div class="think-panel">
+          <div class="think-panel-header">
+            <h4>思考内容</h4>
+            <button class="think-panel-minimize" @click="minimizeThinkPanel">
+              <span class="think-panel-icon" v-if="isThinkPanelMinimized">+</span>
+              <span class="think-panel-icon" v-else>-</span>
+            </button>
+          </div>
+          <p>[[thinkContent]]</p>
+        </div>
+      </div>
+
     </div>
-    </body>
+
+    <script>
+      document.addEventListener('DOMContentLoaded', function() {
+        // 初始化 thinkContent
+        if (typeof app !== 'undefined') {
+          app.thinkContent = "";
+        }
+      });
+    </script>
+  </body>
+</html>

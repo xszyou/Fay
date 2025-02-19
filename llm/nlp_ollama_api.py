@@ -64,8 +64,6 @@ def question(cont, uid=0, observation=""):
 
         result = json.loads(response.text)
         response_text = result["message"]["content"]
-        if "</think>" in response_text:
-            response_text = response_text.split("</think>", 1)[1]
         
     except requests.exceptions.RequestException as e:
         print(f"请求失败: {e}")

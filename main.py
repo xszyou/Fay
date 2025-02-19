@@ -38,16 +38,7 @@ def __clear_logs():
         os.mkdir("./logs")
     for file_name in os.listdir('./logs'):
         if file_name.endswith('.log'):
-            os.remove('./logs/' + file_name)
-#ip替换
-def replace_ip_in_file(file_path, new_ip):
-    with open(file_path, "r", encoding="utf-8") as file:
-        content = file.read()
-    content = re.sub(r"127\.0\.0\.1", new_ip, content)
-    content = re.sub(r"localhost", new_ip, content)
-    with open(file_path, "w", encoding="utf-8") as file:
-        file.write(content)           
-
+            os.remove('./logs/' + file_name)        
 
 def kill_process_by_port(port):
     for conn in psutil.net_connections(kind='inet'):
@@ -122,11 +113,6 @@ if __name__ == '__main__':
     #init_db
     contentdb = content_db.new_instance()
     contentdb.init_db()
-
-    #ip替换
-    if config_util.fay_url != "127.0.0.1":
-        replace_ip_in_file("gui/static/js/index.js", config_util.fay_url)
-        replace_ip_in_file("gui/static/js/setting.js", config_util.fay_url)
 
     #启动数字人接口服务
     ws_server = wsa_server.new_instance(port=10002)

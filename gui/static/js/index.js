@@ -38,12 +38,23 @@ class FayInterface {
 
   async fetchData(url, options = {}) {
     try {
+      // Ensure headers are properly set for POST requests
+      if (options.method === 'POST') {
+        options.headers = {
+          'Content-Type': 'application/json',
+          ...options.headers
+        };
+      }
+      
       const response = await fetch(url, options);
-      if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
-      return await response.json();
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+      const data = await response.json();
+      return data;
     } catch (error) {
       console.error('Error fetching data:', error);
-      return null;
+      throw error; // Rethrow to handle in the calling function
     }
   }
 
@@ -246,25 +257,65 @@ new Vue({
       panelMsg: '', 
       panelReply: '', 
       robot:'static/images/Normal.gif',
-      base_url: 'http://127.0.0.1:5000',
+      base_url: window.location.protocol + '//' + window.location.hostname + ':' + window.location.port,
       play_sound_enabled: false,
       source_record_enabled: false,
-      userListTimer: null, // 添加定时器变量
+      userListTimer: null,
+      thinkPanelExpanded: false,
+      thinkContent: '',
+      isThinkPanelMinimized: false,
     };
+  },
+  watch: {
+    messages: {
+      handler(newMessages) {
+        for (let i = newMessages.length - 1; i >= 0; i--) {
+          let msg = newMessages[i];
+          if (msg.type === 'fay') {
+            const regex = /<think>([\s\S]*?)<\/think>/;
+            const match = msg.content.match(regex);
+            if (match && match[1]) {
+              this.thinkContent = match[1];
+              // 从原始消息中移除think标签及其内容，并去除多余空格
+              msg.content = msg.content.replace(regex, '').trim();
+              break;
+            }
+          }
+        }
+      },
+      deep: true
+    }
   },
   created() {
     this.initFayService(); 
     this.getData();
-    // 启动定时扫描用户列表
     this.startUserListTimer();
   },
   methods: {
     initFayService() {
-      this.fayService = new FayInterface('ws://127.0.0.1:10003', this.base_url, this);
+      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsHost = window.location.hostname;
+      const wsUrl = `${wsProtocol}//${wsHost}:10003`;
+      this.fayService = new FayInterface(wsUrl, this.base_url, this);
       this.fayService.connectWebSocket();
       this.fayService.websocket.addEventListener('open', () => {
         this.loadUserList();
-    });
+      });
+    },
+    async loadUserList() {
+      try {
+        const result = await this.fayService.getUserList();
+        if (result && result.list) {
+          this.userList = result.list;
+          if (this.userList.length > 0) {
+            this.selectedUser = this.userList[0];
+            await this.loadMessageHistory(this.selectedUser[1]);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load user list:', error);
+        this.$message.error('Failed to load user list. Please try again.');
+      }
     },
     sendMessage() {
       let _this = this;
@@ -494,5 +545,10 @@ this.fayService.fetchData(`${this.base_url}/api/adopt_msg`, {
 });
 }
 ,
+  minimizeThinkPanel() {
+    this.isThinkPanelMinimized = !this.isThinkPanelMinimized;
+    const panel = document.querySelector('.think-panel');
+    panel.classList.toggle('minimized');
+  },
   }
 });

@@ -172,7 +172,7 @@ new Vue({
             }],
             automatic_player_status: false,
             automatic_player_url: "",
-            host_url: "http://127.0.0.1:5000"
+            host_url: window.location.protocol + '//' + window.location.hostname + ':' + window.location.port
         };
     },
     created() {
@@ -181,7 +181,9 @@ new Vue({
     },
     methods: {
         initFayService() {
-            this.fayService = new FayInterface('ws://127.0.0.1:10003', this.host_url, this);
+            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws';
+            const wsHost = window.location.hostname;
+            this.fayService = new FayInterface(`${wsProtocol}://${wsHost}:10003`, this.host_url, this);
             this.fayService.connectWebSocket();
         },
         getData() {
