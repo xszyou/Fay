@@ -124,6 +124,7 @@ def send_request_stream(session, data, uid, cache):
 
     except requests.exceptions.RequestException as e:
         print(f"请求失败: {e}")
+        stream_manager.new_instance().write_sentence(uid, "抱歉，我现在太忙了，休息一会，请稍后再试。")
         return "抱歉，我现在太忙了，休息一会，请稍后再试。"
 
 def question(content, uid=0, observation="", cache=None):
