@@ -40,8 +40,8 @@ html {
 
 
   .main_left_menu{
-	margin-top: 30px;
-	margin-bottom: 80px;
+	margin-top: 10px;
+	margin-bottom: 1px;
   }
   .main_left_menu ul{
 	list-style-type: none;
@@ -96,6 +96,19 @@ html {
 	display: block;
 	text-align: center;
   }
+  .iconimg3 {
+	background: url('../images/page3.png') no-repeat;
+	background-size: 32px;
+	background-position: 100px 50%;
+	display: block;
+	text-align: center;
+  }
+  .iconimg3:hover{	
+	background: url('../images/page3_h.png') no-repeat;	
+	background-size: 32px;
+	background-position: 100px 50%;
+  }
+
   .iconimg2:hover{	
 	background: url('../images/setting_h.png') no-repeat;	
 	background-size: 32px;
@@ -116,6 +129,21 @@ html {
   .changeImg2:hover{
 	background: url('../images/menu_bg_h.png') no-repeat;
   }
+
+
+  .changeImg3{
+	/* width: 352px; */
+	height: 65px;
+	line-height: 65px;
+	cursor: pointer;
+	/* background: url('../images/menu_bg_h.png') no-repeat; */
+  }
+  .changeImg3:hover{
+	background: url('../images/menu_bg_h.png') no-repeat;
+  }
+
+
+
   
   .main_left_emoji{
 	text-align: center;

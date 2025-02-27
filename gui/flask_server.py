@@ -464,6 +464,14 @@ def setting():
     except Exception as e:
         return f"Error loading settings page: {e}", 500
 
+@__app.route('/Page3', methods=['get'])
+def Page3():
+    try:
+        return render_template('Page3.html')
+    except Exception as e:
+        return f"Error loading settings page: {e}", 500
+
+
 # 输出的音频http
 @__app.route('/audio/<filename>')
 def serve_audio(filename):

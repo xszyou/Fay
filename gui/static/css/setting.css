@@ -41,3 +41,8 @@ body {
 
 .setting_autoplay{width: 1086px; background-color: #ffffff; height: 40px; margin-left: 65px; padding:25px 30px; margin-top: 10px;;}
 .section_2 {background-color: #f5f7fa;border-radius: 3px;width: 938px;height: 35px;border: solid 1px #f5f7fa;}
+
+.Page3{ padding: 40px;}
+.Page3 ul{ padding: 40px;}
+.Page3 ul li{font-size: 18px;font-family: Microsoft YaHei;color: #2a2a2a; line-height:55px;list-style-type: none;}
+.Page3 ul li a{color: #0064fb;text-decoration: underline;}
