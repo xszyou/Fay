@@ -38,7 +38,7 @@ class FunASR:
             if wsa_server.get_web_instance().is_connected(self.username):
                 wsa_server.get_web_instance().add_cmd({"panelMsg": self.finalResults, "Username" : self.username})
             if wsa_server.get_instance().is_connected(self.username):
-                content = {'Topic': 'Unreal', 'Data': {'Key': 'log', 'Value': self.finalResults}, 'Username' : self.username}
+                content = {'Topic': 'human', 'Data': {'Key': 'log', 'Value': self.finalResults}, 'Username' : self.username}
                 wsa_server.get_instance().add_cmd(content)
    
         except Exception as e:

@@ -9,7 +9,6 @@ import asyncio
 import requests
 from core.interact import Interact
 from core.recorder import Recorder
-from core import fay_core
 from scheduler.thread_manager import MyThread
 from utils import util, config_util, stream_util
 from core.wsa_server import MyServer
@@ -18,14 +17,19 @@ from core import socket_bridge_service
 from llm.agent import agent_service
 import subprocess
 
-feiFei: fay_core.FeiFei = None
-recorderListener: Recorder = None
+# 全局变量声明
+feiFei = None
+recorderListener = None
 __running = False
 deviceSocketServer = None
 DeviceInputListenerDict = {}
 ngrok = None
 socket_service_instance = None
 
+# 延迟导入fay_core
+def get_fay_core():
+    from core import fay_core
+    return fay_core
 
 #启动状态
 def is_running():
@@ -247,9 +251,9 @@ def start_auto_play_service(): #TODO 评估一下有无优化的空间
             util.printInfo(1, user, '60s后重连自动播放服务器')
             time.sleep(60)
         # 请求自动播放服务器
-        with fay_core.auto_play_lock:
-            if config_util.config['source']['automatic_player_status'] and config_util.config['source']['automatic_player_url'] is not None and fay_core.can_auto_play == True and (config_util.config["interact"]["playSound"] or wsa_server.get_instance().is_connected(user)):
-                fay_core.can_auto_play = False
+        with get_fay_core().auto_play_lock:
+            if config_util.config['source']['automatic_player_status'] and config_util.config['source']['automatic_player_url'] is not None and get_fay_core().can_auto_play == True and (config_util.config["interact"]["playSound"] or wsa_server.get_instance().is_connected(user)):
+                get_fay_core().can_auto_play = False
                 post_data = {"user": user}
                 try:
                     response = requests.post(url, json=post_data, timeout=5)
@@ -268,11 +272,11 @@ def start_auto_play_service(): #TODO 评估一下有无优化的空间
                         feiFei.on_interact(interact)
                     else:
                         is_auto_server_error = True
-                        fay_core.can_auto_play = True
+                        get_fay_core().can_auto_play = True
                         util.printInfo(1, user, '请求自动播放服务器失败，错误代码是：{}'.format(response.status_code))
                 except requests.exceptions.RequestException as e:
                     is_auto_server_error = True
-                    fay_core.can_auto_play = True
+                    get_fay_core().can_auto_play = True
                     util.printInfo(1, user, '请求自动播放服务器失败，错误信息是：{}'.format(e))
         time.sleep(0.01)
      
@@ -332,7 +336,7 @@ def start():
 
     #开启核心服务
     util.log(1, '开启核心服务...')
-    feiFei = fay_core.FeiFei()
+    feiFei = get_fay_core().FeiFei()
     feiFei.start()
 
     #加载本地知识库
@@ -371,6 +375,6 @@ def start():
     
 if __name__ == '__main__':
     ws_server: MyServer = None
-    feiFei: fay_core.FeiFei = None
+    feiFei: get_fay_core().FeiFei = None
     recorderListener: Recorder = None
     start()

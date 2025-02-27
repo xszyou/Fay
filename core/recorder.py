@@ -122,7 +122,7 @@ class Recorder:
                             if wsa_server.get_web_instance().is_connected(self.username):
                                 wsa_server.get_web_instance().add_cmd({"panelMsg": "唤醒成功！", "Username" : self.username , 'robot': f'http://{cfg.fay_url}:5000/robot/Listening.jpg'})
                             if wsa_server.get_instance().is_connected(self.username):
-                                content = {'Topic': 'Unreal', 'Data': {'Key': 'log', 'Value': "唤醒成功！"}, 'Username' : self.username, 'robot': f'http://{cfg.fay_url}:5000/robot/Listening.jpg'}
+                                content = {'Topic': 'human', 'Data': {'Key': 'log', 'Value': "唤醒成功！"}, 'Username' : self.username, 'robot': f'http://{cfg.fay_url}:5000/robot/Listening.jpg'}
                                 wsa_server.get_instance().add_cmd(content)
                             self.wakeup_matched = True  # 唤醒成功
                             with fay_core.auto_play_lock:
@@ -138,7 +138,7 @@ class Recorder:
                             if wsa_server.get_web_instance().is_connected(self.username):
                                 wsa_server.get_web_instance().add_cmd({"panelMsg": "[!] 待唤醒！", "Username" : self.username , 'robot': f'http://{cfg.fay_url}:5000/robot/Normal.jpg'})
                             if wsa_server.get_instance().is_connected(self.username):
-                                content = {'Topic': 'Unreal', 'Data': {'Key': 'log', 'Value': "[!] 待唤醒！"}, 'Username' : self.username, 'robot': f'http://{cfg.fay_url}:5000/robot/Normal.jpg'}
+                                content = {'Topic': 'human', 'Data': {'Key': 'log', 'Value': "[!] 待唤醒！"}, 'Username' : self.username, 'robot': f'http://{cfg.fay_url}:5000/robot/Normal.jpg'}
                                 wsa_server.get_instance().add_cmd(content)
                     else:
                         self.on_speaking(text)
@@ -162,7 +162,7 @@ class Recorder:
                         if wsa_server.get_web_instance().is_connected(self.username):
                             wsa_server.get_web_instance().add_cmd({"panelMsg": "唤醒成功！", "Username" : self.username , 'robot': f'http://{cfg.fay_url}:5000/robot/Listening.jpg'})
                         if wsa_server.get_instance().is_connected(self.username):
-                            content = {'Topic': 'Unreal', 'Data': {'Key': 'log', 'Value': "唤醒成功！"}, 'Username' : self.username, 'robot': f'http://{cfg.fay_url}:5000/robot/Listening.jpg'}
+                            content = {'Topic': 'human', 'Data': {'Key': 'log', 'Value': "唤醒成功！"}, 'Username' : self.username, 'robot': f'http://{cfg.fay_url}:5000/robot/Listening.jpg'}
                             wsa_server.get_instance().add_cmd(content)
                         #去除唤醒词后语句
                         question = text#[len(wake_up_word):].lstrip()
@@ -175,7 +175,7 @@ class Recorder:
                         if wsa_server.get_web_instance().is_connected(self.username):
                             wsa_server.get_web_instance().add_cmd({"panelMsg": "[!] 待唤醒！", "Username" : self.username , 'robot': f'http://{cfg.fay_url}:5000/robot/Normal.jpg'})
                         if wsa_server.get_instance().is_connected(self.username):
-                            content = {'Topic': 'Unreal', 'Data': {'Key': 'log', 'Value': "[!] 待唤醒！"}, 'Username' : self.username, 'robot': f'http://{cfg.fay_url}:5000/robot/Normal.jpg'}
+                            content = {'Topic': 'human', 'Data': {'Key': 'log', 'Value': "[!] 待唤醒！"}, 'Username' : self.username, 'robot': f'http://{cfg.fay_url}:5000/robot/Normal.jpg'}
                             wsa_server.get_instance().add_cmd(content)
 
             #非唤醒模式
@@ -192,7 +192,7 @@ class Recorder:
             if wsa_server.get_web_instance().is_connected(self.username):
                 wsa_server.get_web_instance().add_cmd({"panelMsg": "", 'Username' : self.username, 'robot': f'http://{cfg.fay_url}:5000/robot/Normal.jpg'})
             if wsa_server.get_instance().is_connected(self.username):
-                content = {'Topic': 'Unreal', 'Data': {'Key': 'log', 'Value': ""}, 'Username' : self.username, 'robot': f'http://{cfg.fay_url}:5000/robot/Normal.jpg'}
+                content = {'Topic': 'human', 'Data': {'Key': 'log', 'Value': ""}, 'Username' : self.username, 'robot': f'http://{cfg.fay_url}:5000/robot/Normal.jpg'}
                 wsa_server.get_instance().add_cmd(content)
 
     def __record(self):   
@@ -317,7 +317,7 @@ class Recorder:
                     })
                 if wsa_server.get_instance().is_connected(self.username):
                     content = {
-                        'Topic': 'Unreal', 
+                        'Topic': 'human', 
                         'Data': {'Key': 'log', 'Value': "聆听中..."}, 
                         'Username': self.username, 
                         'robot': f'http://{cfg.fay_url}:5000/robot/Listening.jpg'

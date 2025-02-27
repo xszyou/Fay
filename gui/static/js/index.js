@@ -194,32 +194,44 @@ class FayInterface {
       vueInstance.$set(vueInstance, 'robot', data.robot); 
       }
     if (data.panelReply !== undefined) {
-      vueInstance.panelReply = data.panelReply.content; 
+      console.log('收到消息:', data.panelReply);
+      vueInstance.panelReply = data.panelReply.content;
+      
+      // 更新用户列表
       const userExists = vueInstance.userList.some(user => user[1] === data.panelReply.username);
       if (!userExists) {
         vueInstance.userList.push([data.panelReply.uid, data.panelReply.username]);
       }
+
       if (vueInstance.selectedUser && data.panelReply.username === vueInstance.selectedUser[1]) {
-        if ('is_adopted' in data.panelReply && data.panelReply.is_adopted === true) {
-          vueInstance.messages.push({
-              id: data.panelReply.id,
-              username: data.panelReply.username,
-              content: data.panelReply.content,
-              type: data.panelReply.type,
-              timetext: this.getTime(),
-              is_adopted: 1
-          });
-      } else {
+        // 处理content_id为0的消息
+        if (data.panelReply.id === 0) {
+          // 查找最后一条消息
+          const lastIndex = vueInstance.messages.length - 1;
+          if (lastIndex >= 0) {
+            const lastMessage = vueInstance.messages[lastIndex];
+            // 如果最后一条消息也是content_id为0,则更新它
+            if (lastMessage.id === 0) {
+              lastMessage.content = lastMessage.content + data.panelReply.content;
+              lastMessage.timetext = this.getTime();
+              // 强制更新视图
+              vueInstance.$forceUpdate();
+              return;
+            }
+          }
+        }
+        
+        // 添加新消息
         vueInstance.messages.push({
           id: data.panelReply.id,
           username: data.panelReply.username,
           content: data.panelReply.content,
           type: data.panelReply.type,
           timetext: this.getTime(),
-          is_adopted: 0
-      });
-      }
+          is_adopted: data.panelReply.is_adopted ? 1 : 0
+        });
 
+        // 滚动到底部
         vueInstance.$nextTick(() => {
           const chatContainer = vueInstance.$el.querySelector('.chatmessage');
           if (chatContainer) {
@@ -261,7 +273,7 @@ new Vue({
       play_sound_enabled: false,
       source_record_enabled: false,
       userListTimer: null,
-      thinkPanelExpanded: false,
+      thinkPanelExpanded: true,
       thinkContent: '',
       isThinkPanelMinimized: false,
     };

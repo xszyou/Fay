@@ -11,7 +11,6 @@ from queue import Queue
 
 # 适应模型使用
 import numpy as np
-import fay_booter
 from ai_module import baidu_emotion
 from core import wsa_server
 from core.interact import Interact
@@ -32,11 +31,9 @@ from llm import nlp_coze
 from llm.agent import fay_agent
 from llm import nlp_qingliu
 from llm import nlp_gpt_stream
-from core import stream_manager
 
 from core import member_db
 import threading
-import functools
 
 #加载配置
 cfg.load_config()
@@ -126,7 +123,7 @@ class FeiFei:
         self.cemotion = None
         self.timer = None
         self.sound_query = Queue()
-
+        self.think_mode_users = {}  # 使用字典存储每个用户的think模式状态
 
     #语音消息处理检查是否命中q&a
     def __get_answer(self, interleaver, text):
@@ -150,7 +147,7 @@ class FeiFei:
 
                     #同步用户问题到数字人
                     if wsa_server.get_instance().is_connected(interact.data.get("user")): 
-                        content = {'Topic': 'Unreal', 'Data': {'Key': 'question', 'Value': interact.data["msg"]}, 'Username' : interact.data.get("user")}
+                        content = {'Topic': 'human', 'Data': {'Key': 'question', 'Value': interact.data["msg"]}, 'Username' : interact.data.get("user")}
                         wsa_server.get_instance().add_cmd(content)
 
                     #记录用户
@@ -174,41 +171,21 @@ class FeiFei:
                         if wsa_server.get_web_instance().is_connected(username):
                             wsa_server.get_web_instance().add_cmd({"panelMsg": "思考中...", "Username" : username, 'robot': f'http://{cfg.fay_url}:5000/robot/Thinking.jpg'})
                         if wsa_server.get_instance().is_connected(username):
-                            content = {'Topic': 'Unreal', 'Data': {'Key': 'log', 'Value': "思考中..."}, 'Username' : username, 'robot': f'http://{cfg.fay_url}:5000/robot/Thinking.jpg'}
+                            content = {'Topic': 'human', 'Data': {'Key': 'log', 'Value': "思考中..."}, 'Username' : username, 'robot': f'http://{cfg.fay_url}:5000/robot/Thinking.jpg'}
                             wsa_server.get_instance().add_cmd(content)
                         text,textlist = handle_chat_message(interact.data["msg"], username, interact.data.get("observation", ""))
 
                     else: 
                         text = answer
                            
-                    #记录回复    
-                    self.write_to_file("./logs", "answer_result.txt", text)
-                    content_id = content_db.new_instance().add_content('fay','speak',text, username, uid)
-
-                    #文字输出：面板、聊天窗、log、数字人
-                    if wsa_server.get_web_instance().is_connected(username):
-                        wsa_server.get_web_instance().add_cmd({"panelMsg": text, "Username" : username, 'robot': f'http://{cfg.fay_url}:5000/robot/Speaking.jpg'})
-                        if type == 'qa':
-                            wsa_server.get_web_instance().add_cmd({"panelReply": {"type":"fay","content":text, "username":username, "uid":uid, "id":content_id, "is_adopted":True}, "Username" : username})
-                        else:
-                            wsa_server.get_web_instance().add_cmd({"panelReply": {"type":"fay","content":text, "username":username, "uid":uid, "id":content_id, "is_adopted":False}, "Username" : username})
-                    if len(textlist) > 1:
-                        i = 1
-                        while i < len(textlist):
-                            content_db.new_instance().add_content('fay','speak',textlist[i]['text'], username, uid)
-                            if wsa_server.get_web_instance().is_connected(username):
-                                wsa_server.get_web_instance().add_cmd({"panelReply": {"type":"fay","content":textlist[i]['text'], "username":username, "uid":uid}, "Username" : username, 'robot': f'http://{cfg.fay_url}:5000/robot/Speaking.jpg'})
-                            i+= 1                                
-                    util.printInfo(1, interact.data.get('user'), '({}) {}'.format(self.__get_mood_voice(), text))                            
-                    if wsa_server.get_instance().is_connected(username):
-                        content = {'Topic': 'Unreal', 'Data': {'Key': 'text', 'Value': text}, 'Username' : username, 'robot': f'http://{cfg.fay_url}:5000/robot/Speaking.jpg'}
-                        wsa_server.get_instance().add_cmd(content)
-                
+                    #记录回复并输出到各个终端
+                    self.__process_text_output(text, textlist, username, uid, type)
+                    
                     #声音输出(gpt_stream在stream_manager.py中调用了say函数)
-                    if cfg.key_chat_module != 'gpt_stream':
-                        if text in "</think>":
+                    if type == 'qa' or cfg.key_chat_module != 'gpt_stream':
+                        if "</think>" in text:
                             text = text.split("</think>")[1]
-                        MyThread(target=self.say, args=[interact, text]).start()  
+                        MyThread(target=self.say, args=[interact, text, type]).start()  
                     
                     return text      
                 
@@ -220,23 +197,13 @@ class FeiFei:
                     uid = member_db.new_instance().find_user(username)
 
                     if interact.data.get("text"):
-                        #记录回复
                         text = interact.data.get("text")
-                        self.write_to_file("./logs", "answer_result.txt", text)
-                        content_db.new_instance().add_content('fay','speak', text, username, uid)
-
-                        #文字输出：面板、聊天窗、log、数字人
-                        if wsa_server.get_web_instance().is_connected(username):
-                            wsa_server.get_web_instance().add_cmd({"panelMsg": text, "Username" : username, 'robot': f'http://{cfg.fay_url}:5000/robot/Speaking.jpg'})
-                            wsa_server.get_web_instance().add_cmd({"panelReply": {"type":"fay","content":text, "username":username, "uid":uid}, "Username" : username})  
-                        util.printInfo(1, interact.data.get('user'), '({}) {}'.format(self.__get_mood_voice(), text))                            
-                        if wsa_server.get_instance().is_connected(username):
-                            content = {'Topic': 'Unreal', 'Data': {'Key': 'text', 'Value': text}, 'Username' : username, 'robot': f'http://{cfg.fay_url}:5000/robot/Speaking.jpg'}
-                            wsa_server.get_instance().add_cmd(content)
+                        # 使用统一的文本处理方法，空列表表示没有额外回复
+                        self.__process_text_output(text, [], username, uid)
                     
-                    #声音输出
-                    if cfg.key_chat_module != 'gpt_stream':
-                        MyThread(target=self.say, args=[interact, text]).start()  
+                        #声音输出
+                        if cfg.key_chat_module != 'gpt_stream':
+                            MyThread(target=self.say, args=[interact, text]).start()  
                     return 'success'
    
             except BaseException as e:
@@ -266,7 +233,7 @@ class FeiFei:
             time.sleep(3)
             if wsa_server.get_instance().is_connected("User"):
                 if  self.old_mood != self.mood:
-                    content = {'Topic': 'Unreal', 'Data': {'Key': 'mood', 'Value': self.mood}}
+                    content = {'Topic': 'human', 'Data': {'Key': 'mood', 'Value': self.mood}}
                     wsa_server.get_instance().add_cmd(content)
                     self.old_mood = self.mood
 
@@ -332,8 +299,32 @@ class FeiFei:
         return sayType
 
     # 合成声音
-    def say(self, interact, text):
+    def say(self, interact, text, type = ""):
         try:
+            uid = member_db.new_instance().find_user(interact.data.get('user'))
+            self.__send_panel_message(text, interact.data.get('user'), uid, 0, type)
+            
+            # 处理think标签
+            is_start_think = False
+            if "<think>" in text:
+                self.think_mode_users[uid] = True
+                is_start_think = True
+                text = "嗯~等我想想啊"
+            elif "</think>" in text:
+                self.think_mode_users[uid] = False
+                return None
+            
+            if self.think_mode_users.get(uid, False):
+                if wsa_server.get_web_instance().is_connected(interact.data.get('user')):
+                    wsa_server.get_web_instance().add_cmd({"panelMsg": "思考中...", "Username" : interact.data.get('user'), 'robot': f'http://{cfg.fay_url}:5000/robot/Thinking.jpg'})
+                if wsa_server.get_instance().is_connected(interact.data.get("user")):
+                    content = {'Topic': 'human', 'Data': {'Key': 'log', 'Value': "思考中..."}, 'Username' : interact.data.get('user'), 'robot': f'http://{cfg.fay_url}:5000/robot/Thinking.jpg'}
+                    wsa_server.get_instance().add_cmd(content)
+
+            # 如果用户在think模式中,不进行语音合成
+            if self.think_mode_users.get(uid, False) and not is_start_think:
+                return None
+   
             result = None
             audio_url = interact.data.get('audio')#透传的音频
             if audio_url is not None:
@@ -352,7 +343,7 @@ class FeiFei:
                 if wsa_server.get_web_instance().is_connected(interact.data.get('user')):
                     wsa_server.get_web_instance().add_cmd({"panelMsg": "", 'Username' : interact.data.get('user'), 'robot': f'http://{cfg.fay_url}:5000/robot/Normal.jpg'})
                 if wsa_server.get_instance().is_connected(interact.data.get("user")):
-                    content = {'Topic': 'Unreal', 'Data': {'Key': 'log', 'Value': ''}, 'Username' : interact.data.get('user'), 'robot': f'http://{cfg.fay_url}:5000/robot/Normal.jpg'}
+                    content = {'Topic': 'human', 'Data': {'Key': 'log', 'Value': ''}, 'Username' : interact.data.get('user'), 'robot': f'http://{cfg.fay_url}:5000/robot/Normal.jpg'}
                     wsa_server.get_instance().add_cmd(content)               
                 
         except BaseException as e:
@@ -395,7 +386,8 @@ class FeiFei:
             if not self.sound_query.empty():  # 如果队列不为空则播放音频
                 file_url, audio_length, interact = self.sound_query.get()
                 util.printInfo(1, interact.data.get('user'), '播放音频...')
-                
+                if wsa_server.get_web_instance().is_connected(interact.data.get('user')):
+                    wsa_server.get_web_instance().add_cmd({"panelMsg": "播放中 ...", "Username" : interact.data.get('user'), 'robot': f'http://{cfg.fay_url}:5000/robot/Speaking.jpg'})
                 pygame.mixer.music.load(file_url)
                 pygame.mixer.music.play()
 
@@ -406,7 +398,8 @@ class FeiFei:
                     time.sleep(0.01)
                 
                 util.printInfo(1, interact.data.get('user'), '结束播放！')
-                
+                if wsa_server.get_web_instance().is_connected(interact.data.get('user')):
+                    wsa_server.get_web_instance().add_cmd({"panelMsg": "", "Username" : interact.data.get('user'), 'robot': f'http://{cfg.fay_url}:5000/robot/Normal.jpg'})
                 # 播放完毕后通知
                 if wsa_server.get_web_instance().is_connected(interact.data.get("user")):
                     wsa_server.get_web_instance().add_cmd({"panelMsg": "", 'Username': interact.data.get('user')})
@@ -467,7 +460,7 @@ class FeiFei:
 
             #发送音频给数字人接口
             if wsa_server.get_instance().is_connected(interact.data.get("user")):
-                content = {'Topic': 'Unreal', 'Data': {'Key': 'audio', 'Value': os.path.abspath(file_url), 'HttpValue': f'http://{cfg.fay_url}:5000/audio/' + os.path.basename(file_url),  'Text': text, 'Time': audio_length, 'Type': interact.interleaver}, 'Username' : interact.data.get('user')}
+                content = {'Topic': 'human', 'Data': {'Key': 'audio', 'Value': os.path.abspath(file_url), 'HttpValue': f'http://{cfg.fay_url}:5000/audio/' + os.path.basename(file_url),  'Text': text, 'Time': audio_length, 'Type': interact.interleaver}, 'Username' : interact.data.get('user'), 'robot': f'http://{cfg.fay_url}:5000/robot/Speaking.jpg'}
                 #计算lips
                 if platform.system() == "Windows":
                     try:
@@ -482,7 +475,7 @@ class FeiFei:
                 util.printInfo(1, interact.data.get("user"),  "数字人接口发送音频数据成功")
             
             #播放完成通知
-            threading.Timer(audio_length, self.send_play_end_msg, [interact]).start()
+            threading.Timer(audio_length, self.send_play_end_msg_to_human, [interact]).start()
 
             #面板播放
             config_util.load_config()
@@ -492,14 +485,11 @@ class FeiFei:
         except Exception as e:
             print(e)
 
-    def send_play_end_msg(self, interact):
-        if wsa_server.get_web_instance().is_connected(interact.data.get('user')):
-            wsa_server.get_web_instance().add_cmd({"panelMsg": "", 'Username' : interact.data.get('user'), 'robot': f'http://{cfg.fay_url}:5000/robot/Normal.jpg'})
+    def send_play_end_msg_to_human(self, interact):
         if wsa_server.get_instance().is_connected(interact.data.get("user")):
-            content = {'Topic': 'Unreal', 'Data': {'Key': 'log', 'Value': ""}, 'Username' : interact.data.get('user'), 'robot': f'http://{cfg.fay_url}:5000/robot/Normal.jpg'}
+            content = {'Topic': 'human', 'Data': {'Key': 'log', 'Value': ""}, 'Username' : interact.data.get('user'), 'robot': f'http://{cfg.fay_url}:5000/robot/Normal.jpg'}
             wsa_server.get_instance().add_cmd(content)
-        if config_util.config["interact"]["playSound"]:
-            util.printInfo(1, interact.data.get('user'), '结束播放！')
+
         
         self.speaking = False
         global can_auto_play
@@ -536,5 +526,94 @@ class FeiFei:
         self.speaking = False
         self.sp.close()
         wsa_server.get_web_instance().add_cmd({"panelMsg": ""})
-        content = {'Topic': 'Unreal', 'Data': {'Key': 'log', 'Value': ""}}
+        content = {'Topic': 'human', 'Data': {'Key': 'log', 'Value': ""}}
         wsa_server.get_instance().add_cmd(content)
+
+    def __record_response(self, text, username, uid):
+        """
+        记录AI的回复内容
+        :param text: 回复文本
+        :param username: 用户名
+        :param uid: 用户ID
+        :return: content_id
+        """
+        self.write_to_file("./logs", "answer_result.txt", text)
+        return content_db.new_instance().add_content('fay', 'speak', text, username, uid)
+
+    def __send_panel_message(self, text, username, uid, content_id=None, type=None):
+        """
+        发送消息到Web面板
+        :param text: 消息文本
+        :param username: 用户名
+        :param uid: 用户ID
+        :param content_id: 内容ID
+        :param type: 消息类型
+        """
+        if not wsa_server.get_web_instance().is_connected(username):
+            return
+            
+        # 发送基本消息
+        wsa_server.get_web_instance().add_cmd({
+            "panelMsg": text,
+            "Username": username
+        })
+        
+        # 如果有content_id，发送回复消息
+        if content_id is not None:
+            wsa_server.get_web_instance().add_cmd({
+                "panelReply": {
+                    "type": "fay",
+                    "content": text,
+                    "username": username,
+                    "uid": uid,
+                    "id": content_id,
+                    "is_adopted": type == 'qa'
+                },
+                "Username": username
+            })
+
+    def __send_digital_human_message(self, text, username):
+        """
+        发送消息到数字人（语音应该在say方法驱动数字人输出）
+        :param text: 消息文本
+        :param username: 用户名
+        """
+        if wsa_server.get_instance().is_connected(username):
+            content = {
+                'Topic': 'human',
+                'Data': {
+                    'Key': 'text',
+                    'Value': text
+                },
+                'Username': username
+            }
+            wsa_server.get_instance().add_cmd(content)
+
+    def __process_text_output(self, text, textlist, username, uid, type=None):
+        """
+        处理文本输出到各个终端
+        :param text: 主要回复文本
+        :param textlist: 额外回复列表
+        :param username: 用户名
+        :param uid: 用户ID
+        :param type: 消息类型
+        """
+        # 记录主回复
+        content_id = self.__record_response(text, username, uid)
+        
+        # 发送主回复到面板和数字人
+        # self.__send_panel_message(text, username, uid, content_id, type)
+        self.__send_digital_human_message(text, username)
+        
+        # 处理额外回复列表
+        if len(textlist) > 1:
+            for item in textlist[1:]:
+                content_db.new_instance().add_content('fay', 'speak', item['text'], username, uid)
+                # self.__send_panel_message(item['text'], username, uid)
+                self.__send_digital_human_message(item['text'], username)
+        
+        # 打印日志
+        util.printInfo(1, username, '({}) {}'.format(self.__get_mood_voice(), text))
+
+import importlib
+fay_booter = importlib.import_module('fay_booter')

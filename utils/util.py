@@ -36,7 +36,7 @@ def printInfo(level, sender, text, send_time=-1):
         if wsa_server.get_web_instance().is_connected(sender):
             wsa_server.get_web_instance().add_cmd({"panelMsg": text} if sender == "系统" else {"panelMsg": text, "Username" : sender})
         if wsa_server.get_instance().is_connected(sender):
-            content = {'Topic': 'Unreal', 'Data': {'Key': 'log', 'Value': text}} if sender == "系统" else  {'Topic': 'Unreal', 'Data': {'Key': 'log', 'Value': text}, "Username" : sender}
+            content = {'Topic': 'human', 'Data': {'Key': 'log', 'Value': text}} if sender == "系统" else  {'Topic': 'human', 'Data': {'Key': 'log', 'Value': text}, "Username" : sender}
             wsa_server.get_instance().add_cmd(content)
         MyThread(target=__write_to_file, args=[logStr]).start()
 
