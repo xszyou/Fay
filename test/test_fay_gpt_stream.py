@@ -10,7 +10,7 @@ def test_gpt(prompt):
     data = {
         'model': 'fay-streaming',
         'messages': [
-            {'role': 'user', 'content': prompt}
+            {'role': 'user_device_32_6', 'content': prompt}
         ],
         'stream': True  # 启用流式传输
     }
@@ -46,7 +46,7 @@ def test_gpt(prompt):
                 print(f"\n收到未知格式的数据：{line}")
 
 if __name__ == "__main__":
-    user_input = "今天天气怎么样？"
+    user_input = "你好"
     print("GPT 的回复:")
     test_gpt(user_input)
     print("\n请求完成")

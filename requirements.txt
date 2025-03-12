@@ -14,7 +14,7 @@ azure-cognitiveservices-speech
 aliyun-python-sdk-core
 simhash
 pytz
-gevent~=22.10.1
+gevent
 edge_tts
 pydub
 chromadb

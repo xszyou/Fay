@@ -42,7 +42,7 @@ def receive_audio(client):
                     break
             print("receive audio end:{}".format(len(filedata)), end="")
 
-            filename = "samples/recv_{}.wav".format(time.time())
+            filename = "samples/recv_{}.mp3".format(time.time())
             with open(filename, 'wb') as wf:
                 wf.write(filedata)
             with wave.open(filename, 'rb') as wav_file:
@@ -59,7 +59,7 @@ def receive_audio(client):
 if __name__ == "__main__":
     client = socket.socket()
     client.connect(("127.0.0.1", 10001))
-    # client.send(b"<username>User</username>")#指定用户名
+    client.send(b"<username>user_device_32_6</username>")#指定用户名
     # client.send(b"<output>False<output>")#不回传音频（可以通过websocket 10003数字人接口接收音频http路径和本地路径）
     time.sleep(1)
     pygame.mixer.init()

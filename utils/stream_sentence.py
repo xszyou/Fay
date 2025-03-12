@@ -17,6 +17,7 @@ class SentenceCache:
         self.readIndex = 0
         self.idle = 0
 
+
     @synchronized
     def write(self, sentence):
         # 如果缓冲区已满，则无法写入

@@ -232,11 +232,11 @@ def accept_audio_device_output_connect():
             #把DeviceInputListenner对象记录下来
             peername = str(deviceConnector.getpeername()[0]) + ":" + str(deviceConnector.getpeername()[1])
             DeviceInputListenerDict[peername] = deviceInputListener
-            util.log(1,"远程音频输入输出设备连接上：{}".format(addr))
+            util.log(1,"远程音频{}输入输出设备连接上：{}".format(len(DeviceInputListenerDict), addr))
         except Exception as e:
             pass
 
-#数字人端请求获取最新的自动播放消息，若自动播放服务关闭会自动退出自动播放
+#数字人端请求获取最新的自动播报消息，若自动播报服务关闭会自动退出自动播报
 def start_auto_play_service(): #TODO 评估一下有无优化的空间
     if config_util.config['source'].get('automatic_player_url') is None or config_util.config['source'].get('automatic_player_status') is None:
         return
@@ -248,9 +248,9 @@ def start_auto_play_service(): #TODO 评估一下有无优化的空间
             time.sleep(0.01)
             continue
         if is_auto_server_error:
-            util.printInfo(1, user, '60s后重连自动播放服务器')
+            util.printInfo(1, user, '60s后重连自动播报服务器')
             time.sleep(60)
-        # 请求自动播放服务器
+        # 请求自动播报服务器
         with get_fay_core().auto_play_lock:
             if config_util.config['source']['automatic_player_status'] and config_util.config['source']['automatic_player_url'] is not None and get_fay_core().can_auto_play == True and (config_util.config["interact"]["playSound"] or wsa_server.get_instance().is_connected(user)):
                 get_fay_core().can_auto_play = False
@@ -268,16 +268,16 @@ def start_auto_play_service(): #TODO 评估一下有无优化的空间
                             continue
                         timestamp = data.get('timestamp')
                         interact = Interact("auto_play", 2, {'user': user, 'text': response_text, 'audio': audio_url})
-                        util.printInfo(1, user, '自动播放：{}，{}'.format(response_text, audio_url), time.time())
+                        util.printInfo(1, user, '自动播报：{}，{}'.format(response_text, audio_url), time.time())
                         feiFei.on_interact(interact)
                     else:
                         is_auto_server_error = True
                         get_fay_core().can_auto_play = True
-                        util.printInfo(1, user, '请求自动播放服务器失败，错误代码是：{}'.format(response.status_code))
+                        util.printInfo(1, user, '请求自动播报服务器失败，错误代码是：{}'.format(response.status_code))
                 except requests.exceptions.RequestException as e:
                     is_auto_server_error = True
                     get_fay_core().can_auto_play = True
-                    util.printInfo(1, user, '请求自动播放服务器失败，错误信息是：{}'.format(e))
+                    util.printInfo(1, user, '请求自动播报服务器失败，错误信息是：{}'.format(e))
         time.sleep(0.01)
      
 
@@ -367,8 +367,8 @@ def start():
         util.log(1,'启动agent服务...')
         agent_service.agent_start()
 
-    #启动自动播放服务
-    util.log(1,'启动自动播放服务...')
+    #启动自动播报服务
+    util.log(1,'启动自动播报服务...')
     MyThread(target=start_auto_play_service).start()
         
     util.log(1, '服务启动完成!')

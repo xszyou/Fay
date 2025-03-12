@@ -36,6 +36,7 @@ class StreamManager:
             return
         self.lock = threading.Lock()  # 线程锁，用于保护streams字典的访问
         self.streams = {}  # 存储用户ID到句子缓存的映射
+        self.nlp_streams = {}  # 存储用户ID到句子缓存的映射
         self.max_sentences = max_sentences  # 最大句子缓存数量
         self.listener_threads = {}  # 存储用户ID到监听线程的映射
         self.running = True  # 控制监听线程的运行状态
@@ -49,16 +50,26 @@ class StreamManager:
         :return: 对应的句子缓存对象
         """
         need_start_thread = False
+        stream = None
+        nlp_stream = None
+        
         with self.lock:
-            if uid not in self.streams:
+            if uid not in self.streams or uid not in self.nlp_streams:
                 self.streams[uid] = stream_sentence.SentenceCache(self.max_sentences)
+                self.nlp_streams[uid] = stream_sentence.SentenceCache(self.max_sentences)
                 need_start_thread = True
-        if need_start_thread:
-            thread = MyThread(target=self.listen, args=(uid,), daemon=True)
-            with self.lock:
-                self.listener_threads[uid] = thread
-            thread.start()
-        return self.streams[uid]
+                stream = self.streams[uid]
+                nlp_stream = self.nlp_streams[uid]
+                
+                if need_start_thread:
+                    thread = MyThread(target=self.listen, args=(uid, stream, nlp_stream), daemon=True)
+                    self.listener_threads[uid] = thread
+                    thread.start()
+            else:
+                stream = self.streams[uid]
+                nlp_stream = self.nlp_streams[uid]
+                
+        return stream, nlp_stream
 
     def write_sentence(self, uid, sentence):
         """
@@ -69,9 +80,10 @@ class StreamManager:
         """
         if sentence.endswith('_<isfirst>'):
             self.clear_Stream(uid)
-        Stream = self.get_Stream(uid)
+        Stream, nlp_Stream = self.get_Stream(uid)
         success = Stream.write(sentence)
-        return success
+        nlp_success = nlp_Stream.write(sentence)
+        return success and nlp_success
 
     def clear_Stream(self, uid):
         """
@@ -81,20 +93,17 @@ class StreamManager:
         with self.lock:
             if uid in self.streams:
                 self.streams[uid].clear()
+            if uid in self.nlp_streams:
+                self.nlp_streams[uid].clear()
 
-    def listen(self, uid):
-        """
-        监听指定用户的文本流，并处理接收到的句子
-        :param uid: 用户ID
-        """
-        Stream = self.streams[uid]
+    def listen(self, uid, stream, nlp_stream):
         username = member_db.new_instance().find_username_by_uid(uid)
         while self.running:
-            sentence = Stream.read()  # 读取文本流中的句子
+            sentence = stream.read()
             if sentence:
-                self.execute(username, sentence)  # 执行句子处理
+                self.execute(username, sentence)
             else:
-                time.sleep(0.1)  # 无数据时短暂休眠
+                time.sleep(0.1)
 
     def execute(self, username, sentence):
         """
@@ -103,17 +112,15 @@ class StreamManager:
         :param sentence: 要处理的句子
         """
         fay_core = fay_booter.feiFei
-        # 处理打招呼类型的消息
-        if sentence.endswith('_<hello>'):
-            sentence = sentence[:-len('_<hello>')]
-            interact = Interact("hello", 1, {'user': username, 'msg': sentence})
-        else:
             # 处理普通消息，区分是否是会话的第一句
-            if sentence.endswith('_<isfirst>'):
-                sentence = sentence[:-len('_<isfirst>')]
-                interact = Interact("stream", 1, {'user': username, 'msg': sentence, 'isfirst': True})
-            else:
-                interact = Interact("stream", 1, {'user': username, 'msg': sentence, 'isfirst': False})
+        if sentence.endswith('_<isfirst>'):
+            sentence = sentence[:-len('_<isfirst>')]
+            interact = Interact("stream", 1, {'user': username, 'msg': sentence, 'isfirst': True})
+        elif sentence.endswith('_<isend>'):
+            sentence = sentence[:-len('_<isend>')]
+            interact = Interact("stream", 1, {'user': username, 'msg': sentence, 'isend': True})
+        else:
+            interact = Interact("stream", 1, {'user': username, 'msg': sentence})
         fay_core.say(interact, sentence)  # 调用核心处理模块进行响应
         # MyThread(target=fay_core.say, args=[interact, sentence]).start()  # 异步处理方式（已注释）
-        time.sleep(0.1)  # 短暂休眠以控制处理频率
+        time.sleep(0.01)  # 短暂休眠以控制处理频率

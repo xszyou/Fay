@@ -88,10 +88,11 @@ def send_request_stream(session, data, uid, cache):
         full_response_text = ""
         accumulated_text = ""
         punctuation_marks = ["。", "！", "？", ".", "!", "?", "\n"]  
+        is_first_sentence = True  
         for raw_line in response.iter_lines(decode_unicode=False):
             line = raw_line.decode('utf-8', errors='ignore')
             if not line or line.strip() == "":
-                continue
+                continue 
 
             if line.startswith("data: "):
                 chunk = line[len("data: "):].strip()
@@ -100,8 +101,7 @@ def send_request_stream(session, data, uid, cache):
                     finish_reason = json_data["choices"][0].get("finish_reason")
                     if finish_reason is not None:
                         if finish_reason == "stop":
-                            if accumulated_text:
-                                stream_manager.new_instance().write_sentence(uid, accumulated_text)
+                            stream_manager.new_instance().write_sentence(uid, accumulated_text + "_<isend>")
                             break
                     
                     flush_text = json_data["choices"][0]["delta"].get("content", "")
@@ -113,6 +113,9 @@ def send_request_stream(session, data, uid, cache):
                             if last_punct_pos != -1:
                                 to_write = accumulated_text[:last_punct_pos + 1]
                                 accumulated_text = accumulated_text[last_punct_pos + 1:]
+                                if is_first_sentence:
+                                    to_write += "_<isfirst>"
+                                    is_first_sentence = False
                                 stream_manager.new_instance().write_sentence(uid, to_write)
                             break
 
@@ -141,7 +144,7 @@ def question(content, uid=0, observation="", cache=None):
         "model": cfg.gpt_model_engine,
         "messages": messages,
         "temperature": 0.3,
-        "max_tokens": 2000,
+        "max_tokens": 4096,
         "user": f"user_{uid}"
     }
     

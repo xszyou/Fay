@@ -83,7 +83,7 @@ def handle_chat_message(msg, username='User', observation='', cache=None):
         if cfg.key_chat_module == 'rasa':
             textlist = selected_module.question(msg)
             text = textlist[0]['text'] 
-        elif cfg.key_chat_module == 'gpt_stream' and cache is not None:
+        elif cfg.key_chat_module == 'gpt_stream' and cache is not None:#TODO 好像是多余了
             uid = member_db.new_instance().find_user(username)
             text = selected_module.question(msg, uid, observation, cache)  
         else:
@@ -100,7 +100,7 @@ def handle_chat_message(msg, username='User', observation='', cache=None):
 
     return text,textlist
 
-#可以使用自动播放的标记    
+#可以使用自动播报的标记    
 can_auto_play = True
 auto_play_lock = threading.Lock()
 
@@ -141,20 +141,16 @@ class FeiFei:
         if self.__running:
             try:
                 index = interact.interact_type
+                username = interact.data.get("user", "User")
+                uid = member_db.new_instance().find_user(username)
                 if index == 1: #语音文字交互
                     #记录用户问题,方便obs等调用
                     self.write_to_file("./logs", "asr_result.txt",  interact.data["msg"])
 
                     #同步用户问题到数字人
-                    if wsa_server.get_instance().is_connected(interact.data.get("user")): 
+                    if wsa_server.get_instance().is_connected(username): 
                         content = {'Topic': 'human', 'Data': {'Key': 'question', 'Value': interact.data["msg"]}, 'Username' : interact.data.get("user")}
                         wsa_server.get_instance().add_cmd(content)
-
-                    #记录用户
-                    username = interact.data.get("user", "User")
-                    if member_db.new_instance().is_username_exist(username)  == "notexists":
-                        member_db.new_instance().add_user(username)
-                    uid = member_db.new_instance().find_user(username)
 
                     #记录用户问题
                     content_id = content_db.new_instance().add_content('member','speak',interact.data["msg"], username, uid)
@@ -185,25 +181,19 @@ class FeiFei:
                     if type == 'qa' or cfg.key_chat_module != 'gpt_stream':
                         if "</think>" in text:
                             text = text.split("</think>")[1]
+                        interact.data['isfirst'] = True
+                        interact.data['isend'] = True
                         MyThread(target=self.say, args=[interact, text, type]).start()  
                     
                     return text      
                 
-                elif (index == 2):#透传模式，用于适配自动播放控制及agent的通知工具
-                    #记录用户
-                    username = interact.data.get("user", "User")
-                    if member_db.new_instance().is_username_exist(username)  == "notexists":
-                        member_db.new_instance().add_user(username)
-                    uid = member_db.new_instance().find_user(username)
+                elif (index == 2):#透传模式，用于适配自动播报控制及agent的通知工具
 
                     if interact.data.get("text"):
                         text = interact.data.get("text")
                         # 使用统一的文本处理方法，空列表表示没有额外回复
                         self.__process_text_output(text, [], username, uid)
-                    
-                        #声音输出
-                        if cfg.key_chat_module != 'gpt_stream':
-                            MyThread(target=self.say, args=[interact, text]).start()  
+                        MyThread(target=self.say, args=[interact, text]).start()  
                     return 'success'
    
             except BaseException as e:
@@ -225,6 +215,13 @@ class FeiFei:
     #触发语音交互
     def on_interact(self, interact: Interact):
         MyThread(target=self.__update_mood, args=[interact]).start()
+        #创建用户
+        username = interact.data.get("user", "User")
+        if member_db.new_instance().is_username_exist(username)  == "notexists":
+            member_db.new_instance().add_user(username)
+        if cfg.key_chat_module == "gpt_stream":
+            MyThread(target=self.__process_interact, args=[interact]).start()
+            return None
         return self.__process_interact(interact)
 
     # 发送情绪
@@ -302,6 +299,7 @@ class FeiFei:
     def say(self, interact, text, type = ""):
         try:
             uid = member_db.new_instance().find_user(interact.data.get('user'))
+            is_end = interact.data.get("isend", False)
             self.__send_panel_message(text, interact.data.get('user'), uid, 0, type)
             
             # 处理think标签
@@ -327,24 +325,22 @@ class FeiFei:
    
             result = None
             audio_url = interact.data.get('audio')#透传的音频
-            if audio_url is not None:
-                file_name = 'sample-' + str(int(time.time() * 1000)) + '.wav'
+            if audio_url is not None:#透传音频下载
+                file_name = 'sample-' + str(int(time.time() * 1000)) + audio_url[-4:]
                 result = self.download_wav(audio_url, './samples/', file_name)
             elif config_util.config["interact"]["playSound"] or wsa_server.get_instance().is_connected(interact.data.get("user")) or self.__is_send_remote_device_audio(interact):#tts
-                util.printInfo(1,  interact.data.get('user'), '合成音频...')
-                tm = time.time()
-                result = self.sp.to_sample(text.replace("*", ""), self.__get_mood_voice())
-                util.printInfo(1,  interact.data.get('user'), '合成音频完成. 耗时: {} ms 文件:{}'.format(math.floor((time.time() - tm) * 1000), result))
-
-            if result is not None:            
-                MyThread(target=self.__process_output_audio, args=[result, interact, text]).start()
-                return result
+                if text != None and  text.replace("*", "").strip() != "":
+                    util.printInfo(1,  interact.data.get('user'), '合成音频...')
+                    tm = time.time()
+                    result = self.sp.to_sample(text.replace("*", ""), self.__get_mood_voice())
+                    util.printInfo(1,  interact.data.get("user"), "合成音频完成. 耗时: {} ms 文件:{}".format(math.floor((time.time() - tm) * 1000), result))
             else:
-                if wsa_server.get_web_instance().is_connected(interact.data.get('user')):
+                if is_end and wsa_server.get_web_instance().is_connected(interact.data.get('user')):
                     wsa_server.get_web_instance().add_cmd({"panelMsg": "", 'Username' : interact.data.get('user'), 'robot': f'http://{cfg.fay_url}:5000/robot/Normal.jpg'})
-                if wsa_server.get_instance().is_connected(interact.data.get("user")):
-                    content = {'Topic': 'human', 'Data': {'Key': 'log', 'Value': ''}, 'Username' : interact.data.get('user'), 'robot': f'http://{cfg.fay_url}:5000/robot/Normal.jpg'}
-                    wsa_server.get_instance().add_cmd(content)               
+
+            if result is not None or is_end:          
+                MyThread(target=self.__process_output_audio, args=[result, interact, text]).start()
+                return result         
                 
         except BaseException as e:
             print(e)
@@ -378,18 +374,30 @@ class FeiFei:
 
     #面板播放声音
     def __play_sound(self):
-        
-        pygame.mixer.init()  # 初始化pygame.mixer，只需要在此处初始化一次
+        try:
+            pygame.mixer.init()  # 初始化pygame.mixer，只需要在此处初始化一次, 如果初始化失败，则不播放音频
+        except Exception as e:
+            util.printInfo(1, "System", "音频播放初始化失败,本机无法播放音频")
+            return
         
         while self.__running:
             time.sleep(0.1)
             if not self.sound_query.empty():  # 如果队列不为空则播放音频
                 file_url, audio_length, interact = self.sound_query.get()
+                is_first = False
+                is_end = False
+                if interact.data.get('isfirst'):
+                    is_first = True
+                if interact.data.get('isend'):
+                    is_end = True
                 util.printInfo(1, interact.data.get('user'), '播放音频...')
+                self.speaking = True
                 if wsa_server.get_web_instance().is_connected(interact.data.get('user')):
                     wsa_server.get_web_instance().add_cmd({"panelMsg": "播放中 ...", "Username" : interact.data.get('user'), 'robot': f'http://{cfg.fay_url}:5000/robot/Speaking.jpg'})
-                pygame.mixer.music.load(file_url)
-                pygame.mixer.music.play()
+                
+                if file_url is not None:
+                    pygame.mixer.music.load(file_url)
+                    pygame.mixer.music.play()
 
                 # 播放过程中计时，直到音频播放完毕
                 length = 0
@@ -398,6 +406,8 @@ class FeiFei:
                     time.sleep(0.01)
                 
                 util.printInfo(1, interact.data.get('user'), '结束播放！')
+                if is_end:
+                    self.play_end(interact)
                 if wsa_server.get_web_instance().is_connected(interact.data.get('user')):
                     wsa_server.get_web_instance().add_cmd({"panelMsg": "", "Username" : interact.data.get('user'), 'robot': f'http://{cfg.fay_url}:5000/robot/Normal.jpg'})
                 # 播放完毕后通知
@@ -406,6 +416,8 @@ class FeiFei:
     
     #推送远程音频
     def __send_remote_device_audio(self, file_url, interact):
+        if file_url is None:
+            return
         delkey = None    
         for key, value in fay_booter.DeviceInputListenerDict.items():
             if value.username == interact.data.get("user") and value.isOutput: #按username选择推送，booter.devicelistenerdice按用户名记录
@@ -440,12 +452,18 @@ class FeiFei:
     def __process_output_audio(self, file_url, interact, text):
         try:
             try:
-                audio = AudioSegment.from_wav(file_url)
-                audio_length = len(audio) / 1000.0  # 时长以秒为单位
+                if file_url is None:
+                    audio_length = 0
+                elif file_url.endswith('.wav'):
+                    audio = AudioSegment.from_wav(file_url)
+                    audio_length = len(audio) / 1000.0  # 时长以秒为单位
+                elif file_url.endswith('.mp3'):
+                    audio = AudioSegment.from_mp3(file_url)
+                    audio_length = len(audio) / 1000.0  # 时长以秒为单位
             except Exception as e:
                 audio_length = 3
 
-            #自动播放关闭
+            #自动播报关闭
             global auto_play_lock
             global can_auto_play
             with auto_play_lock:
@@ -454,12 +472,11 @@ class FeiFei:
                     self.timer = None
                 can_auto_play = False
 
-            self.speaking = True
             #推送远程音频
             MyThread(target=self.__send_remote_device_audio, args=[file_url, interact]).start()       
 
             #发送音频给数字人接口
-            if wsa_server.get_instance().is_connected(interact.data.get("user")):
+            if file_url is not None and wsa_server.get_instance().is_connected(interact.data.get("user")):
                 content = {'Topic': 'human', 'Data': {'Key': 'audio', 'Value': os.path.abspath(file_url), 'HttpValue': f'http://{cfg.fay_url}:5000/audio/' + os.path.basename(file_url),  'Text': text, 'Time': audio_length, 'Type': interact.interleaver}, 'Username' : interact.data.get('user'), 'robot': f'http://{cfg.fay_url}:5000/robot/Speaking.jpg'}
                 #计算lips
                 if platform.system() == "Windows":
@@ -473,24 +490,19 @@ class FeiFei:
                         util.printInfo(1, interact.data.get("user"),  "唇型数据生成失败")
                 wsa_server.get_instance().add_cmd(content)
                 util.printInfo(1, interact.data.get("user"),  "数字人接口发送音频数据成功")
-            
-            #播放完成通知
-            threading.Timer(audio_length, self.send_play_end_msg_to_human, [interact]).start()
 
             #面板播放
             config_util.load_config()
             if config_util.config["interact"]["playSound"]:
                   self.sound_query.put((file_url, audio_length, interact))
+            else:
+                if wsa_server.get_web_instance().is_connected(interact.data.get('user')):
+                    wsa_server.get_web_instance().add_cmd({"panelMsg": "", 'Username' : interact.data.get('user'), 'robot': f'http://{cfg.fay_url}:5000/robot/Normal.jpg'})
             
         except Exception as e:
             print(e)
 
-    def send_play_end_msg_to_human(self, interact):
-        if wsa_server.get_instance().is_connected(interact.data.get("user")):
-            content = {'Topic': 'human', 'Data': {'Key': 'log', 'Value': ""}, 'Username' : interact.data.get('user'), 'robot': f'http://{cfg.fay_url}:5000/robot/Normal.jpg'}
-            wsa_server.get_instance().add_cmd(content)
-
-        
+    def play_end(self, interact):
         self.speaking = False
         global can_auto_play
         global auto_play_lock
@@ -498,13 +510,13 @@ class FeiFei:
             if self.timer:
                 self.timer.cancel()
                 self.timer = None
-            if interact.interleaver != 'auto_play': #交互后暂停自动播放30秒
+            if interact.interleaver != 'auto_play': #交互后暂停自动播报30秒
                 self.timer = threading.Timer(30, self.set_auto_play)
                 self.timer.start()
             else:
                 can_auto_play = True
 
-    #恢复自动播放(如果有)   
+    #恢复自动播报(如果有)   
     def set_auto_play(self):
         global auto_play_lock
         global can_auto_play

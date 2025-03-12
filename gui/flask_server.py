@@ -10,9 +10,9 @@ import requests
 import datetime
 import pytz
 import logging
+import uuid
 
 import fay_booter
-
 from tts import tts_voice
 from gevent import pywsgi
 from scheduler.thread_manager import MyThread
@@ -25,6 +25,7 @@ from core import member_db
 import fay_booter
 from flask_httpauth import HTTPBasicAuth
 from core import qa_service
+from core import stream_manager
 
 __app = Flask(__name__)
 # 禁用 Flask 默认日志
@@ -326,7 +327,9 @@ def api_send_v1_chat_completions():
         util.printInfo(1, username, '[文字沟通接口]{}'.format(interact.data["msg"]), time.time())
         text = fay_booter.feiFei.on_interact(interact)
 
-        if model == 'fay-streaming':
+        if config_util.key_chat_module == 'gpt_stream':
+            return gpt_stream_response(member_db.new_instance().find_user(username))
+        elif model == 'fay-streaming':
             return stream_response(text)
         else:
             return non_streaming_response(last_content, text)
@@ -384,6 +387,43 @@ def adopt_msg():
     except Exception as e:
         return jsonify({'status':'error', 'msg': f'采纳消息时出错: {e}'}), 500
 
+def gpt_stream_response(uid):
+    _, nlp_Stream = stream_manager.new_instance().get_Stream(uid)
+    def generate():
+        while True:
+            sentence = nlp_Stream.read()
+            if sentence is None:
+                time.sleep(0.01)
+                continue
+            
+            # 处理特殊标记
+            is_first = "_<isfirst>" in sentence
+            is_end = "_<isend>" in sentence
+            content = sentence.replace("_<isfirst>", "").replace("_<isend>", "")
+            if content:  # 只有当有实际内容时才发送
+                message = {
+                    "id": "chatcmpl-" + str(uuid.uuid4()),
+                    "object": "chat.completion.chunk",
+                    "created": int(time.time()),
+                    "model": "fay-streaming",
+                    "choices": [
+                        {
+                            "delta": {
+                                "content": content
+                            },
+                            "index": 0,
+                            "finish_reason": "stop" if is_end else None
+                        }
+                    ]
+                }
+                yield f"data: {json.dumps(message)}\n\n"
+            if is_end:
+                break
+            time.sleep(0.01)
+        yield 'data: [DONE]\n\n'
+    
+    return Response(generate(), mimetype='text/event-stream')
+
 def stream_response(text):
     # 处理流式响应
     def generate():
@@ -404,7 +444,7 @@ def stream_response(text):
                 ]
             }
             yield f"data: {json.dumps(message)}\n\n"
-            time.sleep(0.1)
+            time.sleep(0.01)
         yield 'data: [DONE]\n\n'
     
     return Response(generate(), mimetype='text/event-stream')
