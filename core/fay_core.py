@@ -312,7 +312,7 @@ class FeiFei:
                 self.think_mode_users[uid] = False
                 return None
             
-            if self.think_mode_users.get(uid, False):
+            if self.think_mode_users.get(uid, False) and is_start_think:
                 if wsa_server.get_web_instance().is_connected(interact.data.get('user')):
                     wsa_server.get_web_instance().add_cmd({"panelMsg": "思考中...", "Username" : interact.data.get('user'), 'robot': f'http://{cfg.fay_url}:5000/robot/Thinking.jpg'})
                 if wsa_server.get_instance().is_connected(interact.data.get("user")):
