@@ -75,7 +75,7 @@ python main.py
 
 1. 克隆仓库
 ```shell
-https://github.com/xszyou/Fay
+git clone https://github.com/xszyou/Fay.git
 ```
 2. 修改 `./system.conf` 文件
 3. 删除`requirements.txt`下`PyQt5=<版本>`
