@@ -27,7 +27,7 @@ class Member_Db:
 
     #初始化
     def init_db(self):
-        conn = sqlite3.connect('user_profiles.db')
+        conn = sqlite3.connect('memory/user_profiles.db')
         c = conn.cursor()
         c.execute('''CREATE TABLE IF NOT EXISTS T_Member
             (id INTEGER PRIMARY KEY     autoincrement,
@@ -39,7 +39,7 @@ class Member_Db:
     @synchronized
     def add_user(self, username):
         if self.is_username_exist(username) == "notexists":
-            conn = sqlite3.connect('user_profiles.db')
+            conn = sqlite3.connect('memory/user_profiles.db')
             c = conn.cursor()
             c.execute('INSERT INTO T_Member (username) VALUES (?)', (username,))
             conn.commit()
@@ -52,7 +52,7 @@ class Member_Db:
     @synchronized
     def update_user(self, username, new_username):
         if self.is_username_exist(new_username) == "notexists":
-            conn = sqlite3.connect('user_profiles.db')
+            conn = sqlite3.connect('memory/user_profiles.db')
             c = conn.cursor()
             c.execute('UPDATE T_Member SET username = ? WHERE username = ?', (new_username, username))
             conn.commit()
@@ -64,7 +64,7 @@ class Member_Db:
     # 删除用户
     @synchronized
     def delete_user(self, username):
-        conn = sqlite3.connect('user_profiles.db')
+        conn = sqlite3.connect('memory/user_profiles.db')
         c = conn.cursor()
         c.execute('DELETE FROM T_Member WHERE username = ?', (username,))
         conn.commit()
@@ -73,7 +73,7 @@ class Member_Db:
 
     # 检查用户名是否已存在
     def is_username_exist(self, username):
-        conn = sqlite3.connect('user_profiles.db')
+        conn = sqlite3.connect('memory/user_profiles.db')
         c = conn.cursor()
         c.execute('SELECT COUNT(*) FROM T_Member WHERE username = ?', (username,))
         result = c.fetchone()[0]
@@ -85,7 +85,7 @@ class Member_Db:
 
     #根据username查询uid
     def find_user(self, username):
-        conn = sqlite3.connect('user_profiles.db')
+        conn = sqlite3.connect('memory/user_profiles.db')
         c = conn.cursor()
         c.execute('SELECT * FROM T_Member WHERE username = ?', (username,))
         result = c.fetchone()
@@ -97,7 +97,7 @@ class Member_Db:
         
     #根据uid查询username
     def find_username_by_uid(self, uid):
-        conn = sqlite3.connect('user_profiles.db')
+        conn = sqlite3.connect('memory/user_profiles.db')
         c = conn.cursor()
         c.execute('SELECT username FROM T_Member WHERE id = ?', (uid,))
         result = c.fetchone()
@@ -112,7 +112,7 @@ class Member_Db:
     @synchronized
     def query(self, sql):
         try:
-            conn = sqlite3.connect('user_profiles.db')
+            conn = sqlite3.connect('memory/user_profiles.db')
             c = conn.cursor()
             c.execute(sql)
             results = c.fetchall()
@@ -126,7 +126,7 @@ class Member_Db:
     # 获取所有用户
     @synchronized
     def get_all_users(self):
-        conn = sqlite3.connect('user_profiles.db')
+        conn = sqlite3.connect('memory/user_profiles.db')
         c = conn.cursor()
         c.execute('SELECT * FROM T_Member')
         results = c.fetchall()

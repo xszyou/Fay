@@ -114,10 +114,10 @@ class StreamManager:
         fay_core = fay_booter.feiFei
             # 处理普通消息，区分是否是会话的第一句
         if sentence.endswith('_<isfirst>'):
-            sentence = sentence[:-len('_<isfirst>')]
+            sentence = sentence[:-len('_<isfirst>')].strip()
             interact = Interact("stream", 1, {'user': username, 'msg': sentence, 'isfirst': True})
         elif sentence.endswith('_<isend>'):
-            sentence = sentence[:-len('_<isend>')]
+            sentence = sentence[:-len('_<isend>')].strip()
             interact = Interact("stream", 1, {'user': username, 'msg': sentence, 'isend': True})
         else:
             interact = Interact("stream", 1, {'user': username, 'msg': sentence})

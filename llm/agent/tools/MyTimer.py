@@ -38,7 +38,7 @@ class MyTimer(BaseTool, abc.ABC):
             return "事项内容必须为非空字符串。"
 
         # 数据库操作
-        conn = sqlite3.connect('timer.db')
+        conn = sqlite3.connect('memory/timer.db')
         cursor = conn.cursor()
         try:
             cursor.execute("INSERT INTO timer (time, repeat_rule, content, uid) VALUES (?, ?, ?, ?)", (time, repeat_rule, content, self.uid))

@@ -20,7 +20,7 @@ class QueryTimerDB(BaseTool, abc.ABC):
 
 
     def _run(self, para) -> str:
-        conn = sqlite3.connect('timer.db')
+        conn = sqlite3.connect('memory/timer.db')
         cursor = conn.cursor()
         # 执行查询
         cursor.execute("SELECT * FROM timer")

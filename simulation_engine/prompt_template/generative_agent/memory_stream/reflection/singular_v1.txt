@@ -1,0 +1,15 @@
+Variables: 
+!<INPUT 0>!: observations
+!<INPUT 1>!: reflection count
+!<INPUT 2>!: anchor
+<commentblockmarker>###</commentblockmarker>
+!<INPUT 0>!
+---
+Task: Above are observations about a fictional human subject. Write one reflection (in first person voice, from the perspective of the subject) that you can infer from the observations above about the subject on the following anchoring topic/phrase: "!<INPUT 2>!". 
+
+Output format: Json dictionaries of the following format: 
+{
+  "reflection": [
+     "<fill in>"
+  ]
+}

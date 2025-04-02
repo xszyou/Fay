@@ -131,20 +131,32 @@
           <input class="section_2" v-model="automatic_player_url" placeholder="http://127.0.0.1:6000" :disabled="!configEditable" />
         </div>
         </div>
-        <div style="margin-top: 40px; text-align: center;">
-          <el-button style="width: 160px;height: 50px;margin-left: -100px;" :disabled="!configEditable"  @click=saveConfig()>保存配置</el-button>
-
+        <div style="margin-top: 40px; position: relative; width: 100%; text-align: center;">
+          <div style="display: inline-block; position: absolute; left: 30%; transform: translateX(-50%);">
+            <el-button style="width: 160px; height: 50px;" :disabled="!configEditable" @click=saveConfig()>保存配置</el-button>
+          </div>
           
-          <!-- <el-button type="primary" style="width: 160px;height: 50px;margin-left: 100px;background-color: #007aff;">开 启</el-button> -->
-          <el-button v-if="liveState == 1" type="success" class="btn_close"
-          style="width: 160px;height: 50px;margin-left: 100px;background-color: #007aff;" @click=stopLive()>关闭（运行中）</el-button>
-                                    <el-button v-else-if="liveState == 2" type="primary" plain disabled
-                                    style="width: 160px;height: 50px;margin-left: 100px;background-color: #007aff;">正在开启...</el-button>
-                                    <el-button v-else-if="liveState == 3" type="success" plain disabled
-                                    style="width: 160px;height: 50px;margin-left: 100px;background-color: #007aff;">正在关闭...</el-button>
-                                    <el-button v-else type="primary" style="width: 160px;height: 50px;margin-left: 100px;background-color: #007aff;"
-                                        @click=startLive()>开启</el-button>
+          <div style="display: inline-block; position: absolute; left: 70%; transform: translateX(-50%);">
+            <!-- <el-button type="primary" style="width: 160px;height: 50px;background-color: #007aff;">开 启</el-button> -->
+            <el-button v-if="liveState == 1" type="success" class="btn_close"
+            style="width: 160px; height: 50px; background-color: #007aff;" @click=stopLive()>关闭（运行中）</el-button>
+            <el-button v-else-if="liveState == 2" type="primary" plain disabled
+            style="width: 160px; height: 50px; background-color: #007aff;">正在开启...</el-button>
+            <el-button v-else-if="liveState == 3" type="success" plain disabled
+            style="width: 160px; height: 50px; background-color: #007aff;">正在关闭...</el-button>
+            <el-button v-else type="primary" style="width: 160px; height: 50px; background-color: #007aff;"
+                @click=startLive()>开启</el-button>
+          </div>
         </div>
+        <div style="margin-top: 100px; position: relative; width: 100%; text-align: center;">
+          <div style="display: inline-block; position: absolute; left: 30%; transform: translateX(-50%);">
+            <a href="javascript:void(0)" @click="clearMemory" style="color: #007aff; font-size: 14px; text-decoration: none;">清除记忆</a>
+          </div>
+          <div style="display: inline-block; position: absolute; left: 70%; transform: translateX(-50%);">
+            <a href="javascript:void(0)" @click="clonePersonality" style="color: #007aff; font-size: 14px; text-decoration: none;">克隆（赋予）人格</a>
+          </div>
+        </div>
+        <div style="height: 60px;"></div> <!-- 添加空间以避免内容被覆盖 -->
       </div>
 
     </div>

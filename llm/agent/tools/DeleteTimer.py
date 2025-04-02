@@ -20,7 +20,7 @@ class DeleteTimer(BaseTool):
             return "输入的 ID 无效，必须是数字。"
         
         try:
-            with sqlite3.connect('timer.db') as conn:
+            with sqlite3.connect('memory/timer.db') as conn:
                 cursor = conn.cursor()
                 cursor.execute("DELETE FROM timer WHERE id = ?", (id,))
                 conn.commit()

@@ -1,0 +1,12 @@
+Variables: 
+!<INPUT 0>!: Observations
+
+<commentblockmarker>###</commentblockmarker>
+!<INPUT 0>!
+---
+Task: Above is a list of observations about a fictional human subject. For each item, rate its importance on a scale from 0 to 100, where 0 represents 'not important' and 100 represents 'very important' for understanding the subject.
+Output format: Json dictionaries of the following format: 
+{
+"Item  1": <int importance score (range: 0 to 100) for item 1>,
+"Item  2": <int importance score (range: 0 to 100) for item 2>, ...
+}

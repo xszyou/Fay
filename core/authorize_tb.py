@@ -17,7 +17,7 @@ class Authorize_Tb:
 
     #初始化
     def init_tb(self):
-        conn = sqlite3.connect('fay.db')
+        conn = sqlite3.connect('memory/fay.db')
         c = conn.cursor()
         c.execute('''
             CREATE TABLE IF NOT EXISTS T_Authorize
@@ -34,7 +34,7 @@ class Authorize_Tb:
     @synchronized
     def add(self,userid,accesstoken,expirestime):
         self.init_tb()
-        conn = sqlite3.connect("fay.db")
+        conn = sqlite3.connect("memory/fay.db")
         cur = conn.cursor()
         cur.execute("insert into T_Authorize (userid,accesstoken,expirestime,createtime) values (?,?,?,?)",(userid,accesstoken,expirestime,int(time.time())))
         
@@ -46,7 +46,7 @@ class Authorize_Tb:
     @synchronized
     def find_by_userid(self,userid):
         self.init_tb()
-        conn = sqlite3.connect("fay.db")
+        conn = sqlite3.connect("memory/fay.db")
         cur = conn.cursor()
         cur.execute("select accesstoken,expirestime from T_Authorize where userid = ? order by id desc limit 1",(userid,))
         info = cur.fetchone()
@@ -57,7 +57,7 @@ class Authorize_Tb:
     @synchronized
     def update_by_userid(self, userid, new_accesstoken, new_expirestime):
         self.init_tb()
-        conn = sqlite3.connect("fay.db")
+        conn = sqlite3.connect("memory/fay.db")
         cur = conn.cursor()
         cur.execute("UPDATE T_Authorize SET accesstoken = ?, expirestime = ? WHERE userid = ?", 
                     (new_accesstoken, new_expirestime, userid))

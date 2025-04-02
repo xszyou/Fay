@@ -74,7 +74,7 @@ class FayInterface {
     }
 
     getRunStatus() {
-        return this.fetchData(`${this.baseApiUrl}/api/get_run_status`, {
+        return this.fetchData(`${this.baseApiUrl}/api/get-run-status`, {
           method: 'POST'
         });
       }
@@ -312,7 +312,7 @@ new Vue({
                     }
                 }
             }
-            this.sendSuccessMsg("配置已保存！")
+            this.sendSuccessMsg("配置已保存！");
         },
         startLive() {
             this.liveState = 2
@@ -334,6 +334,94 @@ new Vue({
                 message,
                 type: 'success',
             });
+        },
+        clearMemory() {
+            this.$confirm('清除记忆操作将删除Fay的所有对话记忆，清除后需要重启应用才能生效，确认继续吗?', '提示', {
+                confirmButtonText: '确定',
+                cancelButtonText: '取消',
+                type: 'warning'
+            }).then(() => {
+                // 发送清除记忆请求
+                fetch(`${this.host_url}/api/clear-memory`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        this.sendSuccessMsg(data.message || "记忆已清除，请重启应用使更改生效");
+                    } else {
+                        this.$notify({
+                            title: '错误',
+                            message: data.message || '清除记忆失败',
+                            type: 'error'
+                        });
+                    }
+                })
+                .catch(error => {
+                    this.$notify({
+                        title: '错误',
+                        message: '清除记忆请求失败',
+                        type: 'error'
+                    });
+                });
+            }).catch(() => {
+                // 用户取消操作
+            });
+        },
+        clonePersonality() {
+            if (this.liveState === 1) {
+                this.$prompt('请输入克隆要求', '克隆人格', {
+                    confirmButtonText: '确定',
+                    cancelButtonText: '取消',
+                    inputPlaceholder: '请输入克隆要求，例如：你现在是一个活泼开朗的助手...'
+                }).then(({ value }) => {
+                    if (!value) {
+                        this.$notify({
+                            title: '提示',
+                            message: '克隆要求不能为空',
+                            type: 'warning'
+                        });
+                        return;
+                    }
+                    
+                    // 直接启动genagents_flask.py并打开decision_interview.html页面
+                    fetch(`${this.host_url}/api/start-genagents`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ instruction: value })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            // 弹出提示，显示克隆地址，不自动打开
+                            this.$alert(`决策分析页面已启动，请复制以下链接在新窗口中打开：<br><br><code style="background-color: #f5f5f5; padding: 5px; border-radius: 3px;">${data.url}</code>`, '克隆人格', {
+                                confirmButtonText: '确定',
+                                dangerouslyUseHTMLString: true
+                            });
+                        } else {
+                            this.$notify({
+                                title: '错误',
+                                message: data.message || '启动决策分析页面失败',
+                                type: 'error'
+                            });
+                        }
+                    })
+                    .catch(error => {
+                        this.$notify({
+                            title: '错误',
+                            message: '启动决策分析页面请求失败',
+                            type: 'error'
+                        });
+                    });
+                });
+            } else {
+                this.$notify({
+                    title: '提示',
+                    message: '请先开Fay后再执行此操作',
+                    type: 'warning'
+                });
+            }
         },
     },
 });

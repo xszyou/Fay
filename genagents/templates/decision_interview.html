@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>价值观及经历克隆</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            padding-top: 20px;
+            padding-bottom: 60px;
+            background-color: #f8f9fa;
+        }
+        .dimension-card {
+            margin-bottom: 30px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            border-radius: 8px;
+        }
+        .dimension-header {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px 8px 0 0;
+            border-bottom: 1px solid #dee2e6;
+        }
+        .dimension-body {
+            padding: 20px;
+        }
+        .question-item {
+            margin-bottom: 20px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #eee;
+        }
+        .question-item:last-child {
+            border-bottom: none;
+        }
+        .fixed-bottom-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(255,255,255,0.95);
+            padding: 10px 0;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+            z-index: 1000;
+        }
+        textarea {
+            min-height: 100px;
+        }
+        .progress {
+            height: 8px;
+        }
+        .instruction-card {
+            margin-bottom: 20px;
+            background-color: #e9f7fe;
+            border-left: 4px solid #3498db;
+            padding: 15px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <div class="text-center mb-4">
+                    <h1 class="display-4">价值观及经历克隆</h1>
+                    <p class="lead">本采访将从多个维度分析你的决策风格和价值观</p>
+                    <p>回答越详细，创建的代理就越接近你的真实决策模式</p>
+                </div>
+                
+                <!-- 显示指令信息 -->
+                <div class="instruction-card" id="instructionCard">
+                    <h4>克隆要求</h4>
+                    <p id="instructionText">{{ instruction }}</p>
+                </div>
+                
+                <form id="decisionInterviewForm">
+                    <!-- 核心价值观维度 -->
+                    <div class="dimension-card" id="dimension1">
+                        <div class="dimension-header">
+                            <h3>核心价值观维度</h3>
+                            <p class="text-muted">这个维度分析你在核心价值观方面的特点和偏好</p>
+                        </div>
+                        <div class="dimension-body">
+                            <div class="question-item">
+                                <label class="form-label">在你的人生中，最重要的3-5个价值观是什么？</label>
+                                <textarea class="form-control" name="dim1_q1" rows="3" required></textarea>
+                            </div>
+                            <div class="question-item">
+                                <label class="form-label">如果你必须在这些价值观之间做取舍，你会如何排序？</label>
+                                <textarea class="form-control" name="dim1_q2" rows="3" required></textarea>
+                            </div>
+                            <div class="question-item">
+                                <label class="form-label">有什么原则是你认为在任何情况下都不应该违背的？</label>
+                                <textarea class="form-control" name="dim1_q3" rows="3" required></textarea>
+                            </div>
+                            <div class="question-item">
+                                <label class="form-label">分享一个你坚守个人价值观的具体经历，以及这如何影响了当时的决策和结果？</label>
+                                <textarea class="form-control" name="dim1_q4" rows="5" required></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 风险态度维度 -->
+                    <div class="dimension-card" id="dimension2">
+                        <div class="dimension-header">
+                            <h3>风险态度维度</h3>
+                            <p class="text-muted">这个维度分析你在风险态度方面的特点和偏好</p>
+                        </div>
+                        <div class="dimension-body">
+                            <div class="question-item">
+                                <label class="form-label">在投资决策中，你倾向于保守还是激进？为什么？</label>
+                                <textarea class="form-control" name="dim2_q1" rows="3" required></textarea>
+                            </div>
+                            <div class="question-item">
+                                <label class="form-label">面对不确定性较高但回报也高的机会，你通常如何抉择？</label>
+                                <textarea class="form-control" name="dim2_q2" rows="3" required></textarea>
+                            </div>
+                            <div class="question-item">
+                                <label class="form-label">你如何看待'宁可错过机会也不要承担过大风险'这种说法？</label>
+                                <textarea class="form-control" name="dim2_q3" rows="3" required></textarea>
+                            </div>
+                            <div class="question-item">
+                                <label class="form-label">描述一次你冒险（或拒绝冒险）的重要决策，事后你如何评价这个决定？</label>
+                                <textarea class="form-control" name="dim2_q4" rows="5" required></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 时间偏好维度 -->
+                    <div class="dimension-card" id="dimension3">
+                        <div class="dimension-header">
+                            <h3>时间偏好维度</h3>
+                            <p class="text-muted">这个维度分析你在时间偏好方面的特点和偏好</p>
+                        </div>
+                        <div class="dimension-body">
+                            <div class="question-item">
+                                <label class="form-label">在追求短期利益和长期发展之间，你通常如何平衡？</label>
+                                <textarea class="form-control" name="dim3_q1" rows="3" required></textarea>
+                            </div>
+                            <div class="question-item">
+                                <label class="form-label">你愿意现在牺牲多少，来换取未来更大的收益？</label>
+                                <textarea class="form-control" name="dim3_q2" rows="3" required></textarea>
+                            </div>
+                            <div class="question-item">
+                                <label class="form-label">在规划未来时，你会考虑多长的时间跨度？</label>
+                                <textarea class="form-control" name="dim3_q3" rows="3" required></textarea>
+                            </div>
+                            <div class="question-item">
+                                <label class="form-label">回忆一个你为长远目标放弃短期利益的重要经历，这个决定最终如何影响了你？</label>
+                                <textarea class="form-control" name="dim3_q4" rows="5" required></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 自主性与集体性维度 -->
+                    <div class="dimension-card" id="dimension4">
+                        <div class="dimension-header">
+                            <h3>自主性与集体性维度</h3>
+                            <p class="text-muted">这个维度分析你在自主性与集体性方面的特点和偏好</p>
+                        </div>
+                        <div class="dimension-body">
+                            <div class="question-item">
+                                <label class="form-label">在团队决策中，你更倾向于坚持自己的判断还是顺应多数意见？</label>
+                                <textarea class="form-control" name="dim4_q1" rows="3" required></textarea>
+                            </div>
+                            <div class="question-item">
+                                <label class="form-label">个人利益与集体利益冲突时，你通常如何处理？</label>
+                                <textarea class="form-control" name="dim4_q2" rows="3" required></textarea>
+                            </div>
+                            <div class="question-item">
+                                <label class="form-label">你认为什么情况下应该妥协，什么情况下应该坚持立场？</label>
+                                <textarea class="form-control" name="dim4_q3" rows="3" required></textarea>
+                            </div>
+                            <div class="question-item">
+                                <label class="form-label">分享一次你在团队中坚持己见或选择妥协的经历，结果如何？这教会了你什么？</label>
+                                <textarea class="form-control" name="dim4_q4" rows="5" required></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 理性与情感维度 -->
+                    <div class="dimension-card" id="dimension5">
+                        <div class="dimension-header">
+                            <h3>理性与情感维度</h3>
+                            <p class="text-muted">这个维度分析你在理性与情感方面的特点和偏好</p>
+                        </div>
+                        <div class="dimension-body">
+                            <div class="question-item">
+                                <label class="form-label">在做重要决策时，你更依赖理性分析还是直觉感受？</label>
+                                <textarea class="form-control" name="dim5_q1" rows="3" required></textarea>
+                            </div>
+                            <div class="question-item">
+                                <label class="form-label">情感因素在你的决策过程中占多大比重？</label>
+                                <textarea class="form-control" name="dim5_q2" rows="3" required></textarea>
+                            </div>
+                            <div class="question-item">
+                                <label class="form-label">回忆一次你的情感判断与理性分析相冲突的经历，你最终如何决定？</label>
+                                <textarea class="form-control" name="dim5_q3" rows="3" required></textarea>
+                            </div>
+                            <div class="question-item">
+                                <label class="form-label">有没有一次决策，你完全依靠直觉而非分析做出，结果令你印象深刻？</label>
+                                <textarea class="form-control" name="dim5_q4" rows="5" required></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 资源分配维度 -->
+                    <div class="dimension-card" id="dimension6">
+                        <div class="dimension-header">
+                            <h3>资源分配维度</h3>
+                            <p class="text-muted">这个维度分析你在资源分配方面的特点和偏好</p>
+                        </div>
+                        <div class="dimension-body">
+                            <div class="question-item">
+                                <label class="form-label">在分配时间、金钱和精力时，你有什么原则或优先级？</label>
+                                <textarea class="form-control" name="dim6_q1" rows="3" required></textarea>
+                            </div>
+                            <div class="question-item">
+                                <label class="form-label">面对多个重要但无法同时满足的需求，你如何决定先满足哪一个？</label>
+                                <textarea class="form-control" name="dim6_q2" rows="3" required></textarea>
+                            </div>
+                            <div class="question-item">
+                                <label class="form-label">你会为了帮助他人而牺牲自己的资源吗？在什么条件下？</label>
+                                <textarea class="form-control" name="dim6_q3" rows="3" required></textarea>
+                            </div>
+                            <div class="question-item">
+                                <label class="form-label">描述一次你必须在多个重要项目或责任之间分配有限资源的经历和你的处理方式？</label>
+                                <textarea class="form-control" name="dim6_q4" rows="5" required></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 道德伦理维度 -->
+                    <div class="dimension-card" id="dimension7">
+                        <div class="dimension-header">
+                            <h3>道德伦理维度</h3>
+                            <p class="text-muted">这个维度分析你在道德伦理方面的特点和偏好</p>
+                        </div>
+                        <div class="dimension-body">
+                            <div class="question-item">
+                                <label class="form-label">在面临道德两难时，你通常依据什么原则来决定？</label>
+                                <textarea class="form-control" name="dim7_q1" rows="3" required></textarea>
+                            </div>
+                            <div class="question-item">
+                                <label class="form-label">你认为在商业决策中，道德因素应该占多大权重？</label>
+                                <textarea class="form-control" name="dim7_q2" rows="3" required></textarea>
+                            </div>
+                            <div class="question-item">
+                                <label class="form-label">有没有某些行为，即使对你有利，你也坚决不会做？为什么？</label>
+                                <textarea class="form-control" name="dim7_q3" rows="3" required></textarea>
+                            </div>
+                            <div class="question-item">
+                                <label class="form-label">分享一个你面临道德困境的经历，你如何做出抉择，事后有何反思？</label>
+                                <textarea class="form-control" name="dim7_q4" rows="5" required></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 决策过程维度 -->
+                    <div class="dimension-card" id="dimension8">
+                        <div class="dimension-header">
+                            <h3>决策过程维度</h3>
+                            <p class="text-muted">这个维度分析你在决策过程方面的特点和偏好</p>
+                        </div>
+                        <div class="dimension-body">
+                            <div class="question-item">
+                                <label class="form-label">你通常如何收集信息来支持重要决策？</label>
+                                <textarea class="form-control" name="dim8_q1" rows="3" required></textarea>
+                            </div>
+                            <div class="question-item">
+                                <label class="form-label">在时间紧迫的情况下，你会如何简化决策过程？</label>
+                                <textarea class="form-control" name="dim8_q2" rows="3" required></textarea>
+                            </div>
+                            <div class="question-item">
+                                <label class="form-label">当你对某个决定感到后悔时，你会如何调整未来的决策方式？</label>
+                                <textarea class="form-control" name="dim8_q3" rows="3" required></textarea>
+                            </div>
+                            <div class="question-item">
+                                <label class="form-label">回忆一次你做出了错误决策的经历，你从中学到了什么？这如何改变了你后来的决策习惯？</label>
+                                <textarea class="form-control" name="dim8_q4" rows="5" required></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 成长与变化维度 -->
+                    <div class="dimension-card" id="dimension9">
+                        <div class="dimension-header">
+                            <h3>成长与变化维度</h3>
+                            <p class="text-muted">这个维度分析你在成长与变化方面的特点和偏好</p>
+                        </div>
+                        <div class="dimension-body">
+                            <div class="question-item">
+                                <label class="form-label">你的决策方式在人生不同阶段有什么变化？什么经历促成了这些变化？</label>
+                                <textarea class="form-control" name="dim9_q1" rows="3" required></textarea>
+                            </div>
+                            <div class="question-item">
+                                <label class="form-label">有什么童年或成长经历显著塑造了你现在的决策方式或价值观？</label>
+                                <textarea class="form-control" name="dim9_q2" rows="3" required></textarea>
+                            </div>
+                            <div class="question-item">
+                                <label class="form-label">描述一次彻底改变了你思维方式或价值观的关键经历？</label>
+                                <textarea class="form-control" name="dim9_q3" rows="3" required></textarea>
+                            </div>
+                            <div class="question-item">
+                                <label class="form-label">你认为自己最大的决策失误是什么？它如何影响了你现在的思考方式？</label>
+                                <textarea class="form-control" name="dim9_q4" rows="5" required></textarea>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 进度指示器和保存按钮 -->
+                    <div class="fixed-bottom-bar">
+                        <div class="container">
+                            <div class="row">
+                                <div class="col-md-8 offset-md-2">
+                                    <div class="progress mb-2">
+                                        <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <span id="progressText">0% 完成</span>
+                                        </div>
+                                        <div>
+                                            <button type="button" class="btn btn-primary" id="saveBtn">克隆</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 导出确认模态框 -->
+    <div class="modal fade" id="exportModal" tabindex="-1" aria-labelledby="exportModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="exportModalLabel">回答已保存</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="exportModalBody">
+                    <p>你的回答已成功保存为JSON格式。可以通过以下方式使用：</p>
+                    <ol>
+                        <li>保存到本地文件</li>
+                        <li>将数据提供给代理创建程序</li>
+                    </ol>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                    <button type="button" class="btn btn-primary" id="downloadBtn">下载JSON文件</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap & jQuery JS -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            // 计算表单完成进度
+            function updateProgress() {
+                const totalFields = $('textarea[required], input[required]').length;
+                const filledFields = $('textarea[required], input[required]').filter(function() {
+                    return $(this).val().trim() !== '';
+                }).length;
+                
+                const percentage = Math.floor((filledFields / totalFields) * 100);
+                $('#progressBar').css('width', percentage + '%');
+                $('#progressBar').attr('aria-valuenow', percentage);
+                $('#progressText').text(percentage + '% 完成');
+            }
+
+            // 初始化表单状态
+            updateProgress();
+
+            // 监听输入变化
+            $('textarea, input').on('change keyup', function() {
+                updateProgress();
+            });
+
+            // 格式化表单数据为JSON
+            function formatFormData() {
+                const dimensions = {};
+                
+                for (let i = 1; i <= 9; i++) {
+                    const dimensionName = getDimensionName(i);
+                    dimensions[dimensionName] = [
+                        { 
+                            "问题": $(`#dimension${i} .question-item:nth-child(1) label`).text(),
+                            "回答": $(`textarea[name="dim${i}_q1"]`).val() 
+                        },
+                        { 
+                            "问题": $(`#dimension${i} .question-item:nth-child(2) label`).text(),
+                            "回答": $(`textarea[name="dim${i}_q2"]`).val() 
+                        },
+                        { 
+                            "问题": $(`#dimension${i} .question-item:nth-child(3) label`).text(),
+                            "回答": $(`textarea[name="dim${i}_q3"]`).val() 
+                        },
+                        { 
+                            "问题": $(`#dimension${i} .question-item:nth-child(4) label`).text(),
+                            "回答": $(`textarea[name="dim${i}_q4"]`).val() 
+                        }
+                    ];
+                }
+
+                return {
+                    dimensions: dimensions
+                };
+            }
+
+            // 获取维度名称
+            function getDimensionName(index) {
+                const dimensionMap = {
+                    1: "核心价值观维度",
+                    2: "风险态度维度",
+                    3: "时间偏好维度",
+                    4: "自主性与集体性维度",
+                    5: "理性与情感维度",
+                    6: "资源分配维度",
+                    7: "道德伦理维度",
+                    8: "决策过程维度",
+                    9: "成长与变化维度"
+                };
+                return dimensionMap[index];
+            }
+
+            // 保存按钮点击事件
+            $('#saveBtn').click(function() {
+                // 保存数据到本地存储
+                const formData = formatFormData();
+                const jsonData = JSON.stringify(formData, null, 2);
+                
+                // 创建下载链接
+                const blob = new Blob([jsonData], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                
+                // 设置下载按钮
+                $('#downloadBtn').off('click').on('click', function() {
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `决策价值观调查.json`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                });
+                
+                // 显示确认对话框
+                if (confirm('克隆前将清除所有现有记忆，确定要继续吗？')) {
+                    // 显示保存中状态
+                    $(this).prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> 克隆中...');
+                    
+                    // 先调用清除记忆API
+                    $.ajax({
+                        url: '/api/clear-memory',
+                        type: 'POST',
+                        success: function(clearResponse) {
+                            console.log('记忆清除成功:', clearResponse);
+                            
+                            // 记忆清除成功后，提交表单数据
+                            $.ajax({
+                                url: '/api/submit',
+                                type: 'POST',
+                                contentType: 'application/json',
+                                data: jsonData,
+                                success: function(response) {
+                                    // 显示成功消息
+                                    $('#exportModal').modal('show');
+                                    $('#exportModalLabel').text('保存成功');
+                                    $('#exportModalBody').html(`
+                                        <div class="alert alert-success">
+                                            <p>${response.message || '决策分析数据已成功保存,可以关闭页面了'}</p>
+                                            <p>你的回答也已保存到本地浏览器中，下次访问时可以继续编辑。</p>
+                                        </div>
+                                    `);
+                                    
+                                    // 3秒后关闭当前页面
+                                    setTimeout(function() {
+                                        window.close();
+                                    }, 3000);
+                                },
+                                error: function(xhr, status, error) {
+                                    // 恢复保存按钮状态
+                                    $('#saveBtn').prop('disabled', false).text('保存回答');
+                                    
+                                    // 显示错误消息
+                                    alert('克隆失败: ' + (xhr.responseJSON?.message || error));
+                                }
+                            });
+                        },
+                        error: function(xhr, status, error) {
+                            // 恢复保存按钮状态
+                            $('#saveBtn').prop('disabled', false).text('克隆回答');
+                            
+                            // 显示错误消息
+                            alert('清除记忆失败: ' + (xhr.responseJSON?.message || error) + '\n请稍后再试或手动清除记忆。');
+                        }
+                    });
+                } else {
+                    // 用户取消了提交，但仍然保存到本地并显示下载选项
+                    $('#exportModal').modal('show');
+                    $('#exportModalLabel').text('回答已本地保存');
+                    $('#exportModalBody').html(`
+                        <div class="alert alert-info">
+                            <p>你的回答已保存到本地浏览器中，下次访问时可以继续编辑。</p>
+                            <p>你可以下载JSON文件备份你的回答。</p>
+                        </div>
+                    `);
+                }
+            });
+
+            // 移除表单提交事件处理，因为我们只使用保存按钮
+            $('#decisionInterviewForm').submit(function(e) {
+                e.preventDefault();
+                // 触发保存按钮点击事件
+                $('#saveBtn').click();
+            });
+            
+            // 检查是否有保存的数据
+            const savedData = localStorage.getItem('decisionInterviewData');
+            if (savedData) {
+                try {
+                    const data = JSON.parse(savedData);
+                    
+                    // 填充维度问题
+                    for (let i = 1; i <= 9; i++) {
+                        const dimensionName = getDimensionName(i);
+                        if (data.dimensions && data.dimensions[dimensionName]) {
+                            $(`textarea[name="dim${i}_q1"]`).val(data.dimensions[dimensionName][0].回答);
+                            $(`textarea[name="dim${i}_q2"]`).val(data.dimensions[dimensionName][1].回答);
+                            $(`textarea[name="dim${i}_q3"]`).val(data.dimensions[dimensionName][2].回答);
+                            $(`textarea[name="dim${i}_q4"]`).val(data.dimensions[dimensionName][3].回答);
+                        }
+                    }
+                    
+                    // 更新进度
+                    updateProgress();
+                    
+                    // 显示提示消息
+                    $('<div class="alert alert-info alert-dismissible fade show" role="alert">' +
+                      '已从本地存储加载之前的回答！' +
+                      '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>' +
+                      '</div>').insertBefore('#dimension1');
+                } catch (e) {
+                    console.error('加载保存数据时出错', e);
+                }
+            }
+        });
+    </script>
+    <script>
+        // 显示指令信息
+        $(document).ready(function() {
+            // 如果没有指令，隐藏指令卡片
+            if (!$('#instructionText').text().trim()) {
+                $('#instructionCard').hide();
+            }
+        });
+    </script>
+    <script>
+        // 提交表单的函数
+        function submitForm() {
+            // 获取表单数据
+            const formData = collectFormData();
+            
+            // 发送数据到后端
+            fetch('/api/submit', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(formData),
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    // 显示成功消息
+                    alert(data.message);
+                    
+                    // 如果后端指示关闭窗口
+                    if (data.closeWindow) {
+                        // 关闭当前窗口
+                        window.close();
+                    }
+                    
+                    // 如果提供了重定向URL，则重定向
+                    if (data.redirect) {
+                        // 如果关闭窗口失败，则重定向
+                        setTimeout(() => {
+                            window.location.href = data.redirect;
+                        }, 500);
+                    }
+                } else {
+                    // 显示错误消息
+                    alert('提交失败: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('提交数据时出错:', error);
+                alert('提交数据时出错，请查看控制台获取详细信息。');
+            });
+        }
+
+        // 在页面加载完成后，为关闭按钮添加事件处理器
+        document.addEventListener('DOMContentLoaded', function() {
+            // 假设成功弹窗有一个ID为"successModal"，关闭按钮ID为"closeBtn"
+            const closeBtn = document.getElementById('closeBtn');
+            if (closeBtn) {
+                closeBtn.addEventListener('click', function() {
+                    // 尝试关闭窗口
+                    window.close();
+                    
+                    // 如果关闭窗口失败（某些浏览器可能阻止脚本关闭窗口），则重定向到设置页面
+                    setTimeout(() => {
+                        window.location.href = 'http://localhost:8080/setting';
+                    }, 500);
+                });
+            }
+        });
+    </script>
+</body>
+</html>

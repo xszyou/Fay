@@ -1,0 +1,44 @@
+Variables: 
+
+Note: basically main version (ver 3) but with "reasoning" step
+
+<commentblockmarker>###</commentblockmarker>
+!<INPUT 0>!
+
+=====
+
+Task: What you see above is an interview transcript. Based on the interview transcript, I want you to predict the participant's survey responses. All questions are multiple choice where you must guess from one of the options presented. 
+
+As you answer, I want you to take the following steps: 
+Step 1) Describe in a few sentences the kind of person that would choose each of the response options. ("Option Interpretation")
+Step 2) For each response options, reason about why the Participant might answer with the particular option. ("Option Choice")
+Step 3) Write a few sentences reasoning on which of the option best predicts the participant's response ("Reasoning")
+Step 4) Predict how the participant will actually respond in the survey. Predict based on the interview and your thoughts, but ultimately, DON'T over think it. Use your system 1 (fast, intuitive) thinking. ("Response")
+
+Here are the questions: 
+
+!<INPUT 1>!
+
+-----
+
+Output format -- output your response in json, where you provide the following: 
+
+{"1": {"Q": "<repeat the question you are answering>",
+       "Option Interpretation": {
+            "<option 1>": "a few sentences the kind of person that would choose each of the response options",
+            "<option 2>": "..."},
+       "Option Choice": {
+            "<option 1>": "reasoning about why the participant might choose each of the options",
+            "<option 2>": "..."},
+       "Reasoning": "<reasoning on which of the option best predicts the participant's response>",
+       "Response": "<your prediction on how the participant will answer the question>"},
+ "2": {"Q": "<repeat the question you are answering>",
+       "Option Interpretation": {
+            "<option 1>": "a few sentences the kind of person that would choose each of the response options",
+            "<option 2>": "..."},
+       "Option Choice": {
+            "<option 1>": "reasoning about why the participant might choose each of the options",
+            "<option 2>": "..."},
+       "Reasoning": "<reasoning on which of the option best predicts the participant's response>",
+       "Response": "<your prediction on how the participant will answer the question>"},
+  ...}

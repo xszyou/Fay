@@ -40,6 +40,10 @@ def __clear_logs():
         if file_name.endswith('.log'):
             os.remove('./logs/' + file_name)        
 
+def __create_memory():
+    if not os.path.exists("./memory"):
+        os.mkdir("./memory")
+
 def kill_process_by_port(port):
     for conn in psutil.net_connections(kind='inet'):
         if conn.laddr.port == port and conn.pid:
@@ -108,6 +112,7 @@ def console_listener():
 
 if __name__ == '__main__':
     __clear_samples()
+    __create_memory()
     __clear_logs()
 
     #init_db

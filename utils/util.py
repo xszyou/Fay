@@ -19,30 +19,74 @@ def random_hex(length):
 
 
 def __write_to_file(text):
-    if not os.path.exists("logs"):
-        os.mkdir("logs")
-    file = codecs.open(LOGS_FILE_URL, 'a', 'utf-8')
-    file.write(text + "\n")
-    file.close()
+    """
+    将文本写入日志文件
+    
+    参数:
+        text: 要写入的文本
+    """
+    try:
+        if not os.path.exists("logs"):
+            os.mkdir("logs")
+        with codecs.open(LOGS_FILE_URL, 'a', 'utf-8') as file:
+            file.write(text + "\n")
+    except Exception as e:
+        print(f"写入日志文件时出错: {str(e)}")
 
 
 def printInfo(level, sender, text, send_time=-1):
-    if send_time < 0:
-        send_time = time.time()
-    format_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(send_time)) + f".{int(send_time % 1 * 10)}"
-    logStr = '[{}][{}] {}'.format(format_time, sender, text)
-    print(logStr)
-    if level >= 3:
-        if wsa_server.get_web_instance().is_connected(sender):
-            wsa_server.get_web_instance().add_cmd({"panelMsg": text} if sender == "系统" else {"panelMsg": text, "Username" : sender})
-        if wsa_server.get_instance().is_connected(sender):
-            content = {'Topic': 'human', 'Data': {'Key': 'log', 'Value': text}} if sender == "系统" else  {'Topic': 'human', 'Data': {'Key': 'log', 'Value': text}, "Username" : sender}
-            wsa_server.get_instance().add_cmd(content)
-        MyThread(target=__write_to_file, args=[logStr]).start()
+    """
+    打印并记录信息
+    
+    参数:
+        level: 日志级别
+        sender: 发送者
+        text: 日志内容
+        send_time: 发送时间，默认为当前时间
+    """
+    try:
+        # 确保text是字符串类型
+        if not isinstance(text, str):
+            text = str(text)
+            
+        if send_time < 0:
+            send_time = time.time()
+        format_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(send_time)) + f".{int(send_time % 1 * 10)}"
+        logStr = '[{}][{}] {}'.format(format_time, sender, text)
+        
+        # 使用print函数打印日志，确保编码正确
+        print(logStr)
+        
+        if level >= 3:
+            # 发送日志到WebSocket服务器
+            if wsa_server.get_web_instance().is_connected(sender):
+                wsa_server.get_web_instance().add_cmd({"panelMsg": text} if sender == "系统" else {"panelMsg": text, "Username" : sender})
+            if wsa_server.get_instance().is_connected(sender):
+                content = {'Topic': 'human', 'Data': {'Key': 'log', 'Value': text}} if sender == "系统" else  {'Topic': 'human', 'Data': {'Key': 'log', 'Value': text}, "Username" : sender}
+                wsa_server.get_instance().add_cmd(content)
+            
+            # 异步写入日志文件
+            MyThread(target=__write_to_file, args=[logStr]).start()
+    except Exception as e:
+        print(f"处理日志时出错: {str(e)}")
 
 
 def log(level, text):
-    printInfo(level, "系统", text)
+    """
+    记录系统日志
+    
+    参数:
+        level: 日志级别
+        text: 日志内容
+    """
+    try:
+        # 确保text是字符串类型
+        if not isinstance(text, str):
+            text = str(text)
+        printInfo(level, "系统", text)
+    except Exception as e:
+        print(f"记录系统日志时出错: {str(e)}")
+
 
 class DisablePrint:
     def __enter__(self):

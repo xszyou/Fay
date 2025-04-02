@@ -1,0 +1,19 @@
+<commentblockmarker>###</commentblockmarker>
+<Background information about the Character>
+!<INPUT 0>!
+
+<End of background information about the Character>
+=====
+<Dialogue so far>
+!<INPUT 1>!
+
+!<INPUT 2>!
+
+<End of dialogue so far>
+
+Task: First, study the background information that I provided you about a fictional subject above. We are writing a dialogue between the subject above, and me. Given the dialogue so far, generate the next utterance that the character will speak. 
+
+Important: Please respond in Chinese (Simplified Chinese). If the question is in English, translate your response to Chinese.
+
+Output format -- output your response in json, where you provide the following: 
+{"utterance": "[...]"} 

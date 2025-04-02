@@ -27,6 +27,11 @@ from flask_httpauth import HTTPBasicAuth
 from core import qa_service
 from core import stream_manager
 
+# 全局变量，用于跟踪当前的genagents服务器
+genagents_server = None
+genagents_thread = None
+monitor_thread = None
+
 __app = Flask(__name__)
 # 禁用 Flask 默认日志
 __app.logger.disabled = True
@@ -327,7 +332,7 @@ def api_send_v1_chat_completions():
         util.printInfo(1, username, '[文字沟通接口]{}'.format(interact.data["msg"]), time.time())
         text = fay_booter.feiFei.on_interact(interact)
 
-        if config_util.key_chat_module == 'gpt_stream':
+        if config_util.key_chat_module.endswith('_stream'):
             return gpt_stream_response(member_db.new_instance().find_user(username))
         elif model == 'fay-streaming':
             return stream_response(text)
@@ -346,7 +351,7 @@ def api_get_Member_list():
     except Exception as e:
         return jsonify({'list': [], 'message': f'获取成员列表时出错: {e}'}), 500
 
-@__app.route('/api/get_run_status', methods=['post'])
+@__app.route('/api/get-run-status', methods=['post'])
 def api_get_run_status():
     # 获取运行状态
     try:
@@ -355,7 +360,7 @@ def api_get_run_status():
     except Exception as e:
         return jsonify({'status': False, 'message': f'获取运行状态时出错: {e}'}), 500
 
-@__app.route('/api/adopt_msg', methods=['POST'])
+@__app.route('/api/adopt-msg', methods=['POST'])
 def adopt_msg():
     # 采纳消息
     data = request.get_json()
@@ -531,7 +536,7 @@ def serve_gif(filename):
         return jsonify({'error': '文件未找到'}), 404
 
 #打招呼
-@__app.route('/to_greet', methods=['POST'])
+@__app.route('/to-greet', methods=['POST'])
 def to_greet():
     data = request.get_json()
     username = data.get('username', 'User')
@@ -541,7 +546,7 @@ def to_greet():
     return jsonify({'status': 'success', 'data': text, 'msg': '已进行打招呼'}), 200 
 
 #唤醒:在普通唤醒模式，进行大屏交互才有意义
-@__app.route('/to_wake', methods=['POST'])
+@__app.route('/to-wake', methods=['POST'])
 def to_wake():
     data = request.get_json()
     username = data.get('username', 'User')
@@ -550,7 +555,7 @@ def to_wake():
     return jsonify({'status': 'success', 'msg': '已唤醒'}), 200 
 
 #打断
-@__app.route('/to_stop_talking', methods=['POST'])
+@__app.route('/to-stop-talking', methods=['POST'])
 def to_stop_talking():
     try:
         data = request.get_json()
@@ -572,7 +577,7 @@ def to_stop_talking():
 
 
 #消息透传接口
-@__app.route('/transparent_pass', methods=['post'])
+@__app.route('/transparent-pass', methods=['post'])
 def transparent_pass():
     try:
         data = request.form.get('data')
@@ -592,6 +597,152 @@ def transparent_pass():
     except Exception as e:
         return jsonify({'code': 500, 'message': f'出错: {e}'}), 500
 
+# 清除记忆API
+@__app.route('/api/clear-memory', methods=['POST'])
+def api_clear_memory():
+    try:
+        # 获取memory目录路径
+        memory_dir = os.path.join(os.getcwd(), "memory")
+        
+        # 检查目录是否存在
+        if not os.path.exists(memory_dir):
+            return jsonify({'success': False, 'message': '记忆目录不存在'}), 400
+        
+        # 清空memory目录下的所有文件（保留目录结构）
+        for root, dirs, files in os.walk(memory_dir):
+            for file in files:
+                file_path = os.path.join(root, file)
+                try:
+                    if os.path.isfile(file_path):
+                        os.remove(file_path)
+                        util.log(1, f"已删除文件: {file_path}")
+                except Exception as e:
+                    util.log(1, f"删除文件时出错: {file_path}, 错误: {str(e)}")
+        
+        # 删除memory_stream目录（如果存在）
+        memory_stream_dir = os.path.join(memory_dir, "memory_stream")
+        if os.path.exists(memory_stream_dir):
+            import shutil
+            try:
+                shutil.rmtree(memory_stream_dir)
+                util.log(1, f"已删除目录: {memory_stream_dir}")
+            except Exception as e:
+                util.log(1, f"删除目录时出错: {memory_stream_dir}, 错误: {str(e)}")
+        
+        # 创建一个标记文件，表示记忆已被清除，防止退出时重新保存
+        with open(os.path.join(memory_dir, ".memory_cleared"), "w") as f:
+            f.write("Memory has been cleared. Do not save on exit.")
+        
+        # 修改fay_booter.py中的保存记忆逻辑
+        try:
+            # 导入并修改nlp_cognitive_stream模块中的保存函数
+            from llm.nlp_cognitive_stream import set_memory_cleared_flag
+            set_memory_cleared_flag(True)
+        except Exception as e:
+            util.log(1, f"设置记忆清除标记时出错: {str(e)}")
+        
+        util.log(1, "记忆已清除，需要重启应用才能生效")
+        return jsonify({'success': True, 'message': '记忆已清除，请重启应用使更改生效'}), 200
+    except Exception as e:
+        util.log(1, f"清除记忆时出错: {str(e)}")
+        return jsonify({'success': False, 'message': f'清除记忆时出错: {str(e)}'}), 500
+
+# 启动genagents_flask.py的API
+@__app.route('/api/start-genagents', methods=['POST'])
+def api_start_genagents():
+    try:
+        # 只有在数字人启动后才能克隆人格
+        if not fay_booter.is_running():
+            return jsonify({'success': False, 'message': 'Fay未启动，无法启动决策分析'}), 400
+        
+        # 获取克隆要求
+        data = request.get_json()
+        if not data or 'instruction' not in data:
+            return jsonify({'success': False, 'message': '缺少克隆要求参数'}), 400
+        
+        instruction = data['instruction']
+        
+        # 保存指令到临时文件，供genagents_flask.py读取
+        instruction_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'genagents', 'instruction.json')
+        with open(instruction_file, 'w', encoding='utf-8') as f:
+            json.dump({'instruction': instruction}, f, ensure_ascii=False)
+        
+        # 导入genagents_flask模块
+        import sys
+        sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+        from genagents.genagents_flask import start_genagents_server, is_shutdown_requested
+        from werkzeug.serving import make_server
+        
+        # 关闭之前的genagents服务器（如果存在）
+        global genagents_server, genagents_thread, monitor_thread
+        if genagents_server is not None:
+            try:
+                # 主动关闭之前的服务器
+                util.log(1, "关闭之前的决策分析服务...")
+                genagents_server.shutdown()
+                # 等待线程结束
+                if genagents_thread and genagents_thread.is_alive():
+                    genagents_thread.join(timeout=2)
+                if monitor_thread and monitor_thread.is_alive():
+                    monitor_thread.join(timeout=2)
+            except Exception as e:
+                util.log(1, f"关闭之前的决策分析服务时出错: {str(e)}")
+        
+        # 清除之前的记忆，确保只保留最新的决策分析
+        try:
+            from llm.nlp_cognitive_stream import clear_agent_memory
+            util.log(1, "已清除之前的决策分析记忆")
+        except Exception as e:
+            util.log(1, f"清除之前的决策分析记忆时出错: {str(e)}")
+        
+        # 启动决策分析服务（不启动单独进程，而是返回Flask应用实例）
+        genagents_app = start_genagents_server(instruction_text=instruction)
+        
+        # 创建服务器
+        genagents_server = make_server('0.0.0.0', 5001, genagents_app)
+        
+        # 在后台线程中启动Flask服务
+        import threading
+        def run_genagents_app():
+            try:
+                # 使用serve_forever而不是app.run
+                genagents_server.serve_forever()
+            except Exception as e:
+                util.log(1, f"决策分析服务运行出错: {str(e)}")
+            finally:
+                util.log(1, f"决策分析服务已关闭")
+        
+        # 启动监控线程，检查是否需要关闭服务器
+        def monitor_shutdown():
+            try:
+                while not is_shutdown_requested():
+                    time.sleep(1)
+                util.log(1, f"检测到关闭请求，正在关闭决策分析服务...")
+                genagents_server.shutdown()
+            except Exception as e:
+                util.log(1, f"监控决策分析服务时出错: {str(e)}")
+        
+        # 启动服务器线程
+        genagents_thread = threading.Thread(target=run_genagents_app)
+        genagents_thread.daemon = True
+        genagents_thread.start()
+        
+        # 启动监控线程
+        monitor_thread = threading.Thread(target=monitor_shutdown)
+        monitor_thread.daemon = True
+        monitor_thread.start()
+        
+        util.log(1, f"已启动决策分析页面，指令: {instruction}")
+        
+        # 返回决策分析页面的URL
+        return jsonify({
+            'success': True, 
+            'message': '已启动决策分析页面',
+            'url': 'http://127.0.0.1:5001/'
+        }), 200
+    except Exception as e:
+        util.log(1, f"启动决策分析页面时出错: {str(e)}")
+        return jsonify({'success': False, 'message': f'启动决策分析页面时出错: {str(e)}'}), 500
 
 def run():
     class NullLogHandler:

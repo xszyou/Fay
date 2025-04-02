@@ -95,7 +95,7 @@ class FayInterface {
   }
 
   getRunStatus() {
-    return this.fetchData(`${this.baseApiUrl}/api/get_run_status`, {
+    return this.fetchData(`${this.baseApiUrl}/api/get-run-status`, {
       method: 'POST'
     });
   }
@@ -446,18 +446,24 @@ new Vue({
       this.fayService.getUserList().then((response) => {
         if (response && response.list) {
           if (response.list.length == 0){
-            info = [];
-            info[0] = 1;
-            info[1] = 'User';
-            this.userList.push(info)
-            this.selectUser(info);
-          }else{
-          this.userList = response.list;
-          if (!this.selectedUser) {
-            this.selectUser(this.userList[0]);
+            // 检查是否已经有默认用户
+            const defaultUserExists = this.userList.some(user => user[1] === 'User');
+            if (!defaultUserExists) {
+              // 只有在不存在默认用户时才添加
+              const info = [];
+              info[0] = 1;
+              info[1] = 'User';
+              this.userList.push(info);
+              this.selectUser(info);
+              console.log('添加默认用户: User');
+            }
+          } else {
+            this.userList = response.list;
+            if (!this.selectedUser) {
+              this.selectUser(this.userList[0]);
+            }
           }
         }
-      }
       });
     },
     startUserListTimer() {
@@ -521,12 +527,12 @@ new Vue({
 } ,
 adoptText(id) {
 // 调用采纳接口
-this.fayService.fetchData(`${this.base_url}/api/adopt_msg`, {
+this.fayService.fetchData(`${this.base_url}/api/adopt-msg`, {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json'
   },
-  body: JSON.stringify({ id })  // 发送采纳请求
+  body: JSON.stringify({ id })
 })
 .then((response) => {
   if (response && response.status === 'success') {

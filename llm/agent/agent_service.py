@@ -15,7 +15,7 @@ agent_running = False
 
 # 数据库初始化
 def init_db():
-    conn = sqlite3.connect('timer.db')
+    conn = sqlite3.connect('memory/timer.db')
     cursor = conn.cursor()
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS timer (
@@ -33,7 +33,7 @@ def init_db():
 
 # 插入测试数据
 def insert_test_data():
-    conn = sqlite3.connect('timer.db')
+    conn = sqlite3.connect('memory/timer.db')
     cursor = conn.cursor()
     cursor.execute("INSERT INTO timer (time, repeat_rule, content) VALUES (?, ?, ?)", ('16:20', '1010001', 'Meeting Reminder'))
     conn.commit()
@@ -66,7 +66,7 @@ def execute_task(task_time, id, content, uid):
     if text is not None and id in scheduled_tasks:
         del scheduled_tasks[id]
         # 如果不重复，执行后删除记录
-        conn = sqlite3.connect('timer.db')
+        conn = sqlite3.connect('memory/timer.db')
         cursor = conn.cursor()
         cursor.execute("DELETE FROM timer WHERE repeat_rule = '0000000' AND id = ?", (id,))
         conn.commit()
@@ -76,7 +76,7 @@ def execute_task(task_time, id, content, uid):
 # 30秒扫描一次数据库，当扫描到今天的不存在于定时任务列表的记录，则添加到定时任务列表。执行完的记录从定时任务列表中清除。
 def check_and_execute():
     while agent_running:
-        conn = sqlite3.connect('timer.db')
+        conn = sqlite3.connect('memory/timer.db')
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM timer")
         rows = cursor.fetchall()
@@ -99,7 +99,7 @@ def agent_start():
     
     agent_running = True
     #初始计划
-    if not os.path.exists("./timer.db"):
+    if not os.path.exists("./memory/timer.db"):
         init_db()
         content ="""执行任务->
             你是一个数字人，你的责任是陪伴主人生活、工作：

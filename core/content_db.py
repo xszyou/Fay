@@ -26,7 +26,8 @@ class Content_Db:
 
     # 初始化数据库
     def init_db(self):
-        conn = sqlite3.connect('fay.db')
+        conn = sqlite3.connect('memory/fay.db')
+        conn.text_factory = str
         c = conn.cursor()
         c.execute('''CREATE TABLE IF NOT EXISTS T_Msg
             (id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -48,7 +49,8 @@ class Content_Db:
     # 添加对话
     @synchronized
     def add_content(self, type, way, content, username='User', uid=0):
-        conn = sqlite3.connect("fay.db")
+        conn = sqlite3.connect("memory/fay.db")
+        conn.text_factory = str
         cur = conn.cursor()
         try:
             cur.execute("INSERT INTO T_Msg (type, way, content, createtime, username, uid) VALUES (?, ?, ?, ?, ?, ?)",
@@ -65,7 +67,8 @@ class Content_Db:
     # 根据ID查询对话记录
     @synchronized
     def get_content_by_id(self, msg_id):
-        conn = sqlite3.connect("fay.db")
+        conn = sqlite3.connect("memory/fay.db")
+        conn.text_factory = str
         cur = conn.cursor()
         cur.execute("SELECT * FROM T_Msg WHERE id = ?", (msg_id,))
         record = cur.fetchone()
@@ -75,7 +78,8 @@ class Content_Db:
     # 添加对话采纳记录
     @synchronized
     def adopted_message(self, msg_id):
-        conn = sqlite3.connect('fay.db')
+        conn = sqlite3.connect('memory/fay.db')
+        conn.text_factory = str
         cur = conn.cursor()
         # 检查消息ID是否存在
         cur.execute("SELECT 1 FROM T_Msg WHERE id = ?", (msg_id,))
@@ -96,7 +100,8 @@ class Content_Db:
     # 获取对话内容
     @synchronized
     def get_list(self, way, order, limit, uid=0):
-        conn = sqlite3.connect("fay.db")
+        conn = sqlite3.connect("memory/fay.db")
+        conn.text_factory = str
         cur = conn.cursor()
         where_uid = ""
         if int(uid) != 0:
@@ -126,7 +131,7 @@ class Content_Db:
 
     @synchronized
     def get_previous_user_message(self, msg_id):
-        conn = sqlite3.connect("fay.db")
+        conn = sqlite3.connect("memory/fay.db")
         cur = conn.cursor()
         cur.execute("""
             SELECT id, type, way, content, createtime, datetime(createtime, 'unixepoch', 'localtime') AS timetext, username

@@ -16,6 +16,7 @@ from core import wsa_server
 from core import socket_bridge_service
 from llm.agent import agent_service
 import subprocess
+from llm.nlp_cognitive_stream import save_agent_memory
 
 # 全局变量声明
 feiFei = None
@@ -294,6 +295,16 @@ def stop():
 
     util.log(1, '正在关闭服务...')
     __running = False
+    
+    # 保存代理记忆
+    if config_util.key_chat_module == 'cognitive_stream':
+        util.log(1, '正在保存代理记忆...')
+        try:
+            save_agent_memory()
+            util.log(1, '代理记忆保存成功')
+        except Exception as e:
+            util.log(1, f'保存代理记忆失败: {str(e)}')
+    
     if recorderListener is not None:
         util.log(1, '正在关闭录音服务...')
         recorderListener.stop()
@@ -346,6 +357,12 @@ def start():
     if config_util.key_chat_module == 'privategpt':    
         from llm import nlp_privategpt
         nlp_privategpt.save_all()
+
+    #初始化定时保存记忆的任务
+    if config_util.key_chat_module == 'cognitive_stream':
+        util.log(1, '初始化定时保存记忆的任务...')
+        from llm.nlp_cognitive_stream import init_memory_scheduler
+        init_memory_scheduler()
 
     #开启录音服务
     record = config_util.config['source']['record']
