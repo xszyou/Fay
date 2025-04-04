@@ -30,7 +30,7 @@ def process_response(output: str, use_tool: bool = False) -> Union[str, dict]:
                 def tool_call(**kwargs):
                     return kwargs
 
-                parameters = eval(content)
+                parameters = ast.literal_eval(content)
                 content = {
                     "name": metadata.strip(),
                     "arguments": json.dumps(parameters, ensure_ascii=False)
