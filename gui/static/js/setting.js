@@ -118,6 +118,8 @@ new Vue({
     delimiters: ['[[', ']]'],
     data() {
         return {
+            hostname: window.location.hostname,
+            base_url: window.location.origin,
             messages: [],
             newMessage: '',
             fayService: null,
@@ -134,6 +136,8 @@ new Vue({
             configEditable: true,
             source_liveRoom_url: '',
             play_sound_enabled: false,
+            mcpOnlineStatus: false,
+            mcpCheckTimer: null,
             visualization_detection_enabled: false,
             source_record_enabled: false,
             source_record_device: '',
@@ -172,12 +176,15 @@ new Vue({
             }],
             automatic_player_status: false,
             automatic_player_url: "",
-            host_url: window.location.protocol + '//' + window.location.hostname + ':' + window.location.port
+            host_url: window.location.protocol + '//' + window.location.hostname + ':' + window.location.port,
+            memory_isolate_by_user: false,
         };
     },
     created() {
         this.initFayService();
         this.getData();
+        this.checkMcpStatus();
+        this.startMcpStatusTimer();
     },
     methods: {
         initFayService() {
@@ -245,6 +252,9 @@ new Vue({
             if (config.interact.perception) {
                 this.interact_perception_follow = config.interact.perception.follow;
             }
+            if (config.memory) {
+                this.memory_isolate_by_user = config.memory.isolate_by_user || false;
+            }
         },
         saveConfig() {
             let url = `${this.host_url}/api/submit`;
@@ -262,7 +272,6 @@ new Vue({
                         "wake_word_enabled": this.wake_word_enabled,
                         "wake_word": this.wake_word,
                         "wake_word_type": this.wake_word_type,
-                        "tts_enabled": this.tts_enabled,
                         "automatic_player_status": this.automatic_player_status,
                         "automatic_player_url": this.automatic_player_url
                     },
@@ -284,14 +293,13 @@ new Vue({
                         "playSound": this.play_sound_enabled,
                         "visualization": this.visualization_detection_enabled,
                         "QnA": this.QnA,
-                        "maxInteractTime": this.interact_maxInteractTime,
                         "perception": {
-                            "gift": this.interact_perception_follow,
-                            "follow": this.interact_perception_follow,
-                            "join": this.interact_perception_follow,
-                            "chat": this.interact_perception_follow,
-                            "indifferent": this.interact_perception_follow 
-                        }
+                            "follow": this.interact_perception_follow
+                        },
+                        "maxInteractTime": this.interact_maxInteractTime
+                    },
+                    "memory": {
+                        "isolate_by_user": this.memory_isolate_by_user
                     },
                     "items": []
                 }
@@ -422,6 +430,56 @@ new Vue({
                     type: 'warning'
                 });
             }
+        },
+        
+        // 检查MCP服务器状态
+        checkMcpStatus() {
+            const mcpUrl = `http://${this.hostname}:5010/api/mcp/servers`;
+            
+            // 使用超时设置的fetch请求
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 3000); // 3秒超时
+            
+            fetch(mcpUrl, { signal: controller.signal })
+                .then(response => {
+                    clearTimeout(timeoutId);
+                    if (!response.ok) {
+                        throw new Error('MCP服务器响应不正常');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (Array.isArray(data)) {
+                        // 检查是否有任何一个MCP服务器在线
+                        const hasOnlineServer = data.some(server => server.status === 'online');
+                        this.mcpOnlineStatus = hasOnlineServer;
+                    } else {
+                        console.warn('MCP服务器返回的数据格式不正确');
+                        this.mcpOnlineStatus = false;
+                    }
+                })
+                .catch(error => {
+                    clearTimeout(timeoutId);
+                    // 如果是超时错误，不输出详细错误信息
+                    if (error.name === 'AbortError') {
+                        console.warn('MCP服务器请求超时');
+                    } else {
+                        console.warn('检查MCP状态出错:', error.message);
+                    }
+                    this.mcpOnlineStatus = false;
+                });
+        },
+        
+        // 启动MCP状态检查定时器
+        startMcpStatusTimer() {
+            // 清除可能存在的旧定时器
+            if (this.mcpCheckTimer) {
+                clearInterval(this.mcpCheckTimer);
+            }
+            // 设置新的定时器，每30秒检查一次MCP状态
+            this.mcpCheckTimer = setInterval(() => {
+                this.checkMcpStatus();
+            }, 30000);
         },
     },
 });

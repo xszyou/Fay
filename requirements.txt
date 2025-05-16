@@ -29,3 +29,6 @@ langchain_openai
 langgraph
 bs4
 schedule
+flask-cors
+contextlib
+mcp

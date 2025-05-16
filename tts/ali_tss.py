@@ -83,7 +83,7 @@ class Speech:
     def to_sample(self, text, style) :
         file_url = None
         try:
-            history = self.__get_history(config_util.config["attribute"]["voice"], style, text)
+            history = self.__get_history(config_util.config["attribute"]["voice"] if config_util.config["attribute"]["voice"] is not None and config_util.config["attribute"]["voice"].strip() != "" else "阿斌", style, text)
             if history is not None:
                 return history
             self.set_token()

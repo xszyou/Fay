@@ -270,12 +270,15 @@ new Vue({
       panelReply: '', 
       robot:'static/images/Normal.gif',
       base_url: window.location.protocol + '//' + window.location.hostname + ':' + window.location.port,
+      hostname: window.location.hostname,
       play_sound_enabled: false,
       source_record_enabled: false,
       userListTimer: null,
       thinkPanelExpanded: true,
       thinkContent: '',
       isThinkPanelMinimized: false,
+      mcpOnlineStatus: false,
+      mcpCheckTimer: null,
     };
   },
   watch: {
@@ -302,6 +305,8 @@ new Vue({
     this.initFayService(); 
     this.getData();
     this.startUserListTimer();
+    this.checkMcpStatus();
+    this.startMcpStatusTimer();
   },
   methods: {
     initFayService() {
@@ -482,6 +487,10 @@ new Vue({
         clearInterval(this.userListTimer);
         this.userListTimer = null;
       }
+      if (this.mcpCheckTimer) {
+        clearInterval(this.mcpCheckTimer);
+        this.mcpCheckTimer = null;
+      }
     },
     selectUser(user) {
       this.selectedUser = user;
@@ -508,7 +517,7 @@ new Vue({
           this.messages = response;
           if(type == 'common'){
           this.$nextTick(() => {
-            const chatContainer = this.$el.querySelector('.chatmessage');
+            const chatContainer = document.querySelector('.chatmessage');
             if (chatContainer) {
               chatContainer.scrollTop = chatContainer.scrollHeight;
             }
@@ -568,5 +577,57 @@ this.fayService.fetchData(`${this.base_url}/api/adopt-msg`, {
     const panel = document.querySelector('.think-panel');
     panel.classList.toggle('minimized');
   },
+  
+  // 检查MCP服务器状态
+  checkMcpStatus() {
+    const mcpUrl = `http://${this.hostname}:5010/api/mcp/servers`;
+    
+    // 使用超时设置的fetch请求
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000); // 3秒超时
+    
+    fetch(mcpUrl, { signal: controller.signal })
+      .then(response => {
+        clearTimeout(timeoutId);
+        if (!response.ok) {
+          throw new Error('MCP服务器响应不正常');
+        }
+        return response.json();
+      })
+      .then(data => {
+        if (Array.isArray(data)) {
+          // 检查是否有任何一个MCP服务器在线
+          const hasOnlineServer = data.some(server => server.status === 'online');
+          this.mcpOnlineStatus = hasOnlineServer;
+        } else {
+          console.warn('MCP服务器返回的数据格式不正确');
+          this.mcpOnlineStatus = false;
+        }
+      })
+      .catch(error => {
+        clearTimeout(timeoutId);
+        // 如果是超时错误，不输出详细错误信息
+        if (error.name === 'AbortError') {
+          console.warn('MCP服务器请求超时');
+        } else {
+          console.warn('检查MCP状态出错:', error.message);
+        }
+        this.mcpOnlineStatus = false;
+      });
+  },
+  
+  // 启动MCP状态检查定时器
+  startMcpStatusTimer() {
+    // 清除可能存在的旧定时器
+    if (this.mcpCheckTimer) {
+      clearInterval(this.mcpCheckTimer);
+    }
+    // 设置新的定时器，每30秒检查一次MCP状态
+    this.mcpCheckTimer = setInterval(() => {
+      this.checkMcpStatus();
+    }, 30000);
+  },
+  
+
   }
 });

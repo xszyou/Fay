@@ -12,10 +12,12 @@ from utils import config_util as cfg
 # 确保配置已加载
 cfg.load_config()
 
+# 调试模式开关
+DEBUG = False
+
 # 从system.conf读取配置
 OPENAI_API_KEY = cfg.key_gpt_api_key
 OPENAI_API_BASE = cfg.gpt_base_url
-DEBUG = False
 
 MAX_CHUNK_SIZE = 4
 

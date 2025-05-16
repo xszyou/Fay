@@ -10,7 +10,6 @@ from utils import config_util, util
 from asr import ali_nls
 from core import wsa_server
 from gui import flask_server
-from gui.window import MainWindow
 from core import content_db
 import fay_booter
 from scheduler.thread_manager import MyThread
@@ -23,6 +22,7 @@ config_util.load_config()
 if config_util.start_mode == 'common':
     from PyQt5 import QtGui
     from PyQt5.QtWidgets import QApplication
+    from gui.window import MainWindow
 
 #音频清理
 def __clear_samples():
@@ -133,6 +133,11 @@ if __name__ == '__main__':
 
     #启动http服务器
     flask_server.start()
+
+    #启动mcp service
+    util.log(1, '启动mcp service...')
+    from faymcp import mcp_service
+    MyThread(target=mcp_service.start).start()
 
     #监听控制台
     util.log(1, '注册命令...')

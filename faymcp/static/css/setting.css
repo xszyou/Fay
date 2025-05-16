@@ -1,0 +1,48 @@
+
+html {
+	font-size: 14px;
+}
+  
+body {
+	background-image: url(../images/Bg_pic.png);
+	background-repeat: repeat-x;
+	margin: 0;
+	font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans',
+	  'Droid Sans', 'Helvetica Neue', 'Microsoft Yahei', sans-serif;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	width: 100%;
+	height: 100vh; 
+	min-width: 1719px;
+	overflow: hidden; 
+  }
+ 
+
+
+.setting_fay{width: 1200px; padding:10px 25px;height: 455px;}
+.setting_fay_top{font-size: 16px; color: #a3aaaf; line-height: 50px; text-align: left; padding-left: 15px;}
+.setting_name{ float: left;width: 33%;}
+.setting_name ul{list-style-type: none; width: 305px;; }
+.setting_name ul li{ margin: 25px 0; }
+.font_name {font-size: 15px;font-family: Microsoft YaHei;line-height: 21px;color: #2a2a2a;margin-right: 6px;}
+.section_1 {background-color: #ffffff;border-radius: 1px;width: 240px;height: 35px;border: solid 1px #d9d9d9;line-height: 30px;font-size: 16px;}
+
+.setting_work{float: left;width: 31%;}
+.setting_work{ float: left;width: 30%;}
+.setting_work ul{list-style-type: none; width: 330px; }
+.setting_work ul li{ margin: 25px 0; }
+
+.setting_rup{float: right;width: 30%;}
+.setting_wakeup{ width: 330px;}
+.setting_wakeup ul{list-style-type: none; width: 330px;}
+.setting_wakeup ul li{ margin: 25px 0; }
+.microphone{ width: 330px; height: 30px;}
+.microphone_group1{ width: 145px; float: right; }
+
+.setting_autoplay{width: 1086px; background-color: #ffffff; height: 40px; margin-left: 65px; padding:25px 30px; margin-top: 10px;;}
+.section_2 {background-color: #f5f7fa;border-radius: 3px;width: 938px;height: 35px;border: solid 1px #f5f7fa;}
+
+.Page3{ padding: 40px;}
+.Page3 ul{ padding: 40px;}
+.Page3 ul li{font-size: 18px;font-family: Microsoft YaHei;color: #2a2a2a; line-height:55px;list-style-type: none;}
+.Page3 ul li a{color: #0064fb;text-decoration: underline;}

@@ -1,11 +1,9 @@
 from flask import Flask, render_template, request, jsonify, send_from_directory
 import os
-import uuid
 import json
 import sys
 import threading
 import time
-from genagents.genagents import GenerativeAgent
 from utils import util
 
 # 添加项目根目录到sys.path
@@ -80,15 +78,16 @@ def api_clear_memory():
                 except Exception as e:
                     util.log(1, f"删除文件时出错: {file_path}, 错误: {str(e)}")
         
-        # 删除memory_stream目录（如果存在）
-        memory_stream_dir = os.path.join(memory_dir, "memory_stream")
-        if os.path.exists(memory_stream_dir):
-            import shutil
-            try:
-                shutil.rmtree(memory_stream_dir)
-                util.log(1, f"已删除目录: {memory_stream_dir}")
-            except Exception as e:
-                util.log(1, f"删除目录时出错: {memory_stream_dir}, 错误: {str(e)}")
+        # 删除memory_dir下的所有子目录
+        import shutil
+        for item in os.listdir(memory_dir):
+            item_path = os.path.join(memory_dir, item)
+            if os.path.isdir(item_path):
+                try:
+                    shutil.rmtree(item_path)
+                    util.log(1, f"已删除目录: {item_path}")
+                except Exception as e:
+                    util.log(1, f"删除目录时出错: {item_path}, 错误: {str(e)}")
         
         # 创建一个标记文件，表示记忆已被清除，防止退出时重新保存
         with open(os.path.join(memory_dir, ".memory_cleared"), "w") as f:

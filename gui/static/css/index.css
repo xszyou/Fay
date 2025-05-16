@@ -102,7 +102,27 @@ html {
 	background-position: 100px 50%;
 	display: block;
 	text-align: center;
+	position: relative;
   }
+  
+  /* MCP在线状态指示器 */
+  .mcp-online-indicator {
+	position: absolute;
+	top: 50%;
+	left: 85px;
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	background-color: #4CAF50; /* 绿色 */
+	margin-top: -5px;
+	display: none; /* 默认隐藏 */
+  }
+  
+  /* 当MCP在线时显示指示器 */
+  .mcp-online .mcp-online-indicator {
+	display: block;
+  }
+  
   .iconimg3:hover{	
 	background: url('../images/page3_h.png') no-repeat;	
 	background-size: 32px;
@@ -440,9 +460,11 @@ html {
 }
 
 .think-panel-icon {
-  font-size: 16px;
+  font-size: 24px;
   display: inline-block;
   line-height: 1;
+  font-weight: bold;
+  color: #ff0000;
 }
 
 .think-panel.minimized {

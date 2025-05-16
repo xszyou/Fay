@@ -24,7 +24,7 @@
           <ul>
             <li class="changeImg"><a href="/"><span class="iconimg1">消息</span></a></li>
             <li class="changeImg2"><a href="/setting"><span class="iconimg2">人设</span></a></li>
-            <li class="changeImg3"><a href="/Page3"><span class="iconimg3">第三页</span></a></li>
+            <li class="changeImg3" :class="{'mcp-online': mcpOnlineStatus}"><a :href="'http://' + hostname + ':5010/Page3'"><span class="iconimg3"><span class="mcp-online-indicator"></span>MCP</span></a></li>
           </ul>
         </div>
         

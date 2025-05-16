@@ -1,0 +1,981 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fay数字人</title>
+    <link rel="stylesheet" href="{{ url_for('static',filename='css/index.css') }}"/>
+    <link rel="stylesheet" href="{{ url_for('static',filename='css/setting.css') }}"/>
+    <link rel="stylesheet" href="{{ url_for('static',filename='css/element/index.css') }}">
+    <link rel="icon" href="{{ url_for('static',filename='images/favicon.ico') }}" type="image/x-icon">
+    <script src="{{ url_for('static',filename='js/vue.js') }}"></script>
+
+    <!-- 引入样式 -->
+    <style>
+      .mcp-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 20px;
+        padding: 20px;
+        height: 480px;
+        overflow-y: scroll;
+        margin-bottom: 20px;
+        position: relative;
+      }
+      .mcp-card {
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        padding: 20px;
+        /* 维持三列布局：((100%-gap*2)/3) */
+        width: calc(33.33% - 20px);
+        min-width: 250px;
+        height: 220px; /* 固定卡片高度 */
+        box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+        position: relative;
+        cursor: pointer;
+        transition: all 0.3s;
+        border: 2px solid transparent;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+      }
+      .mcp-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+      }
+      .mcp-card.selected {
+        border: 2px solid #409eff;
+        background-color: #ecf5ff;
+      }
+      .mcp-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+      }
+      .mcp-title {
+        font-weight: bold;
+        font-size: 16px;
+      }
+      .status-online {
+        color: #67c23a;
+        display: flex;
+        align-items: center;
+      }
+      .status-offline {
+        color: #909399;
+        display: flex;
+        align-items: center;
+      }
+      .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 5px;
+      }
+      .online-dot {
+        background-color: #67c23a;
+      }
+      .offline-dot {
+        background-color: #909399;
+      }
+      .mcp-info {
+        margin-bottom: 5px;
+        display: flex;
+        justify-content: space-between;
+      }
+      .mcp-label {
+        color: #606266;
+      }
+      .mcp-value {
+        color: #303133;
+      }
+      .mcp-actions {
+        display: flex;
+        justify-content: space-between;
+        margin-top: auto; /* 将操作按钮推到底部 */
+        padding-top: 15px;
+      }
+      .mcp-btn {
+        padding: 8px 20px;
+        border-radius: 4px;
+        cursor: pointer;
+        border: none;
+      }
+      .disconnect-btn {
+        background-color: #f5f7fa;
+        color: #606266;
+        border: 1px solid #dcdfe6;
+      }
+      .connect-btn {
+        background-color: #409eff;
+        color: white;
+        border: 1px solid #409eff;
+      }
+      .restart-btn {
+        background-color: #67c23a;
+        color: white;
+      }
+      .delete-btn {
+        color: #f56c6c;
+        font-size: 14px;
+        cursor: pointer;
+        padding: 8px 20px;
+        border-radius: 4px;
+        background-color: #fff;
+        border: 1px solid #f56c6c;
+      }
+      .add-btn-container {
+        display: flex;
+        justify-content: flex-end;
+        padding: 20px;
+      }
+      .add-btn {
+        width: 32px;
+        height: 32px;
+        border-radius: 4px;
+        background-color: white;
+        color: #409eff;
+        border: 1px solid #dcdfe6;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+        cursor: pointer;
+      }
+      .counter-container {
+        margin-left: 20px;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+      }
+      .counter {
+        font-size: 48px;
+        color: #409eff;
+        margin: 0 10px;
+      }
+      .counter-icon {
+        width: 64px;
+        height: 64px;
+      }
+      .mcp-dialog {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        display: none;
+        justify-content: center;
+        align-items: center;
+        z-index: 100;
+      }
+      .mcp-dialog-content {
+        background-color: white;
+        width: 400px;
+        border-radius: 4px;
+        box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+      }
+      .mcp-dialog-header {
+        padding: 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid #f0f0f0;
+      }
+      .mcp-dialog-title {
+        font-size: 18px;
+        font-weight: bold;
+      }
+      .mcp-dialog-close {
+        cursor: pointer;
+        font-size: 20px;
+      }
+      .mcp-dialog-body {
+        padding: 20px;
+      }
+      .mcp-form-item {
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+      }
+      .mcp-label {
+        display: inline-block;
+        margin-bottom: 0;
+        width: 100px;
+        flex-shrink: 0;
+      }
+      .mcp-input {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #dcdfe6;
+        border-radius: 4px;
+      }
+      .mcp-dialog-footer {
+        padding: 10px 20px 20px;
+        display: flex;
+        justify-content: center;
+      }
+      .add-server-btn {
+        padding: 8px 20px;
+        background-color: #409eff;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        transition: all 0.3s;
+      }
+      
+      .add-server-btn:hover {
+        background-color: #66b1ff;
+      }
+      .setting_fay_top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0px 20px;
+        background-color: #f8f9fa;
+        border-bottom: 1px solid #ebeef5;
+        margin-bottom: 10px;
+      }
+      /* 添加tooltip样式 */
+      .tooltip {
+        position: relative;
+        display: inline-block;
+      }
+      /* 彻底隐藏 tooltip 弹窗，但保留结构供脚本读取数据 */
+      .tooltip .tooltip-content {
+        display: none !important;
+      }
+      .tooltip-title {
+        font-weight: bold;
+        margin-bottom: 8px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid #ebeef5;
+      }
+      .tooltip-item {
+        margin-bottom: 5px;
+        display: flex;
+      }
+      .tooltip-label {
+        font-weight: bold;
+        width: 100px;
+      }
+      .mcp-info-panel {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        width: 96.8%;
+        min-height: 80px;
+        border: 1px solid #363636;
+        border-radius: 4px;
+        padding: 15px;
+        background-color: #fff;
+        display: none;
+      }
+      .mcp-info-panel.active {
+        display: block;
+      }
+      .mcp-info-title {
+        font-size: 18px;
+        font-weight: bold;
+        margin-bottom: 15px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #ebeef5;
+        color: #303133;
+      }
+      .mcp-info-content {
+        display: flex;
+        flex-wrap: wrap;
+      }
+      .mcp-info-item {
+        width: 33.33%;
+        margin-bottom: 10px;
+        display: flex;
+      }
+      .mcp-info-label {
+        font-weight: bold;
+        width: 100px;
+        color: #606266;
+      }
+      .mcp-info-value {
+        color: #303133;
+      }
+      /* 让 main_right 成为定位上下文 */
+      .main_right {
+        position: relative;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="main_bg" id="app">	
+      <div class="main_left">	
+        <div class="main_left_logo" ><img src="{{ url_for('static',filename='images/Logo.png') }}" alt=""> 
+        </div>
+
+      <div class="main_left_menu">
+        <ul>
+          <li class="changeImg3"><a :href="'http://' + hostname + ':5000/'"><span class="iconimg1">消息</span></a></li>
+          <li class="changeImg3"><a :href="'http://' + hostname + ':5000/setting'"><span class="iconimg2">人设</span></a></li>
+          <li class="changeImg3"><a href="/Page3"><span class="iconimg3">MCP</span></a></li>
+        </ul>
+      </div>
+      
+      <div class="main_left_emoji"><img src="{{ url_for('static',filename='images/emoji.png') }}" alt="" style="width: 80%; margin-top: -25px;">
+      </div>
+      </div>
+
+      <div class="main_right">
+        <div class="setting_fay_top"><span style="color: #000; font-size: 20px; padding-right: 10px;">MCP服务器</span><button class="add-server-btn" id="showAddDialogBtn">添加</button></div>
+        <!-- 以上是即时信息显示 -->
+  
+        <div class="setting_fay">   
+          <div class="mcp-container">
+            <!-- 使用Jinja2模板循环渲染MCP服务器卡片 -->
+            {% for server in mcp_servers %}
+            <div class="mcp-card tooltip" data-server-id="{{ server.id }}">
+              <div class="mcp-header">
+                <div class="mcp-title">{{ server.name }}</div>
+                <div class="status-{{ server.status }}">
+                  <div class="status-dot {{ server.status }}-dot"></div>
+                  {{ '在线' if server.status == 'online' else '离线' }}
+                </div>
+              </div>
+              <div class="mcp-info">
+                <span class="mcp-label">服务器:</span>
+                <span class="mcp-value" data-full-ip="{{ server.ip }}" title="{{ server.ip }}">{{ server.ip }}</span>
+              </div>
+              <div class="mcp-info">
+                <span class="mcp-label">延迟:</span>
+                <span class="mcp-value">{{ server.latency }}</span>
+              </div>
+              <div class="mcp-info">
+                <span class="mcp-label">连接时间:</span>
+                <span class="mcp-value">{{ server.connection_time }}</span>
+              </div>
+              <div class="mcp-actions">
+                <button class="delete-btn" onclick="deleteMcpServer('{{ server.id }}')">删除</button>
+                <div>
+                  <button class="mcp-btn {% if server.status == 'online' %}disconnect-btn{% else %}connect-btn{% endif %}" onclick="toggleConnection('{{ server.id }}')">
+                    {% if server.status == 'online' %}断开{% else %}连接{% endif %}
+                  </button>
+                  <button class="mcp-btn restart-btn" onclick="reconnectServer('{{ server.id }}')">刷 新</button>
+                </div>
+              </div>
+            </div>
+            {% endfor %}
+
+            <!-- Add Button -->
+            <div class="add-btn-container" style="display: none;">
+              <button class="add-btn" onclick="showAddDialog()">+</button>
+            </div>
+
+            <!-- Add MCP Dialog -->
+            <div class="mcp-dialog" id="addMcpDialog">
+              <div class="mcp-dialog-content">
+                <div class="mcp-dialog-header">
+                  <div class="mcp-dialog-title">添加MCP</div>
+                  <div class="mcp-dialog-close" onclick="hideAddDialog()">×</div>
+                </div>
+                <div class="mcp-dialog-body">
+                  <div class="mcp-form-item">
+                    <label class="mcp-label">MCP 名称:</label>
+                    <input type="text" class="mcp-input" id="mcpName" placeholder="请输入名称">
+                  </div>
+                  <div class="mcp-form-item">
+                    <label class="mcp-label">SSE服务器:</label>
+                    <input type="text" class="mcp-input" id="mcpIp" placeholder="请输入SSE地址">
+                  </div>
+                  <div class="mcp-form-item">
+                    <label class="mcp-label">Key:</label>
+                    <input type="text" class="mcp-input" id="mcpKey" placeholder="（可留空）请输入Key">
+                  </div>
+                </div>
+                <div class="mcp-dialog-footer">
+                  <button class="add-server-btn" id="addServerBtn">添加</button>
+                </div>
+              </div>
+            </div>
+
+            
+
+          </div>
+        </div>
+          <!-- 信息面板 -->
+          <div class="mcp-info-panel">
+            <div class="mcp-info-content">
+              <div class="mcp-info-item">
+                <span class="mcp-info-label">服务器:</span>
+                <span class="mcp-info-value">--</span>
+              </div>
+              <div class="mcp-info-item">
+                <span class="mcp-info-label">服务器类型:</span>
+                <span class="mcp-info-value">SSE</span>
+              </div>
+              <div class="mcp-info-item">
+                <span class="mcp-info-label">延迟:</span>
+                <span class="mcp-info-value">--</span>
+              </div>
+              <div class="mcp-info-item">
+                <span class="mcp-info-label">可用工具:</span>
+                <span class="mcp-info-value">--</span>
+              </div>
+            </div>
+          </div>
+      </div>
+    </div>
+
+    <!-- import Vue before Element -->
+    <script src="{{ url_for('static',filename='js/vue.js') }}"></script>
+    <script src="{{ url_for('static',filename='js/element.js') }}"></script>
+    <script>
+      function showAddDialog() {
+        document.getElementById('addMcpDialog').style.display = 'flex';
+      }
+      
+      function hideAddDialog() {
+        document.getElementById('addMcpDialog').style.display = 'none';
+      }
+
+      // 添加MCP服务器函数
+      function addMcpServer() {
+        console.log("添加按钮被点击");
+        // 获取输入值
+        const name = document.getElementById('mcpName').value.trim();
+        const ip = document.getElementById('mcpIp').value.trim();
+        const key = document.getElementById('mcpKey').value.trim();
+        
+        console.log("输入值:", name, ip, key ? "(Key已输入)" : "(无Key)");
+        
+        // 简单验证
+        if (!name || !ip) {
+          alert('请填写完整的MCP信息');
+          return;
+        }
+        
+        // 准备数据
+        const data = {
+          name: name,
+          ip: ip,
+          key: key  // 添加 Key 参数
+        };
+        
+        console.log("准备发送数据:", JSON.stringify(data));
+        
+        // 发送请求到后端
+        fetch('/api/mcp/servers', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(data)
+        })
+        .then(response => {
+          console.log("收到响应:", response.status);
+          if (!response.ok) {
+            throw new Error('添加服务器失败，状态码: ' + response.status);
+          }
+          return response.json();
+        })
+        .then(data => {
+          console.log("添加成功，返回数据:", data);
+          // 添加成功后刷新页面
+          window.location.reload();
+        })
+        .catch(error => {
+          console.error('Error:', error);
+          alert('添加服务器失败: ' + error.message);
+        });
+        
+        // 隐藏对话框
+        hideAddDialog();
+      }
+
+      // 使用事件监听器绑定按钮点击事件
+      document.addEventListener('DOMContentLoaded', function() {
+        // 绑定显示对话框按钮
+        const showAddDialogBtn = document.getElementById('showAddDialogBtn');
+        if (showAddDialogBtn) {
+          showAddDialogBtn.addEventListener('click', showAddDialog);
+          console.log('显示对话框按钮事件已绑定');
+        } else {
+          console.error('找不到显示对话框按钮元素');
+        }
+        
+        // 绑定添加服务器按钮
+        const addServerBtn = document.getElementById('addServerBtn');
+        if (addServerBtn) {
+          addServerBtn.addEventListener('click', addMcpServer);
+          console.log('添加服务器按钮事件已绑定');
+        } else {
+          console.error('找不到添加服务器按钮元素');
+        }
+      });
+
+      // 删除MCP服务器
+      function deleteMcpServer(serverId) {
+        console.log("删除服务器:", serverId);
+        if (confirm("确定要删除此MCP服务器吗？")) {
+          fetch(`/api/mcp/servers/${serverId}`, {
+            method: 'DELETE'
+          })
+          .then(response => {
+            if (!response.ok) {
+              throw new Error('删除服务器失败，状态码: ' + response.status);
+            }
+            return response.json();
+          })
+          .then(data => {
+            console.log("删除成功:", data);
+            window.location.reload();
+          })
+          .catch(error => {
+            console.error('Error:', error);
+            alert('删除服务器失败: ' + error.message);
+          });
+        }
+      }
+
+      // 断开MCP服务器连接
+      function disconnectServer(serverId) {
+        console.log("断开服务器连接:", serverId);
+        fetch(`/api/mcp/servers/${serverId}/disconnect`, {
+          method: 'POST'
+        })
+        .then(response => {
+          if (!response.ok) {
+            throw new Error('断开连接失败，状态码: ' + response.status);
+          }
+          return response.json();
+        })
+        .then(data => {
+          console.log("断开连接成功:", data);
+          // 更新UI而不刷新页面
+          const card = document.querySelector(`.mcp-card[data-server-id="${serverId}"]`);
+          if (card) {
+            const statusDiv = card.querySelector('.status-online, .status-offline');
+            if (statusDiv) {
+              statusDiv.className = 'status-offline';
+              statusDiv.innerHTML = '<div class="status-dot offline-dot"></div>离线';
+            }
+          }
+        })
+        .catch(error => {
+          console.error('Error:', error);
+          alert('断开连接失败: ' + error.message);
+        });
+      }
+
+      // 连接MCP服务器
+      function connectServer(serverId) {
+        console.log("连接服务器:", serverId);
+        const card = document.querySelector(`.mcp-card[data-server-id="${serverId}"]`);
+        if (!card) return;
+        
+        const statusDiv = card.querySelector('.status-online, .status-offline');
+        const connectBtn = card.querySelector('.disconnect-btn, .connect-btn');
+        
+        // 显示加载状态
+        if (statusDiv) {
+          statusDiv.className = 'status-connecting';
+          statusDiv.innerHTML = '<div class="status-dot connecting-dot"></div>连接中...';
+        }
+        
+        // 发送连接请求
+        fetch(`/api/mcp/servers/${serverId}/connect`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        })
+        .then(response => response.json())
+        .then(data => {
+          console.log('连接响应:', data);
+          
+          const latencyValue = card.querySelector('.mcp-info:nth-child(3) .mcp-value');
+          const connectionTimeValue = card.querySelector('.mcp-info:nth-child(4) .mcp-value');
+          
+          if (data.success) {
+            // 连接成功
+            if (statusDiv) {
+              statusDiv.className = 'status-online';
+              statusDiv.innerHTML = '<div class="status-dot online-dot"></div>在线';
+            }
+            
+            if (connectBtn) {
+              connectBtn.classList.remove('connect-btn');
+              connectBtn.classList.add('disconnect-btn');
+              connectBtn.textContent = '断开';
+            }
+            
+            // 更新延迟和连接时间
+            if (latencyValue && data.server && data.server.latency) {
+              latencyValue.textContent = data.server.latency;
+            }
+            
+            if (connectionTimeValue && data.server && data.server.connection_time) {
+              connectionTimeValue.textContent = data.server.connection_time;
+            }
+            
+            // 显示可用工具信息
+            if (data.tools && data.tools.length > 0) {
+              const toolNames = data.tools.map(tool => {
+                if (typeof tool === 'object' && tool !== null && tool.name) {
+                  return tool.name;
+                } else if (typeof tool === 'string') {
+                  return tool;
+                } else {
+                  return '未知工具';
+                }
+              });
+              
+              const toolsInfo = `${toolNames.join(', ')}`;
+              console.log('可用工具:', toolsInfo);
+              
+              // 更新信息面板
+              updateInfoPanel(data.server, toolsInfo);
+              
+              // 选中当前卡片
+              mcpCards.forEach(c => c.classList.remove('selected'));
+              card.classList.add('selected');
+              
+              // 触发卡片点击事件，更新信息卡片
+              card.click();
+            } else {
+              // 没有工具时也更新信息面板
+              updateInfoPanel(data.server, '无可用工具');
+              
+              // 选中当前卡片
+              mcpCards.forEach(c => c.classList.remove('selected'));
+              card.classList.add('selected');
+              
+              // 触发卡片点击事件，更新信息卡片
+              card.click();
+            }
+          } else {
+            // 连接失败
+            if (statusDiv) {
+              statusDiv.className = 'status-offline';
+              statusDiv.innerHTML = '<div class="status-dot offline-dot"></div>离线';
+            }
+            
+            if (connectBtn) {
+              connectBtn.classList.remove('disconnect-btn');
+              connectBtn.classList.add('connect-btn');
+              connectBtn.textContent = '连接';
+            }
+            
+            alert(data.message || '连接失败');
+          }
+        })
+        .catch(error => {
+          console.error('连接错误:', error);
+          
+          // 恢复离线状态
+          if (statusDiv) {
+            statusDiv.className = 'status-offline';
+            statusDiv.innerHTML = '<div class="status-dot offline-dot"></div>离线';
+          }
+          
+          if (connectBtn) {
+            connectBtn.classList.remove('disconnect-btn');
+            connectBtn.classList.add('connect-btn');
+            connectBtn.textContent = '连接';
+          }
+          
+          alert('连接服务器时发生错误');
+        });
+      }
+
+      // 切换连接状态
+      function toggleConnection(serverId) {
+        console.log("切换连接状态:", serverId);
+        const card = document.querySelector(`.mcp-card[data-server-id="${serverId}"]`);
+        if (!card) return;
+        
+        const statusDiv = card.querySelector('.status-online, .status-offline');
+        const connectBtn = card.querySelector('.disconnect-btn, .connect-btn');
+        
+        if (!statusDiv || !connectBtn) return;
+        
+        const isOnline = statusDiv.classList.contains('status-online');
+        
+        if (isOnline) {
+          // 如果当前在线，则断开连接
+          disconnectServer(serverId);
+          // 更新按钮样式和文本
+          connectBtn.classList.remove('disconnect-btn');
+          connectBtn.classList.add('connect-btn');
+          connectBtn.textContent = '连接';
+        } else {
+          // 如果当前离线，则连接
+          connectServer(serverId);
+        }
+      }
+
+      // 重新连接服务器
+      function reconnectServer(serverId) {
+        console.log("重新连接服务器:", serverId);
+        
+        const card = document.querySelector(`.mcp-card[data-server-id="${serverId}"]`);
+        if (!card) return;
+        
+        const statusDiv = card.querySelector('.status-online, .status-offline');
+        const connectBtn = card.querySelector('.disconnect-btn, .connect-btn');
+        
+        // 显示加载状态
+        if (statusDiv) {
+          statusDiv.className = 'status-connecting';
+          statusDiv.innerHTML = '<div class="status-dot connecting-dot"></div>连接中...';
+        }
+        
+        // 先断开连接
+        fetch(`/api/mcp/servers/${serverId}/disconnect`, {
+          method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+          console.log('断开连接响应:', data);
+          
+          // 然后重新连接
+          return fetch(`/api/mcp/servers/${serverId}/connect`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          });
+        })
+        .then(response => response.json())
+        .then(data => {
+          console.log('重新连接响应:', data);
+          
+          const latencyValue = card.querySelector('.mcp-info:nth-child(3) .mcp-value');
+          const connectionTimeValue = card.querySelector('.mcp-info:nth-child(4) .mcp-value');
+          
+          if (data.success) {
+            // 连接成功
+            if (statusDiv) {
+              statusDiv.className = 'status-online';
+              statusDiv.innerHTML = '<div class="status-dot online-dot"></div>在线';
+            }
+            
+            if (connectBtn) {
+              connectBtn.classList.remove('connect-btn');
+              connectBtn.classList.add('disconnect-btn');
+              connectBtn.textContent = '断开';
+            }
+            
+            // 更新延迟和连接时间
+            if (latencyValue && data.server && data.server.latency) {
+              latencyValue.textContent = data.server.latency;
+            }
+            
+            if (connectionTimeValue && data.server && data.server.connection_time) {
+              connectionTimeValue.textContent = data.server.connection_time;
+            }
+            
+            // 显示可用工具信息
+            if (data.tools && data.tools.length > 0) {
+              const toolNames = data.tools.map(tool => {
+                if (typeof tool === 'object' && tool !== null && tool.name) {
+                  return tool.name;
+                } else if (typeof tool === 'string') {
+                  return tool;
+                } else {
+                  return '未知工具';
+                }
+              });
+              
+              const toolsInfo = `${toolNames.join(', ')}`;
+              console.log('可用工具:', toolsInfo);
+              
+              // 更新信息面板
+              updateInfoPanel(data.server, toolsInfo);
+              
+              // 选中当前卡片
+              mcpCards.forEach(c => c.classList.remove('selected'));
+              card.classList.add('selected');
+              
+              // 触发卡片点击事件，更新信息卡片
+              card.click();
+            } else {
+              // 没有工具时也更新信息面板
+              updateInfoPanel(data.server, '无可用工具');
+              
+              // 选中当前卡片
+              mcpCards.forEach(c => c.classList.remove('selected'));
+              card.classList.add('selected');
+              
+              // 触发卡片点击事件，更新信息卡片
+              card.click();
+            }
+          } else {
+            // 连接失败
+            if (statusDiv) {
+              statusDiv.className = 'status-offline';
+              statusDiv.innerHTML = '<div class="status-dot offline-dot"></div>离线';
+            }
+            
+            if (connectBtn) {
+              connectBtn.classList.remove('disconnect-btn');
+              connectBtn.classList.add('connect-btn');
+              connectBtn.textContent = '连接';
+            }
+            
+            alert(data.message || '重新连接失败');
+          }
+        })
+        .catch(error => {
+          console.error('重新连接错误:', error);
+          
+          // 恢复离线状态
+          if (statusDiv) {
+            statusDiv.className = 'status-offline';
+            statusDiv.innerHTML = '<div class="status-dot offline-dot"></div>离线';
+          }
+          
+          if (connectBtn) {
+            connectBtn.classList.remove('disconnect-btn');
+            connectBtn.classList.add('connect-btn');
+            connectBtn.textContent = '连接';
+          }
+          
+          alert('重新连接服务器时发生错误');
+        });
+      }
+
+      // 刷新服务器状态
+      function refreshServer(serverId) {
+        console.log("刷新服务器状态:", serverId);
+      }
+      
+      // 卡片选中功能
+      const mcpCards = document.querySelectorAll('.mcp-card');
+      const infoPanel = document.querySelector('.mcp-info-panel');
+      const infoValues = document.querySelectorAll('.mcp-info-value');
+      
+      // 处理长文本，超出长度使用省略号替代
+      function truncateText(text, maxLength = 30) {
+        if (!text) return '';
+        if (text.length <= maxLength) return text;
+        return text.substring(0, maxLength - 3) + '...';
+      }
+      
+      mcpCards.forEach((card, index) => {
+        // 处理卡片中的服务器地址，如果太长则使用省略号替代
+        const ipValue = card.querySelector('.mcp-info:nth-child(2) .mcp-value');
+        if (ipValue) {
+          ipValue.textContent = truncateText(ipValue.textContent);
+          // 添加完整地址的 title 属性，鼠标悬停时显示完整地址
+          ipValue.title = ipValue.getAttribute('data-full-ip') || ipValue.textContent;
+        }
+        
+        card.addEventListener('click', () => {
+          // 移除其他卡片的选中状态
+          mcpCards.forEach(c => c.classList.remove('selected'));
+          
+          // 添加当前卡片的选中状态
+          card.classList.add('selected');
+          
+          // 显示信息面板
+          infoPanel.classList.add('active');
+          
+          // 获取服务器ID和信息
+          const serverId = card.getAttribute('data-server-id');
+          const serverName = card.querySelector('.mcp-title').textContent;
+          const serverIp = card.querySelector('.mcp-info:nth-child(2) .mcp-value').getAttribute('data-full-ip') || 
+                           card.querySelector('.mcp-info:nth-child(2) .mcp-value').textContent;
+          const serverLatency = card.querySelector('.mcp-info:nth-child(3) .mcp-value').textContent;
+          const serverStatus = card.querySelector('.status-online, .status-offline').className;
+          
+          // 更新信息面板内容
+          const ipValue = infoPanel.querySelector('.mcp-info-item:nth-child(1) .mcp-info-value');
+          const typeValue = infoPanel.querySelector('.mcp-info-item:nth-child(2) .mcp-info-value');
+          const latencyValue = infoPanel.querySelector('.mcp-info-item:nth-child(3) .mcp-info-value');
+          const toolsValue = infoPanel.querySelector('.mcp-info-item:nth-child(4) .mcp-info-value');
+          
+          if (ipValue) {
+            ipValue.textContent = truncateText(serverIp);
+            ipValue.title = serverIp; // 添加完整地址的 title 属性
+          }
+          if (latencyValue) latencyValue.textContent = serverLatency;
+          
+          // 如果服务器在线，获取工具列表
+          if (serverStatus.includes('online')) {
+            // 显示加载状态
+            if (toolsValue) toolsValue.textContent = '加载中...';
+            
+            // 发送请求获取工具列表
+            fetch(`/api/mcp/servers/${serverId}/tools`, {
+              method: 'GET'
+            })
+            .then(response => response.json())
+            .then(data => {
+              if (data.success && data.tools && data.tools.length > 0) {
+                const toolNames = data.tools.map(tool => {
+                  if (typeof tool === 'object' && tool !== null && tool.name) {
+                    return tool.name;
+                  } else if (typeof tool === 'string') {
+                    return tool;
+                  } else {
+                    return '未知工具';
+                  }
+                });
+                
+                toolsValue.textContent = toolNames.join(', ');
+              } else {
+                toolsValue.textContent = '无可用工具';
+              }
+            })
+            .catch(error => {
+              console.error('获取工具列表失败:', error);
+              toolsValue.textContent = '获取工具列表失败';
+            });
+          } else {
+            // 服务器离线
+            if (toolsValue) toolsValue.textContent = '服务器离线';
+          }
+        });
+      });
+
+      // 更新信息面板
+      function updateInfoPanel(server, toolsInfo) {
+        const infoPanel = document.querySelector('.mcp-info-panel');
+        if (!infoPanel) return;
+        
+        const ipValue = infoPanel.querySelector('.mcp-info-item:nth-child(1) .mcp-info-value');
+        const latencyValue = infoPanel.querySelector('.mcp-info-item:nth-child(3) .mcp-info-value');
+        const toolsValue = infoPanel.querySelector('.mcp-info-item:nth-child(4) .mcp-info-value');
+        
+        if (ipValue && server && server.ip) {
+          ipValue.textContent = truncateText(server.ip);
+          ipValue.title = server.ip; // 添加完整地址的 title 属性
+        }
+        
+        if (latencyValue && server && server.latency) {
+          latencyValue.textContent = server.latency;
+        }
+        
+        if (toolsValue && toolsInfo) {
+          toolsValue.textContent = toolsInfo;
+        }
+        
+        // 显示信息面板
+        infoPanel.classList.add('active');
+      }
+
+      // 初始化Vue实例
+      new Vue({
+        el: '#app',
+        delimiters: ['[[', ']]'],
+        data: {
+          hostname: window.location.hostname
+        }
+      });
+    </script>
+  </body>
+</html>

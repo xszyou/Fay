@@ -14,7 +14,7 @@ from scheduler.thread_manager import MyThread
 class Speech:
     def __init__(self):
         self.ms_tts = False
-        voice_type = tts_voice.get_voice_of(config_util.config["attribute"]["voice"])
+        voice_type = tts_voice.get_voice_of(config_util.config["attribute"]["voice"] if config_util.config["attribute"]["voice"] is not None and config_util.config["attribute"]["voice"].strip() != "" else "晓晓(edge)")
         voice_name = EnumVoice.XIAO_XIAO.value["voiceName"]
         if voice_type is not None:
             voice_name = voice_type.value["voiceName"]
@@ -68,7 +68,7 @@ class Speech:
 
     def to_sample(self, text, style):
         if self.ms_tts:
-            voice_type = tts_voice.get_voice_of(config_util.config["attribute"]["voice"])
+            voice_type = tts_voice.get_voice_of(config_util.config["attribute"]["voice"] if config_util.config["attribute"]["voice"] is not None and config_util.config["attribute"]["voice"].strip() != "" else "晓晓(edge)")
             voice_name = EnumVoice.XIAO_XIAO.value["voiceName"]
             if voice_type is not None:
                 voice_name = voice_type.value["voiceName"]

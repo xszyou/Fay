@@ -219,6 +219,7 @@ def api_get_data():
             ]
             send_voice_list = {"voiceList": voice_list}
             wsa_server.get_web_instance().add_cmd(send_voice_list)
+
         else:
             voice_list = tts_voice.get_voice_list()
             send_voice_list = []
@@ -268,6 +269,7 @@ def api_send():
         msg = info.get('msg')
         if not username or not msg:
             return jsonify({'result': 'error', 'message': '用户名和消息内容不能为空'})
+        msg = msg.strip()
         interact = Interact("text", 1, {'user': username, 'msg': msg})
         util.printInfo(1, username, '[文字发送按钮]{}'.format(interact.data["msg"]), time.time())
         fay_booter.feiFei.on_interact(interact)
@@ -330,14 +332,16 @@ def api_send_v1_chat_completions():
         observation = data.get('observation', '')
         interact = Interact("text", 1, {'user': username, 'msg': last_content, 'observation': str(observation)})
         util.printInfo(1, username, '[文字沟通接口]{}'.format(interact.data["msg"]), time.time())
-        text = fay_booter.feiFei.on_interact(interact)
+        fay_booter.feiFei.on_interact(interact)
 
-        if config_util.key_chat_module.endswith('_stream'):
-            return gpt_stream_response(member_db.new_instance().find_user(username))
-        elif model == 'fay-streaming':
-            return stream_response(text)
+        # 检查请求中是否指定了流式传输
+        stream_requested = data.get('stream', False)
+        
+        # 优先使用请求中的stream参数，如果没有指定则使用配置中的设置
+        if stream_requested or model == 'fay-streaming':
+            return gpt_stream_response(last_content, username)
         else:
-            return non_streaming_response(last_content, text)
+            return non_streaming_response(last_content, username)
     except Exception as e:
         return jsonify({'error': f'处理请求时出错: {e}'}), 500
 
@@ -392,8 +396,8 @@ def adopt_msg():
     except Exception as e:
         return jsonify({'status':'error', 'msg': f'采纳消息时出错: {e}'}), 500
 
-def gpt_stream_response(uid):
-    _, nlp_Stream = stream_manager.new_instance().get_Stream(uid)
+def gpt_stream_response(last_content, username):
+    _, nlp_Stream = stream_manager.new_instance().get_Stream(username)
     def generate():
         while True:
             sentence = nlp_Stream.read()
@@ -405,9 +409,9 @@ def gpt_stream_response(uid):
             is_first = "_<isfirst>" in sentence
             is_end = "_<isend>" in sentence
             content = sentence.replace("_<isfirst>", "").replace("_<isend>", "")
-            if content:  # 只有当有实际内容时才发送
+            if content or is_first or is_end:  # 只有当有实际内容时才发送
                 message = {
-                    "id": "chatcmpl-" + str(uuid.uuid4()),
+                    "id": "faystreaming-" + str(uuid.uuid4()),
                     "object": "chat.completion.chunk",
                     "created": int(time.time()),
                     "model": "fay-streaming",
@@ -419,8 +423,18 @@ def gpt_stream_response(uid):
                             "index": 0,
                             "finish_reason": "stop" if is_end else None
                         }
-                    ]
+                    ],
+                    #TODO 这里的token计算方式需要优化
+                    "usage": {
+                        "prompt_tokens": len(last_content) if is_first else 0, 
+                        "completion_tokens": len(content),
+                        "total_tokens": len(last_content) + len(content)
+                    },
+                    "system_fingerprint": ""
                 }
+                if is_end:
+                    if username in fay_booter.feiFei.nlp_streams:
+                        stream_manager.new_instance().clear_Stream(username)
                 yield f"data: {json.dumps(message)}\n\n"
             if is_end:
                 break
@@ -429,35 +443,26 @@ def gpt_stream_response(uid):
     
     return Response(generate(), mimetype='text/event-stream')
 
-def stream_response(text):
-    # 处理流式响应
-    def generate():
-        for chunk in text_chunks(text):
-            message = {
-                "id": "chatcmpl-8jqorq6Fw1Vi5XoH7pddGGpQeuPe0",
-                "object": "chat.completion.chunk",
-                "created": int(time.time()),
-                "model": "fay-streaming",
-                "choices": [
-                    {
-                        "delta": {
-                            "content": chunk
-                        },
-                        "index": 0,
-                        "finish_reason": None
-                    }
-                ]
-            }
-            yield f"data: {json.dumps(message)}\n\n"
+# 处理非流式响应
+def non_streaming_response(last_content, username):
+    _, nlp_Stream = stream_manager.new_instance().get_Stream(username)
+    text = ""
+    while True:
+        sentence = nlp_Stream.read()
+        if sentence is None:
             time.sleep(0.01)
-        yield 'data: [DONE]\n\n'
-    
-    return Response(generate(), mimetype='text/event-stream')
-
-def non_streaming_response(last_content, text):
-    # 处理非流式响应
+            continue
+        
+        # 处理特殊标记
+        is_first = "_<isfirst>" in sentence
+        is_end = "_<isend>" in sentence
+        text += sentence.replace("_<isfirst>", "").replace("_<isend>", "")
+        if is_end:
+            if username in fay_booter.feiFei.nlp_streams:
+                stream_manager.new_instance().clear_Stream(username)
+            break
     return jsonify({
-        "id": "chatcmpl-8jqorq6Fw1Vi5XoH7pddGGpQeuPe0",
+        "id": "fay-" + str(uuid.uuid4()),
         "object": "chat.completion",
         "created": int(time.time()),
         "model": "fay",
@@ -472,19 +477,14 @@ def non_streaming_response(last_content, text):
                 "finish_reason": "stop"
             }
         ],
+        #TODO 这里的token计算方式需要优化
         "usage": {
-            "prompt_tokens": len(last_content),
+            "prompt_tokens": len(last_content), 
             "completion_tokens": len(text),
             "total_tokens": len(last_content) + len(text)
         },
-        "system_fingerprint": "fp_04de91a479"
+        "system_fingerprint": ""
     })
-
-def text_chunks(text, chunk_size=20):
-    pattern = r'([^.!?;:，。！？]+[.!?;:，。！？]?)'
-    chunks = re.findall(pattern, text)
-    for chunk in chunks:
-        yield chunk
 
 @__app.route('/', methods=['get'])
 @auth.login_required
@@ -619,27 +619,35 @@ def api_clear_memory():
                 except Exception as e:
                     util.log(1, f"删除文件时出错: {file_path}, 错误: {str(e)}")
         
-        # 删除memory_stream目录（如果存在）
-        memory_stream_dir = os.path.join(memory_dir, "memory_stream")
-        if os.path.exists(memory_stream_dir):
-            import shutil
-            try:
-                shutil.rmtree(memory_stream_dir)
-                util.log(1, f"已删除目录: {memory_stream_dir}")
-            except Exception as e:
-                util.log(1, f"删除目录时出错: {memory_stream_dir}, 错误: {str(e)}")
+        # 删除memory_dir下的所有子目录
+        import shutil
+        for item in os.listdir(memory_dir):
+            item_path = os.path.join(memory_dir, item)
+            if os.path.isdir(item_path):
+                try:
+                    shutil.rmtree(item_path)
+                    util.log(1, f"已删除目录: {item_path}")
+                except Exception as e:
+                    util.log(1, f"删除目录时出错: {item_path}, 错误: {str(e)}")
         
         # 创建一个标记文件，表示记忆已被清除，防止退出时重新保存
         with open(os.path.join(memory_dir, ".memory_cleared"), "w") as f:
             f.write("Memory has been cleared. Do not save on exit.")
         
-        # 修改fay_booter.py中的保存记忆逻辑
+        # 设置记忆清除标记
         try:
             # 导入并修改nlp_cognitive_stream模块中的保存函数
-            from llm.nlp_cognitive_stream import set_memory_cleared_flag
+            from llm.nlp_cognitive_stream import set_memory_cleared_flag, clear_agent_memory
+            
+            # 设置记忆清除标记
             set_memory_cleared_flag(True)
+            
+            # 清除内存中已加载的记忆
+            clear_agent_memory()
+            
+            util.log(1, "已同时清除文件存储和内存中的记忆")
         except Exception as e:
-            util.log(1, f"设置记忆清除标记时出错: {str(e)}")
+            util.log(1, f"清除内存中记忆时出错: {str(e)}")
         
         util.log(1, "记忆已清除，需要重启应用才能生效")
         return jsonify({'success': True, 'message': '记忆已清除，请重启应用使更改生效'}), 200

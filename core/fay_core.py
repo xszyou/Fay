@@ -1,13 +1,13 @@
 #作用是处理交互逻辑，文字输入，语音、文字及情绪的发送、播放及展示输出
 import math
+from operator import index
 import os
 import time
 import socket
-import wave
-import pygame
 import requests
 from pydub import AudioSegment
 from queue import Queue
+import re  # 添加正则表达式模块用于过滤表情符号
 
 # 适应模型使用
 import numpy as np
@@ -22,16 +22,8 @@ from core import qa_service
 from utils import config_util as cfg
 from core import content_db
 from ai_module import nlp_cemotion
-from llm import nlp_rasa
-from llm import nlp_gpt
-from llm import nlp_lingju
-from llm import nlp_xingchen
-from llm import nlp_ollama_api
-from llm import nlp_coze
-from llm.agent import fay_agent
-from llm import nlp_qingliu
-from llm import nlp_gpt_stream
 from llm import nlp_cognitive_stream
+from core import stream_manager
 
 from core import member_db
 import threading
@@ -56,58 +48,16 @@ if platform.system() == "Windows":
     sys.path.append("test/ovr_lipsync")
     from test_olipsync import LipSyncGenerator
     
-modules = {
-    "nlp_gpt": nlp_gpt,
-    "nlp_rasa": nlp_rasa,
-    "nlp_lingju": nlp_lingju,
-    "nlp_xingchen": nlp_xingchen,
-    "nlp_ollama_api": nlp_ollama_api,
-    "nlp_coze": nlp_coze,
-    "nlp_agent": fay_agent,
-    "nlp_qingliu": nlp_qingliu,
-    "nlp_gpt_stream": nlp_gpt_stream,
-    "nlp_cognitive_stream": nlp_cognitive_stream
-}
-
-#大语言模型回复
-def handle_chat_message(msg, username='User', observation='', cache=None):
-    text = ''
-    textlist = []
-    try:
-        util.printInfo(1, username, '自然语言处理...')
-        tm = time.time()
-        cfg.load_config()
-        module_name = "nlp_" + cfg.key_chat_module
-        selected_module = modules.get(module_name)
-        if selected_module is None:
-            raise RuntimeError('请选择正确的nlp模型')   
-        if cfg.key_chat_module == 'rasa':
-            textlist = selected_module.question(msg)
-            text = textlist[0]['text'] 
-        elif cfg.key_chat_module.endswith('_stream') and cache is not None:#支持所有流式输出模块
-            uid = member_db.new_instance().find_user(username)
-            text = selected_module.question(msg, uid, observation, cache)  
-        else:
-            uid = member_db.new_instance().find_user(username)
-            text = selected_module.question(msg, uid, observation)  
-        util.printInfo(1, username, '自然语言处理完成. 耗时: {} ms'.format(math.floor((time.time() - tm) * 1000)))
-        if text == '哎呀，你这么说我也不懂，详细点呗' or text == '':
-            util.printInfo(1, username, '[!] 自然语言无语了！')
-            text = '哎呀，你这么说我也不懂，详细点呗'  
-    except BaseException as e:
-        print(e)
-        util.printInfo(1, username, '自然语言处理错误！')
-        text = '哎呀，你这么说我也不懂，详细点呗'   
-
-    return text,textlist
 
 #可以使用自动播报的标记    
 can_auto_play = True
-auto_play_lock = threading.Lock()
+auto_play_lock = threading.RLock()
 
 class FeiFei:
     def __init__(self):
         self.lock = threading.Lock()
+        self.nlp_streams = {} # 存储用户ID到句子缓存的映射
+        self.nlp_stream_lock = threading.Lock() # 保护nlp_streams字典的锁
         self.mood = 0.0  # 情绪值
         self.old_mood = 0.0
         self.item_index = 0
@@ -125,6 +75,22 @@ class FeiFei:
         self.timer = None
         self.sound_query = Queue()
         self.think_mode_users = {}  # 使用字典存储每个用户的think模式状态
+    
+    def __remove_emojis(self, text):
+        emoji_pattern = re.compile(
+            "["
+            "\U0001F600-\U0001F64F"  # 表情符号
+            "\U0001F300-\U0001F5FF"  # 图标符号
+            "\U0001F680-\U0001F6FF"  # 交通工具和符号
+            "\U0001F1E0-\U0001F1FF"  # 国旗
+            "\U00002700-\U000027BF"  # 杂项符号
+            "\U0001F900-\U0001F9FF"  # 补充表情符号
+            "\U00002600-\U000026FF"  # 杂项符号
+            "\U0001FA70-\U0001FAFF"  # 更多表情
+            "]+",
+            flags=re.UNICODE,
+        )
+        return emoji_pattern.sub(r'', text)
 
     #语音消息处理检查是否命中q&a
     def __get_answer(self, interleaver, text):
@@ -163,29 +129,21 @@ class FeiFei:
                     
                     #大语言模型回复    
                     text = ''
-                    textlist = []
-                    if answer is None:
+                    if answer is None or type != "qa":
                         if wsa_server.get_web_instance().is_connected(username):
                             wsa_server.get_web_instance().add_cmd({"panelMsg": "思考中...", "Username" : username, 'robot': f'{cfg.fay_url}/robot/Thinking.jpg'})
                         if wsa_server.get_instance().is_connected(username):
                             content = {'Topic': 'human', 'Data': {'Key': 'log', 'Value': "思考中..."}, 'Username' : username, 'robot': f'{cfg.fay_url}/robot/Thinking.jpg'}
                             wsa_server.get_instance().add_cmd(content)
-                        text,textlist = handle_chat_message(interact.data["msg"], username, interact.data.get("observation", ""))
+                        text = nlp_cognitive_stream.question(interact.data["msg"], username, interact.data.get("observation", None))
 
                     else: 
                         text = answer
+                        stream_manager.new_instance().write_sentence(username, "_<isfirst>" + text + "_<isend>")
                            
-                    #记录回复并输出到各个终端
-                    self.__process_text_output(text, textlist, username, uid, type)
-                    
-                    #声音输出(支持流式输出的模块在stream_manager.py中调用了say函数)
-                    if type == 'qa' or not cfg.key_chat_module.endswith('_stream'):
-                        if "</think>" in text:
-                            text = text.split("</think>")[1]
-                        interact.data['isfirst'] = True
-                        interact.data['isend'] = True
-                        MyThread(target=self.say, args=[interact, text, type]).start()  
-                    
+                    #完整文本记录回复并输出到各个终端
+                    self.__process_text_output(text, username, uid  )
+
                     return text      
                 
                 elif (index == 2):#透传模式，用于适配自动播报控制及agent的通知工具
@@ -193,7 +151,7 @@ class FeiFei:
                     if interact.data.get("text"):
                         text = interact.data.get("text")
                         # 使用统一的文本处理方法，空列表表示没有额外回复
-                        self.__process_text_output(text, [], username, uid)
+                        self.__process_text_output(text, username, uid)
                         MyThread(target=self.say, args=[interact, text]).start()  
                     return 'success'
    
@@ -220,10 +178,8 @@ class FeiFei:
         username = interact.data.get("user", "User")
         if member_db.new_instance().is_username_exist(username)  == "notexists":
             member_db.new_instance().add_user(username)
-        if cfg.key_chat_module.endswith('_stream'):
-            MyThread(target=self.__process_interact, args=[interact]).start()
-            return None
-        return self.__process_interact(interact)
+        MyThread(target=self.__process_interact, args=[interact]).start()
+        return None
 
     # 发送情绪
     def __send_mood(self):
@@ -297,22 +253,46 @@ class FeiFei:
         return sayType
 
     # 合成声音
-    def say(self, interact, text, type = ""):
+    def say(self, interact, text, type = ""): #TODO 对is_end及is_first的处理有问题
         try:
             uid = member_db.new_instance().find_user(interact.data.get('user'))
             is_end = interact.data.get("isend", False)
+            is_first = interact.data.get("isfirst", False)
+
+            if is_first and (text is None or text.strip() == ""):
+                return None
+                
             self.__send_panel_message(text, interact.data.get('user'), uid, 0, type)
             
             # 处理think标签
             is_start_think = False
-            if "<think>" in text:
-                self.think_mode_users[uid] = True
-                is_start_think = True
-                text = "嗯~等我想想啊"
-            elif "</think>" in text:
-                self.think_mode_users[uid] = False
-                return None
             
+            # 第一步：处理结束标记</think>
+            if "</think>" in text:
+                # 设置用户退出思考模式
+                self.think_mode_users[uid] = False
+                
+                # 分割文本，提取</think>后面的内容
+                # 如果有多个</think>，我们只关心最后一个后面的内容
+                parts = text.split("</think>")
+                text = parts[-1].strip()
+                
+                # 如果提取出的文本为空，则不需要继续处理
+                if text == "":
+                    return None
+            
+            # 第二步：处理开始标记<think>
+            # 注意：这里要检查经过上面处理后的text
+            if "<think>" in text:
+                is_start_think = True
+                self.think_mode_users[uid] = True
+                text = "请稍等..."
+            
+            # 如果既没有结束标记也没有开始标记，但用户当前处于思考模式
+            # 这种情况是流式输出中间部分，应该被忽略
+            elif "</think>" not in text and "<think>" not in text and self.think_mode_users.get(uid, False):
+                return None
+                
             if self.think_mode_users.get(uid, False) and is_start_think:
                 if wsa_server.get_web_instance().is_connected(interact.data.get('user')):
                     wsa_server.get_web_instance().add_cmd({"panelMsg": "思考中...", "Username" : interact.data.get('user'), 'robot': f'{cfg.fay_url}/robot/Thinking.jpg'})
@@ -323,23 +303,26 @@ class FeiFei:
             # 如果用户在think模式中,不进行语音合成
             if self.think_mode_users.get(uid, False) and not is_start_think:
                 return None
-   
+            
             result = None
             audio_url = interact.data.get('audio')#透传的音频
             if audio_url is not None:#透传音频下载
                 file_name = 'sample-' + str(int(time.time() * 1000)) + audio_url[-4:]
                 result = self.download_wav(audio_url, './samples/', file_name)
             elif config_util.config["interact"]["playSound"] or wsa_server.get_instance().is_connected(interact.data.get("user")) or self.__is_send_remote_device_audio(interact):#tts
-                if text != None and  text.replace("*", "").strip() != "":
-                    util.printInfo(1,  interact.data.get('user'), '合成音频...')
-                    tm = time.time()
-                    result = self.sp.to_sample(text.replace("*", ""), self.__get_mood_voice())
-                    util.printInfo(1,  interact.data.get("user"), "合成音频完成. 耗时: {} ms 文件:{}".format(math.floor((time.time() - tm) * 1000), result))
+                if text != None and text.replace("*", "").strip() != "":
+                    # 先过滤表情符号，然后再合成语音
+                    filtered_text = self.__remove_emojis(text.replace("*", ""))
+                    if filtered_text is not None and filtered_text.strip() != "":
+                        util.printInfo(1,  interact.data.get('user'), '合成音频...')
+                        tm = time.time()
+                        result = self.sp.to_sample(filtered_text, self.__get_mood_voice())
+                        util.printInfo(1,  interact.data.get("user"), "合成音频完成. 耗时: {} ms 文件:{}".format(math.floor((time.time() - tm) * 1000), result))
             else:
                 if is_end and wsa_server.get_web_instance().is_connected(interact.data.get('user')):
                     wsa_server.get_web_instance().add_cmd({"panelMsg": "", 'Username' : interact.data.get('user'), 'robot': f'{cfg.fay_url}/robot/Normal.jpg'})
 
-            if result is not None or is_end:          
+            if result is not None or is_first or is_end:          
                 MyThread(target=self.__process_output_audio, args=[result, interact, text]).start()
                 return result         
                 
@@ -376,13 +359,14 @@ class FeiFei:
     #面板播放声音
     def __play_sound(self):
         try:
+            import pygame
             pygame.mixer.init()  # 初始化pygame.mixer，只需要在此处初始化一次, 如果初始化失败，则不播放音频
         except Exception as e:
             util.printInfo(1, "System", "音频播放初始化失败,本机无法播放音频")
             return
         
         while self.__running:
-            time.sleep(0.1)
+            time.sleep(0.01)
             if not self.sound_query.empty():  # 如果队列不为空则播放音频
                 file_url, audio_length, interact = self.sound_query.get()
                 is_first = False
@@ -416,9 +400,9 @@ class FeiFei:
                     length += 0.01
                     time.sleep(0.01)
                 
-                util.printInfo(1, interact.data.get('user'), '结束播放！')
                 if is_end:
                     self.play_end(interact)
+                    util.printInfo(1, interact.data.get('user'), '结束播放！')
                 if wsa_server.get_web_instance().is_connected(interact.data.get('user')):
                     wsa_server.get_web_instance().add_cmd({"panelMsg": "", "Username" : interact.data.get('user'), 'robot': f'{cfg.fay_url}/robot/Normal.jpg'})
                 # 播放完毕后通知
@@ -475,7 +459,8 @@ class FeiFei:
                 audio_length = 3
 
             #推送远程音频
-            MyThread(target=self.__send_remote_device_audio, args=[file_url, interact]).start()       
+            if file_url is not None:
+                MyThread(target=self.__send_remote_device_audio, args=[file_url, interact]).start()       
 
             #发送音频给数字人接口
             if file_url is not None and wsa_server.get_instance().is_connected(interact.data.get("user")):
@@ -603,7 +588,7 @@ class FeiFei:
             }
             wsa_server.get_instance().add_cmd(content)
 
-    def __process_text_output(self, text, textlist, username, uid, type=None):
+    def __process_text_output(self, text, username, uid):
         """
         处理文本输出到各个终端
         :param text: 主要回复文本
@@ -621,13 +606,6 @@ class FeiFei:
         # 发送主回复到面板和数字人
         # self.__send_panel_message(text, username, uid, content_id, type)
         self.__send_digital_human_message(text, username)
-        
-        # 处理额外回复列表
-        if len(textlist) > 1:
-            for item in textlist[1:]:
-                content_db.new_instance().add_content('fay', 'speak', item['text'], username, uid)
-                # self.__send_panel_message(item['text'], username, uid)
-                self.__send_digital_human_message(item['text'], username)
         
         # 打印日志
         util.printInfo(1, username, '({}) {}'.format(self.__get_mood_voice(), text))

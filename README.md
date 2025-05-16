@@ -32,8 +32,10 @@
 - 支持机器人表情输出
 - 支持react agent自主决策执行、主动对话（准备升级到MCP协议）
 - 支持后台静默启动
-- 支持deepseek
+- 支持deepseek等thinking llm
 - 设计独特的认知模型
+- 支持MCP
+- 提供配置管理中心
 
 ###               
 
@@ -42,6 +44,8 @@
 ![](readme/chat.png)
 
 ![](readme/controller.png)
+
+![](readme/mcp.png)
 
 
 

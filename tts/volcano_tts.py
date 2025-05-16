@@ -28,7 +28,7 @@ class Speech:
         if cfg.volcano_tts_voice_type != None and cfg.volcano_tts_voice_type != '':
             voice = cfg.volcano_tts_voice_type
         else:
-            voice = config_util.config["attribute"]["voice"]
+            voice = config_util.config["attribute"]["voice"] if config_util.config["attribute"]["voice"] is not None and config_util.config["attribute"]["voice"].strip() != "" else "爽快思思/Skye"
         try:
             history = self.__get_history(voice, style, text)
             if history is not None:

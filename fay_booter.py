@@ -1,11 +1,8 @@
 #核心启动模块
-import os
 import time
 import re
 import pyaudio
 import socket
-import sys
-import asyncio
 import requests
 from core.interact import Interact
 from core.recorder import Recorder
@@ -14,8 +11,6 @@ from utils import util, config_util, stream_util
 from core.wsa_server import MyServer
 from core import wsa_server
 from core import socket_bridge_service
-from llm.agent import agent_service
-import subprocess
 from llm.nlp_cognitive_stream import save_agent_memory
 
 # 全局变量声明
@@ -297,13 +292,12 @@ def stop():
     __running = False
     
     # 保存代理记忆
-    if config_util.key_chat_module == 'cognitive_stream':
-        util.log(1, '正在保存代理记忆...')
-        try:
-            save_agent_memory()
-            util.log(1, '代理记忆保存成功')
-        except Exception as e:
-            util.log(1, f'保存代理记忆失败: {str(e)}')
+    util.log(1, '正在保存代理记忆...')
+    try:
+        save_agent_memory()
+        util.log(1, '代理记忆保存成功')
+    except Exception as e:
+        util.log(1, f'保存代理记忆失败: {str(e)}')
     
     if recorderListener is not None:
         util.log(1, '正在关闭录音服务...')
@@ -321,10 +315,6 @@ def stop():
             socket_service_instance = None 
     except:
         pass
-
-    if config_util.key_chat_module == "agent":
-        util.log(1, '正在关闭agent服务...')
-        agent_service.agent_stop()
 
     util.log(1, '正在关闭核心服务...')
     feiFei.stop()
@@ -350,19 +340,10 @@ def start():
     feiFei = get_fay_core().FeiFei()
     feiFei.start()
 
-    #加载本地知识库
-    if config_util.key_chat_module == 'langchain':
-        from llm import nlp_langchain
-        nlp_langchain.save_all()
-    if config_util.key_chat_module == 'privategpt':    
-        from llm import nlp_privategpt
-        nlp_privategpt.save_all()
-
     #初始化定时保存记忆的任务
-    if config_util.key_chat_module == 'cognitive_stream':
-        util.log(1, '初始化定时保存记忆的任务...')
-        from llm.nlp_cognitive_stream import init_memory_scheduler
-        init_memory_scheduler()
+    util.log(1, '初始化定时保存记忆及反思的任务...')
+    from llm.nlp_cognitive_stream import init_memory_scheduler
+    init_memory_scheduler()
 
     #开启录音服务
     record = config_util.config['source']['record']
@@ -378,11 +359,6 @@ def start():
     socket_service_instance = socket_bridge_service.new_instance()
     socket_bridge_service_Thread = MyThread(target=socket_service_instance.start_service)
     socket_bridge_service_Thread.start()
-
-    #启动agent服务
-    if config_util.key_chat_module == "agent":
-        util.log(1,'启动agent服务...')
-        agent_service.agent_start()
 
     #启动自动播报服务
     util.log(1,'启动自动播报服务...')

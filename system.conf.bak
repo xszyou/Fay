@@ -1,0 +1,58 @@
+
+[key]
+#funasr / ali / sensevoice
+#建议使用funasr,请依照asr/funasr/README>md的说明启动
+ASR_mode = funasr
+#ASR二选一（需要运行fay/test/funasr服务）集成达摩院asr项目、感谢中科大脑算法工程师张聪聪提供集成代码
+local_asr_ip=127.0.0.1
+local_asr_port=10197
+
+# ASR二选一（第1次运行建议用这个，免费3个月）， 阿里云 实时语音识别 服务密钥（必须）https://ai.aliyun.com/nls/trans
+ali_nls_key_id=
+ali_nls_key_secret=
+ali_nls_app_key=
+
+
+
+#tts类型（切换请重新选择所需要的声音）azure、ali、gptsovits、volcano、gptsovits_v3
+tts_module=ali
+
+# 微软 文字转语音 服务密钥（非必须，使用可产生不同情绪的音频）https://azure.microsoft.com/zh-cn/services/cognitive-services/text-to-speech/
+ms_tts_key=
+ms_tts_region=
+
+# 阿里云 文字转语音 服务密钥 https://ai.aliyun.com/nls/trans
+ali_tss_key_id=
+ali_tss_key_secret=
+ali_tss_app_key=
+
+# Doubao-语音合成 服务密钥 https://www.volcengine.com/product/voice-tech
+volcano_tts_appid=
+volcano_tts_access_token=
+volcano_tts_cluster=volcano_tts
+#可为空，为空时读取选择的音色
+volcano_tts_voice_type=
+
+#情绪分析选择(baidu(服务秘钥为空时，默认不使用情绪分析),cemotion二选一（建议第一次运行cemotion时，先运行/test/test_cemotion.py去下载所需文件）)
+ltp_mode = baidu
+
+#百度 情绪分析 服务秘钥 https://cloud.baidu.com/
+baidu_emotion_app_id=
+baidu_emotion_api_key=
+baidu_emotion_secret_key=
+
+#key
+gpt_api_key=sk-f3b4cW4pKqyIeRzz5737C76eC4C3441eA85086Cc3dC9D415
+#gpt base url 如：https://api.openai.com/v1、https://rwkv.ai-creator.net/chntuned/v1、https://api.fastgpt.in/api/v1、https://api.moonshot.cn/v1
+gpt_base_url=http://219.135.170.56:1234/v1
+#gpt model engine 如：glm4、deepseek、qwen3-4b等
+gpt_model_engine=qwen3-4b
+#gpt(fastgpt)代理(可为空，填写例子：127.0.0.1:7890)
+proxy_config=
+
+#启动模式common、web（服务器或docker请使用web方式，通过http://127.0.0.1:5000控制）
+start_mode=web
+
+#服务器主动地址
+fay_url=http://127.0.0.1:5000
+
