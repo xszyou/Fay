@@ -17,7 +17,6 @@ pytz
 gevent
 edge_tts
 pydub
-chromadb
 tenacity==8.2.3
 pygame
 scipy
@@ -29,3 +28,4 @@ langchain_openai
 langgraph
 bs4
 schedule
+mcp
