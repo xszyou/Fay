@@ -3,12 +3,34 @@ import os
 import sys
 import random
 import time
+import socket
 
 from core import wsa_server
 from scheduler.thread_manager import MyThread
 from utils import config_util
 
 LOGS_FILE_URL = "logs/log-" + time.strftime("%Y%m%d%H%M%S") + ".log"
+
+
+def get_local_ip():
+    """
+    获取本机IP地址
+    
+    返回:
+        str: 本机IP地址，如果获取失败则返回127.0.0.1
+    """
+    try:
+        # 创建一个临时socket连接，用于获取本机IP
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        # 连接任意可用地址（不需要真正建立连接）
+        s.connect(("8.8.8.8", 80))
+        # 获取本机IP地址
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception as e:
+        log(1, f"获取本机IP地址失败: {str(e)}")
+        return "127.0.0.1"
 
 
 def random_hex(length):

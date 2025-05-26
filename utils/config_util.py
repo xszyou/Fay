@@ -239,6 +239,15 @@ def load_config():
 
     start_mode = system_config.get('key', 'start_mode', fallback=None)
     fay_url = system_config.get('key', 'fay_url', fallback=None)
+    # 如果fay_url为空或None，则动态获取本机IP地址
+    if not fay_url:
+        from utils.util import get_local_ip
+        local_ip = get_local_ip()
+        fay_url = f"http://{local_ip}:5000"
+        # 更新system_config中的值，但不写入文件
+        if not system_config.has_section('key'):
+            system_config.add_section('key')
+        system_config.set('key', 'fay_url', fay_url)
     
     # 读取用户配置
     with codecs.open(config_json_path, encoding='utf-8') as f:
