@@ -7,6 +7,7 @@ import time
 from contextlib import AsyncExitStack
 from mcp import ClientSession
 from mcp.client.sse import sse_client
+from utils import util
 
 # 设置日志记录
 logging.basicConfig(level=logging.ERROR)
@@ -138,7 +139,17 @@ class McpClient:
         :param params: 参数字典
         :return: (是否成功, 结果或错误信息)
         """
-        return self.event_loop.run_until_complete(self._call_tool_async(method, params))
+        try:
+            # 确保在同一个事件循环中执行
+            if asyncio.get_event_loop() != self.event_loop:
+                return self.event_loop.run_until_complete(self._call_tool_async(method, params))
+            else:
+                # 如果已经在事件循环中，创建一个新的任务并等待它完成
+                future = asyncio.run_coroutine_threadsafe(self._call_tool_async(method, params), self.event_loop)
+                return future.result(timeout=30)
+        except Exception as e:
+            util.log(1, f"调用MCP工具时出错: {str(e)}")
+            return False, f"调用工具失败: {str(e)}"
     
     def list_tools(self):
         """

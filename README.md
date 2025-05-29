@@ -57,7 +57,18 @@
 
 ### **环境** 
 - Python 3.12
-- Windows、macos、linux
+
+- Windows、macos、ubuntu
+
+- 注：ubuntu需要先安装gcc及portaudio
+
+- ````bash
+  sudo apt update
+  sudo apt install build-essential
+  sudo apt install portaudio19-dev
+  ````
+
+  
 
 ### **安装依赖**
 
@@ -76,22 +87,9 @@ python main.py
 
 
 
-## **或docker 启动**
+## **镜像快速启动**
 
-1. 下载助理版
-https://github.com/xszyou/Fay
-2.  修改 `./system.conf` 文件
-3. 删除requirements.txt下pyqt5~=5.15.6
-
-build （修改配置文件后，需要重新build）
-```shell
-docker build  -t fay ./fay-assistant-edition
-```
-run
-```shell
-docker run -it --rm -p 5000:5000 -p 10001:10001 -p 10002:10002 -p 10003:10003 fay
-```
-
+https://www.compshare.cn/images/compshareImage-1cft3sk9gvta
 
 ## **高级玩法**
 

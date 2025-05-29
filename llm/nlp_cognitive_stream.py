@@ -108,7 +108,7 @@ def init_memory_scheduler():
     schedule.every().day.at("00:00").do(save_agent_memory)
     
     # 设置每天晚上11点执行反思
-    schedule.every().day.at("23:00").do(perform_daily_reflection)
+    schedule.every().day.at("09:41").do(perform_daily_reflection)
     
     # 启动定时任务线程
     scheduler_thread = MyThread(target=memory_scheduler_thread)
@@ -140,12 +140,12 @@ def check_memory_files(username=None):
     if os.path.exists(memory_cleared_flag_file):
         try:
             os.remove(memory_cleared_flag_file)
-            util.log(1, f"删除记忆清除标记文件: {memory_cleared_flag_file}")
+            util.log(1, f"清除删除记忆标记文件: {memory_cleared_flag_file}")
             # 重置记忆清除标记
             global memory_cleared
             memory_cleared = False
         except Exception as e:
-            util.log(1, f"删除记忆清除标记文件时出错: {str(e)}")
+            util.log(1, f"清除删除记忆标记文件时出错: {str(e)}")
     
     # 检查meta.json是否存在
     meta_file = os.path.join(memory_dir, "meta.json")
@@ -384,9 +384,8 @@ def question(content, username, observation=None):
 {context}
 {observation}
 """
-    
     # 构建消息列表
-    messages = [SystemMessage(content=system_prompt), HumanMessage(content=content)]
+    messages = [SystemMessage(content=system_prompt), HumanMessage(content=content + "/no_think")]
     # 1. 获取mcp工具
     mcp_tools = get_mcp_tools()
     # 2. 存在mcp工具，走react agent
@@ -565,7 +564,7 @@ def perform_daily_reflection():
         for username, agent in agents.items():
             # 获取当前时间作为time_step
             current_time_step = get_current_time_step(username)
-            agent.reflect(topic, current_time_step)
+            agent.reflect(topic, time_step=current_time_step)
         
         # 记录反思执行情况
         util.log(1, f"反思主题: {topic}")

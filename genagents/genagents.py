@@ -171,7 +171,7 @@ class GenerativeAgent:
     Returns: 
       None
     """
-    self.memory_stream.reflect(anchor, time_step)
+    self.memory_stream.reflect(anchor, time_step=time_step)
 
 
   def categorical_resp(self, questions): 
