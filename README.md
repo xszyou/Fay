@@ -89,7 +89,7 @@ python main.py
 
 ## **镜像快速启动**
 
-https://www.compshare.cn/images/compshareImage-1cft3sk9gvta
+https://www.compshare.cn/images/compshareImage-1cft3sk9gvta?ytag=GPU_fay
 
 ## **高级玩法**
 
@@ -107,7 +107,7 @@ metahuman-stream（2d）：https://qqk9ntwbcit.feishu.cn/wiki/Ik1kwO9X5iilnGkFwR
 
 duix（android)：https://qqk9ntwbcit.feishu.cn/wiki/Ik1kwO9X5iilnGkFwRhcnmtvn3e()
 
-aibote(windows cpu克隆人)：[‬‍‬‍⁠﻿‍‍‍‌﻿﻿https://qqk9ntwbcit.feishu.cn/wiki/ULaywzVRti0HXWkhCzacoSPAnIg
+aibote(windows cpu克隆人)：https://qqk9ntwbcit.feishu.cn/wiki/ULaywzVRti0HXWkhCzacoSPAnIg
 
 
 
