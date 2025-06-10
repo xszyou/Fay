@@ -322,7 +322,9 @@ class FeiFei:
                 if is_end and wsa_server.get_web_instance().is_connected(interact.data.get('user')):
                     wsa_server.get_web_instance().add_cmd({"panelMsg": "", 'Username' : interact.data.get('user'), 'robot': f'{cfg.fay_url}/robot/Normal.jpg'})
 
-            if result is not None or is_first or is_end:          
+            if result is not None or is_first or is_end:
+                if is_end:#如果结束标记，则延迟1秒处理,免得is end比前面的音频tts要快
+                    time.sleep(1)          
                 MyThread(target=self.__process_output_audio, args=[result, interact, text]).start()
                 return result         
                 
@@ -375,8 +377,9 @@ class FeiFei:
                     is_first = True
                 if interact.data.get('isend'):
                     is_end = True
-                util.printInfo(1, interact.data.get('user'), '播放音频...')
-                self.speaking = True
+                if file_url is not None:
+                    util.printInfo(1, interact.data.get('user'), '播放音频...')
+                    self.speaking = True
 
                 #自动播报关闭
                 global auto_play_lock
@@ -394,11 +397,11 @@ class FeiFei:
                     pygame.mixer.music.load(file_url)
                     pygame.mixer.music.play()
 
-                # 播放过程中计时，直到音频播放完毕
-                length = 0
-                while length < audio_length:
-                    length += 0.01
-                    time.sleep(0.01)
+                    # 播放过程中计时，直到音频播放完毕
+                    length = 0
+                    while length < audio_length:
+                        length += 0.01
+                        time.sleep(0.01)
                 
                 if is_end:
                     self.play_end(interact)

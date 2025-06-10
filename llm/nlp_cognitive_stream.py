@@ -108,7 +108,7 @@ def init_memory_scheduler():
     schedule.every().day.at("00:00").do(save_agent_memory)
     
     # 设置每天晚上11点执行反思
-    schedule.every().day.at("09:41").do(perform_daily_reflection)
+    schedule.every().day.at("23:00").do(perform_daily_reflection)
     
     # 启动定时任务线程
     scheduler_thread = MyThread(target=memory_scheduler_thread)
@@ -309,7 +309,7 @@ def question(content, username, observation=None):
     current_username = username  # 记录当前会话用户名
     full_response_text = ""
     accumulated_text = ""
-    punctuation_marks = ["。", "！", "？", ".", "!", "?", "\n"]  
+    punctuation_marks = [",", "，","。", "！", "？", ".", "!", "?", "\n"]  
     is_first_sentence = True
     
     # 创建代理
@@ -385,7 +385,7 @@ def question(content, username, observation=None):
 {observation}
 """
     # 构建消息列表
-    messages = [SystemMessage(content=system_prompt), HumanMessage(content=content + "/no_think")]
+    messages = [SystemMessage(content=system_prompt), HumanMessage(content=content)]
     # 1. 获取mcp工具
     mcp_tools = get_mcp_tools()
     # 2. 存在mcp工具，走react agent
