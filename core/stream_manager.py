@@ -45,45 +45,52 @@ class StreamManager:
 
     def get_Stream(self, username):
         """
-        获取指定用户ID的文本流，如果不存在则创建新的
+        获取指定用户ID的文本流，如果不存在则创建新的（线程安全）
         :param username: 用户名
         :return: 对应的句子缓存对象
         """
-        need_start_thread = False
-        stream = None
-        nlp_stream = None
-        
-        with self.lock:
-            if username not in self.streams or username not in self.nlp_streams:
-                self.streams[username] = stream_sentence.SentenceCache(self.max_sentences)
-                self.nlp_streams[username] = stream_sentence.SentenceCache(self.max_sentences)
-                need_start_thread = True
+        # 注意：这个方法应该在已经获得锁的情况下调用
+        # 如果从外部调用，需要先获得锁
+
+        if username not in self.streams or username not in self.nlp_streams:
+            # 创建新的流缓存
+            self.streams[username] = stream_sentence.SentenceCache(self.max_sentences)
+            self.nlp_streams[username] = stream_sentence.SentenceCache(self.max_sentences)
+
+            # 启动监听线程（如果还没有）
+            if username not in self.listener_threads:
                 stream = self.streams[username]
                 nlp_stream = self.nlp_streams[username]
-                
-                if need_start_thread:
-                    thread = MyThread(target=self.listen, args=(username, stream, nlp_stream), daemon=True)
-                    self.listener_threads[username] = thread
-                    thread.start()
-            else:
-                stream = self.streams[username]
-                nlp_stream = self.nlp_streams[username]
-                
-        return stream, nlp_stream
+                thread = MyThread(target=self.listen, args=(username, stream, nlp_stream), daemon=True)
+                self.listener_threads[username] = thread
+                thread.start()
+
+        return self.streams[username], self.nlp_streams[username]
 
     def write_sentence(self, username, sentence):
         """
-        写入句子到指定用户的文本流
+        写入句子到指定用户的文本流（线程安全）
         :param username: 用户名
         :param sentence: 要写入的句子
         :return: 写入是否成功
         """
+        # 检查句子长度，防止过大的句子导致内存问题
+        if len(sentence) > 10240:  # 10KB限制
+            sentence = sentence[:10240]
+
         if sentence.endswith('_<isfirst>'):
             self.clear_Stream(username)
-        Stream, nlp_Stream = self.get_Stream(username)
-        success = Stream.write(sentence)
-        nlp_success = nlp_Stream.write(sentence)
-        return success and nlp_success
+
+        # 使用锁保护获取和写入操作
+        with self.lock:
+            try:
+                Stream, nlp_Stream = self.get_Stream(username)
+                success = Stream.write(sentence)
+                nlp_success = nlp_Stream.write(sentence)
+                return success and nlp_success
+            except Exception as e:
+                print(f"写入句子时出错: {e}")
+                return False
 
     def clear_Stream(self, username):
         """
@@ -111,12 +118,11 @@ class StreamManager:
         :param sentence: 要处理的句子
         """
         fay_core = fay_booter.feiFei
-            # 处理普通消息，区分是否是会话的第一句
 
         is_first = "_<isfirst>" in sentence
         is_end = "_<isend>" in sentence
         sentence = sentence.replace("_<isfirst>", "").replace("_<isend>", "")
-        
+
         if sentence or is_first or is_end :
             interact = Interact("stream", 1, {"user": username, "msg": sentence, "isfirst" : is_first, "isend" : is_end})
             fay_core.say(interact, sentence)  # 调用核心处理模块进行响应

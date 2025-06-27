@@ -11,6 +11,28 @@ from pydantic import create_model
 from langchain.tools import StructuredTool
 from langgraph.prebuilt import create_react_agent
 
+# 新增：本地知识库相关导入
+import re
+from pathlib import Path
+import docx
+from docx.document import Document
+from docx.oxml.table import CT_Tbl
+from docx.oxml.text.paragraph import CT_P
+from docx.table import _Cell, Table
+from docx.text.paragraph import Paragraph
+try:
+    from pptx import Presentation
+    PPTX_AVAILABLE = True
+except ImportError:
+    PPTX_AVAILABLE = False
+
+# 用于处理 .doc 文件的库
+try:
+    import win32com.client
+    WIN32COM_AVAILABLE = True
+except ImportError:
+    WIN32COM_AVAILABLE = False
+
 from utils import util
 import utils.config_util as cfg
 from genagents.genagents import GenerativeAgent
@@ -21,7 +43,7 @@ from core import stream_manager
 os.environ["LANGCHAIN_TRACING_V2"] = "true"
 os.environ["LANGCHAIN_ENDPOINT"] = "https://api.smith.langchain.com"
 os.environ["LANGCHAIN_API_KEY"] = "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"
-os.environ["LANGCHAIN_PROJECT"] = "fay3.0.0_github"
+os.environ["LANGCHAIN_PROJECT"] = "fay3.1.2_github"
 
 # 加载配置
 cfg.load_config()
@@ -82,6 +104,395 @@ def get_current_time_step(username=None):
     except Exception as e:
         util.log(1, f"获取time_step时出错: {str(e)}，使用0代替")
         return 0
+
+# 新增：本地知识库相关函数
+def read_doc_file(file_path):
+    """
+    读取doc文件内容
+    
+    参数:
+        file_path: doc文件路径
+        
+    返回:
+        str: 文档内容
+    """
+    try:
+        # 方法1: 使用 win32com.client（Windows系统，推荐用于.doc文件）
+        if WIN32COM_AVAILABLE:
+            word = None
+            doc = None
+            try:
+                import pythoncom
+                pythoncom.CoInitialize()  # 初始化COM组件
+                
+                word = win32com.client.Dispatch("Word.Application")
+                word.Visible = False
+                doc = word.Documents.Open(file_path)
+                content = doc.Content.Text
+                
+                # 先保存内容，再尝试关闭
+                if content and content.strip():
+                    try:
+                        doc.Close()
+                        word.Quit()
+                    except Exception as close_e:
+                        util.log(1, f"关闭Word应用程序时出错: {str(close_e)}，但内容已成功提取")
+                    
+                    try:
+                        pythoncom.CoUninitialize()  # 清理COM组件
+                    except:
+                        pass
+                    
+                    return content.strip()
+                
+            except Exception as e:
+                util.log(1, f"使用 win32com 读取 .doc 文件失败: {str(e)}")
+            finally:
+                # 确保资源被释放
+                try:
+                    if doc:
+                        doc.Close()
+                except:
+                    pass
+                try:
+                    if word:
+                        word.Quit()
+                except:
+                    pass
+                try:
+                    pythoncom.CoUninitialize()
+                except:
+                    pass
+        
+        # 方法2: 简单的二进制文本提取（备选方案）
+        try:
+            with open(file_path, 'rb') as f:
+                raw_data = f.read()
+                # 尝试提取可打印的文本
+                text_parts = []
+                current_text = ""
+                
+                for byte in raw_data:
+                    char = chr(byte) if 32 <= byte <= 126 or byte in [9, 10, 13] else None
+                    if char:
+                        current_text += char
+                    else:
+                        if len(current_text) > 3:  # 只保留长度大于3的文本片段
+                            text_parts.append(current_text.strip())
+                        current_text = ""
+                
+                if len(current_text) > 3:
+                    text_parts.append(current_text.strip())
+                
+                # 过滤和清理文本
+                filtered_parts = []
+                for part in text_parts:
+                    # 移除过多的重复字符和无意义的片段
+                    if (len(part) > 5 and 
+                        not part.startswith('Microsoft') and 
+                        not all(c in '0123456789-_.' for c in part) and
+                        len(set(part)) > 3):  # 字符种类要多样
+                        filtered_parts.append(part)
+                
+                if filtered_parts:
+                    return '\n'.join(filtered_parts)
+                    
+        except Exception as e:
+            util.log(1, f"使用二进制方法读取 .doc 文件失败: {str(e)}")
+        
+        util.log(1, f"无法读取 .doc 文件 {file_path}，建议转换为 .docx 格式")
+        return ""
+        
+    except Exception as e:
+        util.log(1, f"读取doc文件 {file_path} 时出错: {str(e)}")
+        return ""
+
+def read_docx_file(file_path):
+    """
+    读取docx文件内容
+    
+    参数:
+        file_path: docx文件路径
+        
+    返回:
+        str: 文档内容
+    """
+    try:
+        doc = docx.Document(file_path)
+        content = []
+        
+        for element in doc.element.body:
+            if isinstance(element, CT_P):
+                paragraph = Paragraph(element, doc)
+                if paragraph.text.strip():
+                    content.append(paragraph.text.strip())
+            elif isinstance(element, CT_Tbl):
+                table = Table(element, doc)
+                for row in table.rows:
+                    row_text = []
+                    for cell in row.cells:
+                        if cell.text.strip():
+                            row_text.append(cell.text.strip())
+                    if row_text:
+                        content.append(" | ".join(row_text))
+        
+        return "\n".join(content)
+    except Exception as e:
+        util.log(1, f"读取docx文件 {file_path} 时出错: {str(e)}")
+        return ""
+    
+def read_pptx_file(file_path):
+    """
+    读取pptx文件内容
+    
+    参数:
+        file_path: pptx文件路径
+        
+    返回:
+        str: 演示文稿内容
+    """
+    if not PPTX_AVAILABLE:
+        util.log(1, "python-pptx 库未安装，无法读取 PowerPoint 文件")
+        return ""
+        
+    try:
+        prs = Presentation(file_path)
+        content = []
+        
+        for i, slide in enumerate(prs.slides):
+            slide_content = [f"第{i+1}页："]
+            
+            for shape in slide.shapes:
+                if hasattr(shape, "text") and shape.text.strip():
+                    slide_content.append(shape.text.strip())
+                    
+            if len(slide_content) > 1:  # 有内容才添加
+                content.append("\n".join(slide_content))
+        
+        return "\n\n".join(content)
+    except Exception as e:
+        util.log(1, f"读取pptx文件 {file_path} 时出错: {str(e)}")
+        return ""
+
+def load_local_knowledge_base():
+    """
+    加载本地知识库内容
+    
+    返回:
+        dict: 文件名到内容的映射
+    """
+    knowledge_base = {}
+    
+    # 获取llm/data目录路径
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    data_dir = os.path.join(current_dir, "data")
+    
+    if not os.path.exists(data_dir):
+        util.log(1, f"知识库目录不存在: {data_dir}")
+        return knowledge_base
+    
+    # 遍历data目录中的文件
+    for file_path in Path(data_dir).iterdir():
+        if not file_path.is_file():
+            continue
+            
+        file_name = file_path.name
+        file_extension = file_path.suffix.lower()
+        
+        try:
+            if file_extension == '.docx':
+                content = read_docx_file(str(file_path))
+            elif file_extension == '.doc':
+                content = read_doc_file(str(file_path))
+            elif file_extension == '.pptx':
+                content = read_pptx_file(str(file_path))
+            else:
+                # 尝试作为文本文件读取
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                except UnicodeDecodeError:
+                    try:
+                        with open(file_path, 'r', encoding='gbk') as f:
+                            content = f.read()
+                    except UnicodeDecodeError:
+                        util.log(1, f"无法解码文件: {file_name}")
+                        continue
+            
+            if content.strip():
+                knowledge_base[file_name] = content
+                util.log(1, f"成功加载知识库文件: {file_name} ({len(content)} 字符)")
+            
+        except Exception as e:
+            util.log(1, f"加载知识库文件 {file_name} 时出错: {str(e)}")
+    
+    return knowledge_base
+
+def search_knowledge_base(query, knowledge_base, max_results=3):
+    """
+    在知识库中搜索相关内容
+    
+    参数:
+        query: 查询内容
+        knowledge_base: 知识库字典
+        max_results: 最大返回结果数
+        
+    返回:
+        list: 相关内容列表
+    """
+    if not knowledge_base:
+        return []
+    
+    results = []
+    query_lower = query.lower()
+    
+    # 搜索关键词
+    query_keywords = re.findall(r'\w+', query_lower)
+    
+    for file_name, content in knowledge_base.items():
+        content_lower = content.lower()
+        
+        # 计算匹配度
+        score = 0
+        matched_sentences = []
+        
+        # 按句子分割内容
+        sentences = re.split(r'[。！？\n]', content)
+        
+        for sentence in sentences:
+            if not sentence.strip():
+                continue
+                
+            sentence_lower = sentence.lower()
+            sentence_score = 0
+            
+            # 计算关键词匹配度
+            for keyword in query_keywords:
+                if keyword in sentence_lower:
+                    sentence_score += 1
+            
+            # 如果句子有匹配，记录
+            if sentence_score > 0:
+                matched_sentences.append((sentence.strip(), sentence_score))
+                score += sentence_score
+        
+        # 如果有匹配的内容
+        if score > 0:
+            # 按匹配度排序句子
+            matched_sentences.sort(key=lambda x: x[1], reverse=True)
+            
+            # 取前几个最相关的句子
+            relevant_sentences = [sent[0] for sent in matched_sentences[:5] if sent[0]]
+            
+            if relevant_sentences:
+                results.append({
+                    'file_name': file_name,
+                    'score': score,
+                    'content': '\n'.join(relevant_sentences)
+                })
+    
+    # 按匹配度排序
+    results.sort(key=lambda x: x['score'], reverse=True)
+    
+    return results[:max_results]
+
+# 全局知识库缓存
+_knowledge_base_cache = None
+_knowledge_base_load_time = None
+_knowledge_base_file_times = {}  # 存储文件的最后修改时间
+
+def check_knowledge_base_changes():
+    """
+    检查知识库文件是否有变化
+    
+    返回:
+        bool: 如果有文件变化返回True，否则返回False
+    """
+    global _knowledge_base_file_times
+    
+    # 获取llm/data目录路径
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    data_dir = os.path.join(current_dir, "data")
+    
+    if not os.path.exists(data_dir):
+        return False
+    
+    current_file_times = {}
+    
+    # 遍历data目录中的文件
+    for file_path in Path(data_dir).iterdir():
+        if not file_path.is_file():
+            continue
+        
+        file_name = file_path.name
+        file_extension = file_path.suffix.lower()
+        
+        # 只检查支持的文件格式
+        if file_extension in ['.docx', '.doc', '.pptx', '.txt'] or file_extension == '':
+            try:
+                mtime = os.path.getmtime(str(file_path))
+                current_file_times[file_name] = mtime
+            except OSError:
+                continue
+    
+    # 检查是否有变化
+    if not _knowledge_base_file_times:
+        # 第一次检查，保存文件时间
+        _knowledge_base_file_times = current_file_times
+        return True
+    
+    # 比较文件时间
+    if set(current_file_times.keys()) != set(_knowledge_base_file_times.keys()):
+        # 文件数量发生变化
+        _knowledge_base_file_times = current_file_times
+        return True
+    
+    for file_name, mtime in current_file_times.items():
+        if file_name not in _knowledge_base_file_times or _knowledge_base_file_times[file_name] != mtime:
+            # 文件被修改
+            _knowledge_base_file_times = current_file_times
+            return True
+    
+    return False
+
+def init_knowledge_base():
+    """
+    初始化知识库，在系统启动时调用
+    """
+    global _knowledge_base_cache, _knowledge_base_load_time
+    
+    util.log(1, "初始化本地知识库...")
+    _knowledge_base_cache = load_local_knowledge_base()
+    _knowledge_base_load_time = time.time()
+    
+    # 初始化文件修改时间跟踪
+    check_knowledge_base_changes()
+    
+    util.log(1, f"知识库初始化完成，共 {len(_knowledge_base_cache)} 个文件")
+
+def get_knowledge_base():
+    """
+    获取知识库，使用缓存机制
+    
+    返回:
+        dict: 知识库内容
+    """
+    global _knowledge_base_cache, _knowledge_base_load_time
+    
+    # 如果缓存为空，先初始化
+    if _knowledge_base_cache is None:
+        init_knowledge_base()
+        return _knowledge_base_cache
+    
+    # 检查文件是否有变化
+    if check_knowledge_base_changes():
+        util.log(1, "检测到知识库文件变化，正在重新加载...")
+        _knowledge_base_cache = load_local_knowledge_base()
+        _knowledge_base_load_time = time.time()
+        util.log(1, f"知识库重新加载完成，共 {len(_knowledge_base_cache)} 个文件")
+    
+    return _knowledge_base_cache
+
 
 # 定时保存记忆的线程
 def memory_scheduler_thread():
@@ -361,6 +772,21 @@ def question(content, username, observation=None):
         except Exception as e:
             util.log(1, f"获取相关记忆时出错: {str(e)}")
     
+    # 新增：搜索本地知识库
+    knowledge_context = ""
+    try:
+        knowledge_base = get_knowledge_base()
+        if knowledge_base:
+            knowledge_results = search_knowledge_base(content, knowledge_base, max_results=3)
+            if knowledge_results:
+                knowledge_context = "**本地知识库相关信息**：\n"
+                for result in knowledge_results:
+                    knowledge_context += f"来源文件：{result['file_name']}\n"
+                    knowledge_context += f"{result['content']}\n\n"
+                util.log(1, f"找到 {len(knowledge_results)} 条相关知识库信息")
+    except Exception as e:
+        util.log(1, f"搜索知识库时出错: {str(e)}")
+
     # 使用文件开头定义的llm对象进行流式请求
     observation = "**还观察的情况**：" + observation + "\n"  if observation else "" 
     
@@ -437,12 +863,60 @@ def question(content, username, observation=None):
                     if react_response_text and react_response_text.strip():
                         if is_agent_think_start:
                             react_response_text = "</think>" + react_response_text 
-                        stream_manager.new_instance().write_sentence(username, react_response_text)
+                        # 对React Agent的最终回复也进行分句处理
+                        accumulated_text += react_response_text
+                        # 使用安全的流式文本处理器和状态管理器
+                        from utils.stream_text_processor import get_processor
+                        from utils.stream_state_manager import get_state_manager
+
+                        processor = get_processor()
+                        state_manager = get_state_manager()
+
+                        # 确保有活跃会话
+                        if not state_manager.is_session_active(username):
+                            state_manager.start_new_session(username, "react_agent")
+
+                        # 如果累积文本达到一定长度，进行处理
+                        if len(accumulated_text) >= 20:  # 设置一个合理的阈值
+                            # 找到最后一个标点符号的位置
+                            last_punct_pos = -1
+                            for punct in processor.punctuation_marks:
+                                pos = accumulated_text.rfind(punct)
+                                if pos > last_punct_pos:
+                                    last_punct_pos = pos
+
+                            if last_punct_pos > 10:  # 确保有足够的内容发送
+                                sentence_text = accumulated_text[:last_punct_pos + 1]
+                                # 使用状态管理器准备句子
+                                marked_text, _, _ = state_manager.prepare_sentence(username, sentence_text)
+                                stream_manager.new_instance().write_sentence(username, marked_text)
+                                accumulated_text = accumulated_text[last_punct_pos + 1:].lstrip()
+                        
                 except (KeyError, IndexError, AttributeError):
                     react_response_text = f"抱歉，我现在太忙了，休息一会，请稍后再试。"
+                    if is_first_sentence:
+                        react_response_text = "_<isfirst>" + react_response_text
+                        is_first_sentence = False
                     stream_manager.new_instance().write_sentence(username, react_response_text)
             
             full_response_text += react_response_text
+        
+        # 确保React Agent最后一段文本也被发送，并标记为结束
+        from utils.stream_state_manager import get_state_manager
+        state_manager = get_state_manager()
+
+        if accumulated_text:
+            # 使用状态管理器准备最后的文本，强制标记为结束
+            marked_text, _, _ = state_manager.prepare_sentence(username, accumulated_text, force_end=True)
+            stream_manager.new_instance().write_sentence(username, marked_text)
+        else:
+            # 如果没有剩余文本，检查是否需要发送结束标记
+            session_info = state_manager.get_session_info(username)
+            if session_info and not session_info.get('is_end_sent', False):
+                # 发送一个空的结束标记
+                marked_text, _, _ = state_manager.prepare_sentence(username, "", force_end=True)
+                stream_manager.new_instance().write_sentence(username, marked_text)
+                     
                      
     else:
         try:
@@ -452,24 +926,50 @@ def question(content, username, observation=None):
                 if not flush_text:
                     continue
                 accumulated_text += flush_text
-                for mark in punctuation_marks:
-                    if mark in accumulated_text:
-                        last_punct_pos = max(accumulated_text.rfind(p) for p in punctuation_marks if p in accumulated_text)
-                        if last_punct_pos != -1:
-                            to_write = accumulated_text[:last_punct_pos + 1]
-                            accumulated_text = accumulated_text[last_punct_pos + 1:]
-                            if is_first_sentence:
-                                to_write += "_<isfirst>"
-                                is_first_sentence = False
-                            stream_manager.new_instance().write_sentence(username, to_write)
-                        break
+                # 使用安全的流式处理逻辑和状态管理器
+                from utils.stream_text_processor import get_processor
+                from utils.stream_state_manager import get_state_manager
+
+                processor = get_processor()
+                state_manager = get_state_manager()
+
+                # 确保有活跃会话
+                if not state_manager.is_session_active(username):
+                    state_manager.start_new_session(username, "llm_stream")
+
+                # 如果累积文本达到一定长度，进行处理
+                if len(accumulated_text) >= 20:  # 设置一个合理的阈值
+                    # 找到最后一个标点符号的位置
+                    last_punct_pos = -1
+                    for punct in processor.punctuation_marks:
+                        pos = accumulated_text.rfind(punct)
+                        if pos > last_punct_pos:
+                            last_punct_pos = pos
+
+                    if last_punct_pos > 10:  # 确保有足够的内容发送
+                        sentence_text = accumulated_text[:last_punct_pos + 1]
+                        # 使用状态管理器准备句子
+                        marked_text, _, _ = state_manager.prepare_sentence(username, sentence_text)
+                        stream_manager.new_instance().write_sentence(username, marked_text)
+                        accumulated_text = accumulated_text[last_punct_pos + 1:].lstrip()
+                        
                 full_response_text += flush_text
-            # 确保最后一段文本也被发送
+            # 确保最后一段文本也被发送，并标记为结束
+            from utils.stream_state_manager import get_state_manager
+            state_manager = get_state_manager()
+
             if accumulated_text:
-                if is_first_sentence: #相当于整个回复没有标点
-                    accumulated_text += "_<isfirst>"
-                    is_first_sentence = False
-                stream_manager.new_instance().write_sentence(username, accumulated_text)
+                # 使用状态管理器准备最后的文本，强制标记为结束
+                marked_text, _, _ = state_manager.prepare_sentence(username, accumulated_text, force_end=True)
+                stream_manager.new_instance().write_sentence(username, marked_text)
+            else:
+                # 如果没有剩余文本，检查是否需要发送结束标记
+                session_info = state_manager.get_session_info(username)
+                if session_info and not session_info.get('is_end_sent', False):
+                    # 发送一个空的结束标记
+                    marked_text, _, _ = state_manager.prepare_sentence(username, "", force_end=True)
+                    stream_manager.new_instance().write_sentence(username, marked_text)
+
 
         except requests.exceptions.RequestException as e:
             util.log(1, f"请求失败: {e}")
@@ -477,8 +977,10 @@ def question(content, username, observation=None):
             stream_manager.new_instance().write_sentence(username, "_<isfirst>" + error_message + "_<isend>")
             full_response_text = error_message
 
-    # 发送结束标记
-    stream_manager.new_instance().write_sentence(username, "_<isend>")
+    # 结束会话（不再需要发送额外的结束标记）
+    from utils.stream_state_manager import get_state_manager
+    state_manager = get_state_manager()
+    state_manager.end_session(username)
 
     # 在单独线程中记忆对话内容
     MyThread(target=remember_conversation_thread, args=(username, content, full_response_text.split("</think>")[-1])).start()

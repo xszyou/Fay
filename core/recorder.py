@@ -128,7 +128,12 @@ class Recorder:
                             with fay_core.auto_play_lock:
                                 fay_core.can_auto_play = False
                             #self.on_speaking(text)
-                            intt = interact.Interact("auto_play", 2, {'user': self.username, 'text': "在呢，你说？"})
+                            # 使用状态管理器处理唤醒回复
+                            from utils.stream_state_manager import get_state_manager
+                            state_manager = get_state_manager()
+                            state_manager.start_new_session(self.username, "auto_play")
+
+                            intt = interact.Interact("auto_play", 2, {'user': self.username, 'text': "在呢，你说？" , "isfirst" : True, "isend" : True})
                             self.__fay.on_interact(intt)
                             self.processing = False
                             self.timer.cancel()  # 取消之前的计时器任务

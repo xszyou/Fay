@@ -77,20 +77,70 @@ class FeiFei:
         self.think_mode_users = {}  # 使用字典存储每个用户的think模式状态
     
     def __remove_emojis(self, text):
+        """
+        改进的表情包过滤，避免误删除正常Unicode字符
+        """
+        # 更精确的emoji范围，避免误删除正常字符
         emoji_pattern = re.compile(
             "["
-            "\U0001F600-\U0001F64F"  # 表情符号
-            "\U0001F300-\U0001F5FF"  # 图标符号
-            "\U0001F680-\U0001F6FF"  # 交通工具和符号
-            "\U0001F1E0-\U0001F1FF"  # 国旗
-            "\U00002700-\U000027BF"  # 杂项符号
-            "\U0001F900-\U0001F9FF"  # 补充表情符号
-            "\U00002600-\U000026FF"  # 杂项符号
-            "\U0001FA70-\U0001FAFF"  # 更多表情
+            "\U0001F600-\U0001F64F"  # 表情符号 (Emoticons)
+            "\U0001F300-\U0001F5FF"  # 杂项符号和象形文字 (Miscellaneous Symbols and Pictographs)
+            "\U0001F680-\U0001F6FF"  # 交通和地图符号 (Transport and Map Symbols)
+            "\U0001F1E0-\U0001F1FF"  # 区域指示符号 (Regional Indicator Symbols)
+            "\U0001F900-\U0001F9FF"  # 补充符号和象形文字 (Supplemental Symbols and Pictographs)
+            "\U0001FA70-\U0001FAFF"  # 扩展A符号和象形文字 (Symbols and Pictographs Extended-A)
+            "\U00002600-\U000026FF"  # 杂项符号 (Miscellaneous Symbols)
+            "\U00002700-\U000027BF"  # 装饰符号 (Dingbats)
+            "\U0000FE00-\U0000FE0F"  # 变体选择器 (Variation Selectors)
+            "\U0001F000-\U0001F02F"  # 麻将牌 (Mahjong Tiles)
+            "\U0001F0A0-\U0001F0FF"  # 扑克牌 (Playing Cards)
             "]+",
             flags=re.UNICODE,
         )
-        return emoji_pattern.sub(r'', text)
+
+        # 保护常用的中文标点符号和特殊字符
+        protected_chars = ["。", "，", "！", "？", "：", "；", "、", """, """, "'", "'", "（", "）", "【", "】", "《", "》"]
+
+        # 先保存保护字符的位置
+        protected_positions = {}
+        for i, char in enumerate(text):
+            if char in protected_chars:
+                protected_positions[i] = char
+
+        # 执行emoji过滤
+        filtered_text = emoji_pattern.sub('', text)
+
+        # 如果过滤后文本长度变化太大，可能误删了正常字符，返回原文本
+        if len(filtered_text) < len(text) * 0.5:  # 如果删除了超过50%的内容
+            return text
+
+        return filtered_text
+
+    def __process_qa_stream(self, text, username):
+        """
+        按流式方式分割和发送Q&A答案
+        使用安全的流式文本处理器和状态管理器
+        """
+        if not text or text.strip() == "":
+            return
+
+        # 使用安全的流式文本处理器
+        from utils.stream_text_processor import get_processor
+        from utils.stream_state_manager import get_state_manager
+
+        processor = get_processor()
+        state_manager = get_state_manager()
+
+        # 处理Q&A流式文本，is_qa=True表示Q&A模式
+        success = processor.process_stream_text(text, username, is_qa=True, session_type="qa")
+
+        if success:
+            # Q&A模式结束会话（不再需要发送额外的结束标记）
+            state_manager.end_session(username)
+        else:
+            util.log(1, f"Q&A流式处理失败，文本长度: {len(text)}")
+            # 失败时也要确保结束会话
+            state_manager.force_reset_user_state(username)
 
     #语音消息处理检查是否命中q&a
     def __get_answer(self, interleaver, text):
@@ -139,7 +189,8 @@ class FeiFei:
 
                     else: 
                         text = answer
-                        stream_manager.new_instance().write_sentence(username, "_<isfirst>" + text + "_<isend>")
+                        # 使用流式分割处理Q&A答案
+                        self.__process_qa_stream(text, username)
                            
                     #完整文本记录回复并输出到各个终端
                     self.__process_text_output(text, username, uid  )
@@ -259,7 +310,7 @@ class FeiFei:
             is_end = interact.data.get("isend", False)
             is_first = interact.data.get("isfirst", False)
 
-            if is_first and (text is None or text.strip() == ""):
+            if not is_first and not is_end and (text is None or text.strip() == ""):
                 return None
                 
             self.__send_panel_message(text, interact.data.get('user'), uid, 0, type)
@@ -366,20 +417,24 @@ class FeiFei:
         except Exception as e:
             util.printInfo(1, "System", "音频播放初始化失败,本机无法播放音频")
             return
-        
+
         while self.__running:
             time.sleep(0.01)
             if not self.sound_query.empty():  # 如果队列不为空则播放音频
                 file_url, audio_length, interact = self.sound_query.get()
-                is_first = False
-                is_end = False
-                if interact.data.get('isfirst'):
-                    is_first = True
-                if interact.data.get('isend'):
-                    is_end = True
+
+                is_first = interact.data.get('isfirst') is True
+                is_end = interact.data.get('isend') is True
+
+
+
                 if file_url is not None:
                     util.printInfo(1, interact.data.get('user'), '播放音频...')
-                    self.speaking = True
+
+                    if is_first:
+                        self.speaking = True
+                    elif not is_end:
+                        self.speaking = True
 
                 #自动播报关闭
                 global auto_play_lock
@@ -392,7 +447,7 @@ class FeiFei:
 
                 if wsa_server.get_web_instance().is_connected(interact.data.get('user')):
                     wsa_server.get_web_instance().add_cmd({"panelMsg": "播放中 ...", "Username" : interact.data.get('user'), 'robot': f'{cfg.fay_url}/robot/Speaking.jpg'})
-                
+
                 if file_url is not None:
                     pygame.mixer.music.load(file_url)
                     pygame.mixer.music.play()
@@ -402,10 +457,10 @@ class FeiFei:
                     while length < audio_length:
                         length += 0.01
                         time.sleep(0.01)
-                
+
                 if is_end:
                     self.play_end(interact)
-                    util.printInfo(1, interact.data.get('user'), '结束播放！')
+
                 if wsa_server.get_web_instance().is_connected(interact.data.get('user')):
                     wsa_server.get_web_instance().add_cmd({"panelMsg": "", "Username" : interact.data.get('user'), 'robot': f'{cfg.fay_url}/robot/Normal.jpg'})
                 # 播放完毕后通知
@@ -467,7 +522,7 @@ class FeiFei:
 
             #发送音频给数字人接口
             if file_url is not None and wsa_server.get_instance().is_connected(interact.data.get("user")):
-                content = {'Topic': 'human', 'Data': {'Key': 'audio', 'Value': os.path.abspath(file_url), 'HttpValue': f'{cfg.fay_url}/audio/' + os.path.basename(file_url),  'Text': text, 'Time': audio_length, 'Type': interact.interleaver}, 'Username' : interact.data.get('user'), 'robot': f'{cfg.fay_url}/robot/Speaking.jpg'}
+                content = {'Topic': 'human', 'Data': {'Key': 'audio', 'Value': os.path.abspath(file_url), 'HttpValue': f'{cfg.fay_url}/audio/' + os.path.basename(file_url),  'Text': text, 'Time': audio_length, 'Type': interact.interleaver, 'IsFirst': 1 if interact.data.get("isfirst", False) else 0,  'IsEnd': 1 if interact.data.get("isend", False) else 0}, 'Username' : interact.data.get('user'), 'robot': f'{cfg.fay_url}/robot/Speaking.jpg'}
                 #计算lips
                 if platform.system() == "Windows":
                     try:
@@ -580,12 +635,13 @@ class FeiFei:
         :param text: 消息文本
         :param username: 用户名
         """
+        full_text = self.__remove_emojis(text.replace("*", ""))
         if wsa_server.get_instance().is_connected(username):
             content = {
                 'Topic': 'human',
                 'Data': {
                     'Key': 'text',
-                    'Value': text
+                    'Value': full_text
                 },
                 'Username': username
             }

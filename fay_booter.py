@@ -345,6 +345,11 @@ def start():
     from llm.nlp_cognitive_stream import init_memory_scheduler
     init_memory_scheduler()
 
+    #初始化知识库
+    util.log(1, '初始化本地知识库...')
+    from llm.nlp_cognitive_stream import init_knowledge_base
+    init_knowledge_base()
+
     #开启录音服务
     record = config_util.config['source']['record']
     if record['enabled']:

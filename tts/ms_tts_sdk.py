@@ -6,10 +6,8 @@ from tts import tts_voice
 from tts.tts_voice import EnumVoice
 from utils import util, config_util
 from utils import config_util as cfg
-import pygame
 import edge_tts
 from pydub import AudioSegment
-from scheduler.thread_manager import MyThread
 
 class Speech:
     def __init__(self):
