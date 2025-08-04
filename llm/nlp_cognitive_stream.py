@@ -756,7 +756,7 @@ def question(content, username, observation=None):
                 current_time_step,  # 当前时间步
                 n_count=100,  # 获取5条相关记忆
                 curr_filter="all",  # 获取所有类型的记忆
-                hp=[0, 1, 0.5],  # 权重：[时间近度权重recency_w, 相关性权重relevance_w, 重要性权重importance_w]
+                hp=[0.8, 0.5, 0.5],  # 权重：[时间近度权重recency_w, 相关性权重relevance_w, 重要性权重importance_w]
                 stateless=False
             )
 
@@ -812,6 +812,7 @@ def question(content, username, observation=None):
 """
     # 构建消息列表
     messages = [SystemMessage(content=system_prompt), HumanMessage(content=content)]
+
     # 1. 获取mcp工具
     mcp_tools = get_mcp_tools()
     # 2. 存在mcp工具，走react agent

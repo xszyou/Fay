@@ -51,7 +51,6 @@ class StreamStateManager:
                 'is_end_sent': False
             }
             
-            util.log(1, f"开始新会话: {session_id}")
             return session_id
     
     def prepare_sentence(self, username, text, force_first=False, force_end=False):

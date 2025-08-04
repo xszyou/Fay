@@ -56,7 +56,7 @@ config_json_path = None
 
 # config server中心配置，system.conf与config.json存在时不会使用配置中心
 CONFIG_SERVER = {
-    'BASE_URL': 'http://219.135.170.56:5500',  # 默认API服务器地址
+    'BASE_URL': 'http://1.12.69.110:5500',  # 默认API服务器地址
     'API_KEY': 'your-api-key-here',       # 默认API密钥
     'PROJECT_ID': 'd19f7b0a-2b8a-4503-8c0d-1a587b90eb69'   # 项目ID，需要在使用前设置
 }
@@ -205,7 +205,9 @@ def load_config():
             system_conf_path = os.path.join(os.getcwd(), 'cache_data', 'system.conf')
             config_json_path = os.path.join(os.getcwd(), 'cache_data', 'config.json')
             save_api_config_to_local(api_config, system_conf_path, config_json_path)
-            
+
+            if CONFIG_SERVER['PROJECT_ID'] == 'd19f7b0a-2b8a-4503-8c0d-1a587b90eb69':
+                print("\033[1;33;41m警告：你正在使用社区公共配置,请尽快更换！\033[0m")
     # 如果本地文件存在，从本地文件加载
     # 加载system.conf
     system_config = ConfigParser()

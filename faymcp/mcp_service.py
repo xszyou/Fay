@@ -772,7 +772,7 @@ def check_mcp_connections():
                     # 尝试调用一个简单的工具来测试连接
                     test_success, test_result = client.call_tool("ping", {})
                     if not test_success:
-                        util.log(1, f"服务器 {server['name']} (ID: {server_id}) 测试调用失败，尝试重新连接...")
+                        # util.log(1, f"服务器 {server['name']} (ID: {server_id}) 测试调用失败，尝试重新连接...")
                         # 调用失败，可能已断开连接，尝试重新连接
                         success, updated_server, tools = connect_to_real_mcp(server)
                         if success:
@@ -814,7 +814,7 @@ def check_mcp_connections():
     #     util.log(1, f"已自动重新连接以下服务器: {', '.join(reconnected_servers)}")
     
     # 安排下一次检查
-    schedule_connection_check()
+    schedule_connection_check() 
 
 # 安排连接检查定时任务
 def schedule_connection_check():
@@ -862,7 +862,7 @@ def run():
 # 启动MCP服务器
 def start():
     # 启动连接检查定时任务
-    start_connection_check()
+    # start_connection_check() TODO 暂时取消定时检查任务
     
     # 输出启动信息
     util.log(1, "MCP服务已启动在端口5010")

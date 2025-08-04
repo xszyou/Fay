@@ -8,6 +8,7 @@ import requests
 from pydub import AudioSegment
 from queue import Queue
 import re  # 添加正则表达式模块用于过滤表情符号
+import uuid
 
 # 适应模型使用
 import numpy as np
@@ -75,6 +76,8 @@ class FeiFei:
         self.timer = None
         self.sound_query = Queue()
         self.think_mode_users = {}  # 使用字典存储每个用户的think模式状态
+        self.think_time_users = {} #使用字典存储每个用户的think开始时间
+        self.user_conv_map = {} #存储用户对话id及句子流序号
     
     def __remove_emojis(self, text):
         """
@@ -224,65 +227,12 @@ class FeiFei:
 
     #触发语音交互
     def on_interact(self, interact: Interact):
-        MyThread(target=self.__update_mood, args=[interact]).start()
         #创建用户
         username = interact.data.get("user", "User")
         if member_db.new_instance().is_username_exist(username)  == "notexists":
             member_db.new_instance().add_user(username)
         MyThread(target=self.__process_interact, args=[interact]).start()
         return None
-
-    # 发送情绪
-    def __send_mood(self):
-         while self.__running:
-            time.sleep(3)
-            if wsa_server.get_instance().is_connected("User"):
-                if  self.old_mood != self.mood:
-                    content = {'Topic': 'human', 'Data': {'Key': 'mood', 'Value': self.mood}}
-                    wsa_server.get_instance().add_cmd(content)
-                    self.old_mood = self.mood
-
-    #TODO 考虑重构这个逻辑  
-    # 更新情绪
-    def __update_mood(self, interact):
-        perception = config_util.config["interact"]["perception"]
-        if interact.interact_type == 1:
-            try:
-                if cfg.ltp_mode == "cemotion":
-                    result = nlp_cemotion.get_sentiment(self.cemotion, interact.data["msg"])
-                    chat_perception = perception["chat"]
-                    if result >= 0.5 and result <= 1:
-                       self.mood = self.mood + (chat_perception / 150.0)
-                    elif result <= 0.2:
-                       self.mood = self.mood - (chat_perception / 100.0)
-                else:
-                    if str(cfg.baidu_emotion_api_key) == '' or str(cfg.baidu_emotion_app_id) == '' or str(cfg.baidu_emotion_secret_key) == '':
-                        self.mood = 0
-                    else:
-                        result = int(baidu_emotion.get_sentiment(interact.data["msg"]))
-                        chat_perception = perception["chat"]
-                        if result >= 2:
-                            self.mood = self.mood + (chat_perception / 150.0)
-                        elif result == 0:
-                            self.mood = self.mood - (chat_perception / 100.0)
-            except BaseException as e:
-                self.mood = 0
-                print("[System] 情绪更新错误！")
-                print(e)
-
-        elif interact.interact_type == 2:
-            self.mood = self.mood + (perception["join"] / 100.0)
-
-        elif interact.interact_type == 3:
-            self.mood = self.mood + (perception["gift"] / 100.0)
-
-        elif interact.interact_type == 4:
-            self.mood = self.mood + (perception["follow"] / 100.0)
-
-        if self.mood >= 1:
-            self.mood = 1
-        if self.mood <= -1:
-            self.mood = -1
 
     #获取不同情绪声音
     def __get_mood_voice(self):
@@ -291,24 +241,22 @@ class FeiFei:
             voice = EnumVoice.XIAO_XIAO
         styleList = voice.value["styleList"]
         sayType = styleList["calm"]
-        if -1 <= self.mood < -0.5:
-            sayType = styleList["angry"]
-        if -0.5 <= self.mood < -0.1:
-            sayType = styleList["lyrical"]
-        if -0.1 <= self.mood < 0.1:
-            sayType = styleList["calm"]
-        if 0.1 <= self.mood < 0.5:
-            sayType = styleList["assistant"]
-        if 0.5 <= self.mood <= 1:
-            sayType = styleList["cheerful"]
         return sayType
 
     # 合成声音
-    def say(self, interact, text, type = ""): #TODO 对is_end及is_first的处理有问题
+    def say(self, interact, text, type = ""):
         try:
-            uid = member_db.new_instance().find_user(interact.data.get('user'))
+            uid = member_db.new_instance().find_user(interact.data.get("user"))
             is_end = interact.data.get("isend", False)
             is_first = interact.data.get("isfirst", False)
+
+            if is_first == True:
+                conv = "conv_" + str(uuid.uuid4())
+                conv_no = 0
+                self.user_conv_map[interact.data.get("user", "User")] = {"conversation_id" : conv, "conversation_msg_no" : conv_no}
+            else:
+                self.user_conv_map[interact.data.get("user", "User")]["conversation_msg_no"] += 1
+
 
             if not is_first and not is_end and (text is None or text.strip() == ""):
                 return None
@@ -337,13 +285,8 @@ class FeiFei:
             if "<think>" in text:
                 is_start_think = True
                 self.think_mode_users[uid] = True
-                text = "请稍等..."
+                self.think_time_users[uid] = time.time()
             
-            # 如果既没有结束标记也没有开始标记，但用户当前处于思考模式
-            # 这种情况是流式输出中间部分，应该被忽略
-            elif "</think>" not in text and "<think>" not in text and self.think_mode_users.get(uid, False):
-                return None
-                
             if self.think_mode_users.get(uid, False) and is_start_think:
                 if wsa_server.get_web_instance().is_connected(interact.data.get('user')):
                     wsa_server.get_web_instance().add_cmd({"panelMsg": "思考中...", "Username" : interact.data.get('user'), 'robot': f'{cfg.fay_url}/robot/Thinking.jpg'})
@@ -351,8 +294,12 @@ class FeiFei:
                     content = {'Topic': 'human', 'Data': {'Key': 'log', 'Value': "思考中..."}, 'Username' : interact.data.get('user'), 'robot': f'{cfg.fay_url}/robot/Thinking.jpg'}
                     wsa_server.get_instance().add_cmd(content)
 
-            # 如果用户在think模式中,不进行语音合成
-            if self.think_mode_users.get(uid, False) and not is_start_think:
+            if self.think_mode_users[uid] == True and time.time() - self.think_time_users[uid] >= 5:
+                self.think_time_users[uid] = time.time()
+                text = "请稍等..."
+            
+            # 流式输出think中的内容
+            elif self.think_mode_users.get(uid, False) == True and "</think>" not in text:
                 return None
             
             result = None
@@ -522,7 +469,7 @@ class FeiFei:
 
             #发送音频给数字人接口
             if file_url is not None and wsa_server.get_instance().is_connected(interact.data.get("user")):
-                content = {'Topic': 'human', 'Data': {'Key': 'audio', 'Value': os.path.abspath(file_url), 'HttpValue': f'{cfg.fay_url}/audio/' + os.path.basename(file_url),  'Text': text, 'Time': audio_length, 'Type': interact.interleaver, 'IsFirst': 1 if interact.data.get("isfirst", False) else 0,  'IsEnd': 1 if interact.data.get("isend", False) else 0}, 'Username' : interact.data.get('user'), 'robot': f'{cfg.fay_url}/robot/Speaking.jpg'}
+                content = {'Topic': 'human', 'Data': {'Key': 'audio', 'Value': os.path.abspath(file_url), 'HttpValue': f'{cfg.fay_url}/audio/' + os.path.basename(file_url),  'Text': text, 'Time': audio_length, 'Type': interact.interleaver, 'IsFirst': 1 if interact.data.get("isfirst", False) else 0,  'IsEnd': 1 if interact.data.get("isend", False) else 0, 'CONV_ID' : self.user_conv_map[interact.data.get("user", "User")]["conversation_id"], 'CONV_MSG_NO' : self.user_conv_map[interact.data.get("user", "User")]["conversation_msg_no"]  }, 'Username' : interact.data.get('user'), 'robot': f'{cfg.fay_url}/robot/Speaking.jpg'}
                 #计算lips
                 if platform.system() == "Windows":
                     try:
@@ -574,7 +521,6 @@ class FeiFei:
         if cfg.ltp_mode == "cemotion":
             from cemotion import Cemotion
             self.cemotion = Cemotion()
-        MyThread(target=self.__send_mood).start()
         MyThread(target=self.__play_sound).start()
 
     #停止核心服务
