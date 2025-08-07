@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>聊天网站系统</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary-color: #4361ee;
+            --secondary-color: #3f37c9;
+            --light-bg: #f8f9fa;
+            --dark-bg: #212529;
+            --success-color: #4cc9f0;
+            --danger-color: #f72585;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f2f5;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        .chat-container {
+            display: flex;
+            height: 90vh;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        
+        /* 左侧联系人列表样式 */
+        .sidebar {
+            width: 300px;
+            background-color: var(--light-bg);
+            border-right: 1px solid #dee2e6;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .user-header {
+            padding: 15px;
+            background-color: var(--primary-color);
+            color: white;
+            display: flex;
+            align-items: center;
+        }
+        
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            margin-right: 10px;
+            object-fit: cover;
+        }
+        
+        .tab-content {
+            flex: 1;
+            overflow-y: auto;
+        }
+        
+        .contact-item, .group-item {
+            padding: 10px 15px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            transition: background-color 0.2s;
+        }
+        
+        .contact-item:hover, .group-item:hover {
+            background-color: #e9ecef;
+        }
+        
+        .contact-item.active, .group-item.active {
+            background-color: #dee2ff;
+        }
+        
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 10px;
+        }
+        
+        .online {
+            background-color: var(--success-color);
+        }
+        
+        .offline {
+            background-color: #6c757d;
+        }
+        
+        /* 聊天区域样式 */
+        .chat-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .chat-header {
+            padding: 15px;
+            border-bottom: 1px solid #dee2e6;
+            display: flex;
+            align-items: center;
+        }
+        
+        .message-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+            background-color: #f8fafb;
+        }
+        
+        .message {
+            max-width: 70%;
+            margin-bottom: 15px;
+            display: flex;
+        }
+        
+        .message-incoming {
+            align-self: flex-start;
+        }
+        
+        .message-outgoing {
+            align-self: flex-end;
+            flex-direction: row-reverse;
+        }
+        
+        .message-bubble {
+            padding: 10px 15px;
+            border-radius: 18px;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+        }
+        
+        .message-incoming .message-bubble {
+            background-color: white;
+            border-top-left-radius: 0;
+        }
+        
+        .message-outgoing .message-bubble {
+            background-color: var(--primary-color);
+            color: white;
+            border-top-right-radius: 0;
+        }
+        
+        .message-input-area {
+            padding: 15px;
+            border-top: 1px solid #dee2e6;
+            display: flex;
+        }
+        
+        .message-input {
+            flex: 1;
+            padding: 10px 15px;
+            border: 1px solid #dee2e6;
+            border-radius: 20px;
+            resize: none;
+            outline: none;
+        }
+        
+        .send-button {
+            margin-left: 10px;
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        
+        /* 管理员面板样式 */
+        .admin-panel {
+            background-color: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            height: 90vh;
+            overflow-y: auto;
+        }
+        
+        .admin-nav {
+            margin-bottom: 20px;
+        }
+        
+        .stats-container {
+            display: flex;
+            margin-bottom: 20px;
+        }
+        
+        .stat-card {
+            flex: 1;
+            background-color: var(--light-bg);
+            border-radius: 8px;
+            padding: 15px;
+            margin: 0 10px;
+            text-align: center;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+        }
+        
+        .stat-card h3 {
+            font-size: 1.5rem;
+            margin-bottom: 5px;
+        }
+        
+        .stat-card p {
+            color: #6c757d;
+        }
+        
+        .chart-container {
+            height: 300px;
+            margin-bottom: 20px;
+        }
+        
+        .action-buttons button {
+            margin-right: 5px;
+            margin-bottom: 5px;
+        }
+        
+        .page-item.active .page-link {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+        
+        /* 登录页面样式 */
+        .login-container {
+            max-width: 400px;
+            margin: 100px auto;
+            padding: 30px;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+        
+        .system-health {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: var(--light-bg);
+            border-radius: 8px;
+        }
+        
+        .health-indicator {
+            height: 10px;
+            background-color: #28a745;
+            border-radius: 5px;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <!-- 登录页面 -->
+    <div id="login-page" class="login-container">
+        <h2 class="text-center mb-4">聊天系统登录</h2>
+        <div class="mb-3">
+            <label for="login-username" class="form-label">用户名</label>
+            <input type="text" class="form-control" id="login-username" placeholder="请输入用户名">
+        </div>
+        <div class="mb-3">
+            <label for="login-password" class="form-label">密码</label>
+            <input type="password" class="form-control" id="login-password" placeholder="请输入密码">
+        </div>
+        <div class="mb-3 form-check">
+            <input type="checkbox" class="form-check-input" id="remember-me">
+            <label class="form-check-label" for="remember-me">记住我</label>
+        </div>
+        <button id="login-button" class="btn btn-primary w-100">登录</button>
+        <div class="mt-3 text-center">
+            <a href="#" id="switch-to-admin">管理员登录</a>
+        </div>
+    </div>
+
+    <!-- 用户聊天主界面 -->
+    <div id="chat-page" class="container py-4" style="display: none;">
+        <div class="chat-container">
+            <!-- 左侧联系人列表 -->
+            <div class="sidebar">
+                <div class="user-header">
+                    <img src="https://ui-avatars.com/api/?name=User" alt="头像" class="user-avatar">
+                    <div class="user-info">
+                        <h5 class="m-0" id="current-username">用户名</h5>
+                        <small id="current-user-status">在线</small>
+                    </div>
+                </div>
+                
+                <ul class="nav nav-tabs" id="myTab" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="contacts-tab" data-bs-toggle="tab" data-bs-target="#contacts" type="button" role="tab">联系人</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="groups-tab" data-bs-toggle="tab" data-bs-target="#groups" type="button" role="tab">群聊</button>
+                    </li>
+                </ul>
+                
+                <div class="tab-content" id="myTabContent">
+                    <div class="tab-pane fade show active" id="contacts" role="tabpanel">
+                        <div class="list-group list-group-flush">
+                            <!-- 联系人列表将通过JavaScript动态生成 -->
+                        </div>
+                    </div>
+                    <div class="tab-pane fade" id="groups" role="tabpanel">
+                        <div class="list-group list-group-flush">
+                            <!-- 群聊列表将通过JavaScript动态生成 -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 聊天区域 -->
+            <div class="chat-area">
+                <div class="chat-header">
+                    <img src="https://ui-avatars.com/api/?name=Group" alt="群聊头像" class="user-avatar">
+                    <div>
+                        <h5 class="m-0" id="current-chat-name">选择聊天</h5>
+                        <small id="current-chat-status">离线</small>
+                    </div>
+                </div>
+                
+                <div class="message-list" id="message-list">
+                    <!-- 消息将通过JavaScript动态生成 -->
+                </div>
+                
+                <div class="message-input-area">
+                    <textarea class="message-input" id="message-input" placeholder="输入消息..." rows="1"></textarea>
+                    <button class="send-button" id="send-button">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 管理员后台界面 -->
+    <div id="admin-page" class="container py-4" style="display: none;">
+        <h2 class="mb-4">聊天系统管理后台</h2>
+        
+        <ul class="nav nav-tabs admin-nav">
+            <li class="nav-item">
+                <a class="nav-link active" href="#dashboard" data-bs-toggle="tab">系统仪表盘</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#user-management" data-bs-toggle="tab">用户管理</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#message-monitor" data-bs-toggle="tab">消息监控</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#banned-words" data-bs-toggle="tab">违规词管理</a>
+            </li>
+        </ul>
+        
+        <div class="tab-content">
+            <!-- 系统仪表盘 -->
+            <div class="tab-pane active" id="dashboard">
+                <div class="stats-container">
+                    <div class="stat-card">
+                        <h3 id="online-count">0</h3>
+                        <p>在线用户</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3 id="message-count">0</h3>
+                        <p>今日消息</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3 id="user-count">0</h3>
+                        <p>注册用户</p>
+                    </div>
+                </div>
+                
+                <div class="chart-container">
+                    <canvas id="message-chart"></canvas>
+                </div>
+                
+                <div class="system-health">
+                    <h5>系统健康状态</h5>
+                    <div class="health-indicator" style="width: 95%;"></div>
+                    <p class="mt-2">CPU 使用率: 23% | 内存使用: 45% | 连接数: 128</p>
+                </div>
+            </div>
+            
+            <!-- 用户管理 -->
+            <div class="tab-pane" id="user-management">
+                <div class="d-flex justify-content-between mb-3">
+                    <div class="d-flex">
+                        <input type="text" class="form-control me-2" id="user-search" placeholder="搜索用户...">
+                        <button class="btn btn-outline-primary">搜索</button>
+</div>
+                    <div class="action-buttons">
+                        <button class="btn btn-danger" id="ban-selected">禁用账户</button>
+                        <button class="btn btn-warning" id="delete-selected">删除账户</button>
+                    </div>
+</div>
+                
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th><input type="checkbox" id="select-all"></th>
+                            <th>ID</th>
+                            <th>用户名</th>
+                            <th>状态</th>
+                            <th>角色</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="user-list">
+                        <!-- 用户列表将通过JavaScript动态生成 -->
+                    </tbody>
+                </table>
+                
+                <nav>
+                    <ul class="pagination justify-content-center" id="user-pagination">
+                        <!-- 分页将通过JavaScript动态生成 -->
+</ul>
+                </nav>
+</div>
+            
+            <!-- 消息监控 -->
+            <div class="tab-pane" id="message-monitor">
+                <div class="d-flex justify-content-between mb-3">
+<div class="d-flex">
+                        <input type="text" class="form-control me-2" id="message-search" placeholder="搜索关键词...">
+                        <button class="btn btn-outline-primary">搜索</button>
+                    </div>
+                    <div class="action-buttons">
+                        <button class="btn btn-danger" id="delete-messages">删除消息</button>
+                    </div>
+</div>
+                
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th><input type="checkbox" id="select-all-messages"></th>
+                            <th>时间</th>
+                            <th>发送者</th>
+                            <th>接收者</th>
+                            <th>内容</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="message-list-admin">
+                        <!-- 消息列表将通过JavaScript动态生成 -->
+                    </tbody>
+                </table>
+                
+                <nav>
+                    <ul class="pagination justify-content-center" id="message-pagination">
+                        <!-- 分页将通过JavaScript动态生成 -->
+</ul>
+                </nav>
+</div>
+            
+            <!-- 违规词管理 -->
+            <div class="tab-pane" id="banned-words">
+                <div class="mb-4">
+<h4>添加违规词</h4>
+<div class="d-flex">
+<input type="text"class="表单控件ME-2"id="新禁止字"占位符="输入要禁止的词汇...">
+<button class="btn btn-primary"id="add-banned-word">添加</button>
+</div>
+</div>
+                
+<div>
+<h4>违规词列表</h4>
+<ul class="list-group"id="禁止词列表">
+<！--违规词列表将通过JavaScript动态生成-->
+</ul>
+</div>
+</div>
+</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+// 模拟数据
+常量mockUsers=[
+{id:1，用户名：“”张三"，头像：“https://ui-avatars.com/api/?name=张三”，状态：“在线”，角色：“用户”}，
+{id:2，用户名："李四"，头像：“https://ui-avatars.com/api/?name=李四”，状态：“离线”，角色：“用户”}，
+{id:3，用户名：“”王五"，头像：“https://ui-avatars.com/api/?name=王五”，状态：“在线”，角色：“admin”}，
+{id:4，用户名："赵六"，头像：“https://ui-avatars.com/api/?name=赵六”，状态：“离线”，角色：“用户”}，
+{id:5，用户名："钱七"，头像："https://ui-avatars.com/api/?name=钱七"，状态："在线"，角色："user"}，
+{id:6，用户名："孙八"，头像："https://ui-avatars.com/api/?name=孙八"，状态："在线"，角色："用户"}，
+{id:7，用户名："周九"，头像：“https://ui-avatars.com/api/?name=周九”，状态：“离线”，角色：“用户”}，
+{id:8，用户名："吴十"，头像：“https://ui-avatars.com/api/?name=吴十”，状态：“在线”，角色：“用户”}
+        ];
+        
+常数mockGroups=[
+{id:101，名称："前端开发群"，Avatar："https://ui-avatars.com/api/?name=前端"，成员：12}，
+{id:102，名称：“”技术交流群"，Avatar："https://ui-avatars.com/api/?name=技术"，成员：24}，
+{id:103，名称："项目协作群"，Avatar："https://ui-avatars.com/api/?name=项目"，成员：8}
+        ];
+        
+Const mockMessages=[
+{id:1001，发件人ID:2，发件人名："李四"，内容：“”你好，最近怎么样？"，时间戳："10:30AM"}，
+{id:1002，发件人ID:1，发件人名："张三"，内容：“”我很好，谢谢！项目进展顺利吗？"，时间戳："10:32AM"}，
+{ID:1003，发件人ID:2，发件人名："李四"，内容：“”还不错，我们解决了那个技术难题。"，时间戳："10:35AM"}，
+{id:1004，发件人ID:1，发件人名："张三"，内容：“”太好了！期待看到最终成果。"，时间戳：“10:36AM”}
+        ];
+        
+Const bannedWords=["垃圾"，"笨蛋"，"骗子"，"广告"]；
+        
+//初始化socket.io连接
+const socket=io('http://localhost:3000',{
+自动连接：false
+        });
+        
+//DOM元素
+Const loginpage=document.getElementById('login-page')；
+Const chatpage=document.getElementById('chat-page')；
+Const AdminPage=document.getElementById('Admin-Page')；
+Const switchToAdmin=document.getElementById('switch-to-admin')；
+Const LoginButton=document.getElementById('login-button')；
+const messagelist=document.getElementById('message-list')；
+const messageInput=document.getElementById('message-input')；
+const sendButton=document.getElementById('send-button')；
+Const currentUsername=document.getElement BYID('current-username')；
+Const UserList=document.getElementById('user-list')；
+Const messageListAdmin=文件.getElementById('message-list-admin')；
+Const bannedWordsList=document.getElementById('banned-words-list')；
+const onlineCount=document.getElement BYID('online-count')；
+常量messageCount=document.getElementById('message-count')；
+常量usercount=document.getElementById('user-count')；
+        
+// 当前用户状态
+让currentUser=null；
+设isAdmin=false；
+让selectedChat=空；
+        
+// 初始化页面
+函数initPage(){
+renderContactList()；
+renderGroupList()；
+renderMessages()；
+renderUserList()；
+renderMessageListAdmin()；
+renderBannedWordsList()；
+initMessageChart()；
+            
+// 设置在线用户数
+在线计数。textContent=mockUsers.筛选器(u=>u.状态==='在线')。长度；
+userCount.textContent=mockUsers.length；
+            
+// 初始化消息图表
+initMessageChart()；
+        }
+        
+// 渲染联系人列表
+函数renderContactList(){
+常量contactlist=文档.QuerySelector('#contacts.list-group')；
+contactList.innerHTML="；
+            
+mockUsers.forEach(user=>{
+if(user.id===1)返回；//跳过当前用户
+                
+Const contactItem=document.createElement('a')；
+contactItem.className='list-group-item list-group-item-action contact-item${selected Chat？.id===user.id？'active'："}'；
+contactItem.innerHTML='
+<div class="d-flex对齐项-中心">
+<span class="状态指示器${user.status}"></span>
+<img src="${user.Avatar}"alt="${user。username}"class="user-avatar Me-3">
+<div>
+<h6class="mb-0">${user.username}</h6>
+<small class="text-muted">${用户。状态==='在线'？'在线'：'离线'}</small>
+</div>
+</div>
+`;
+                
+contactItem.addEventListener('click'，()=>{
+文件。querySelectorAll(".联系人项").foreach(item=>item.classList.移除(“活动”))；
+contactItem.classList.add('active')；
+选择Chat(用户)；
+                });
+                
+contactList.appendChild(contactItem)；
+            });
+        }
+        
+// 渲染群聊列表
+<h4>添加违规词</h4>
+<div class="d-flex">
+<input type="text"class="表单控件ME-2"id="新禁止字"占位符="输入要禁止的词汇...">
+<button class="btn btn-primary"id="add-banned-word">添加</button>
+mockGroups.forEach(group=>{
+Const groupItem=document.createElement('a')；
+groupItem.className='list-group-item list-group-item-action group-item${selected Chat？.id===group.id？'active'："}'；
+groupItem.innerHTML='
+<h4>违规词列表</h4>
+<ul class="list-group"id="禁止词列表">
+<！--违规词列表将通过JavaScript动态生成-->
+<h6class="mb-0">${group.name}</h6>
+<small class="text-muted">${group.members}成员</small>
+</div>
+</div>
+                `;
+                
+groupItem.addEventListener('click'，()=>{
+文件。querySelectorAll(“.Group-item”)。foreach(item=>item.classList.remove('active'))；
+groupItem.classList.add('active')；
+选择聊天(组)；
+                });
+                
+groupList.appendChild(groupItem)；
+            });
+        }
+        
+// 选择聊天
+功能选择Chat(聊天){
+selectedChat=聊天；
+文件。getElementById('current-chat-name')。textContent=聊天。用户名||聊天。姓名；
+文件。getElementById('current-chat-status')。textContent=聊天。状态？(chat.status==='在线'？'在线'：'离线')：'${chat.member}成员'；
+renderMessages()；
+        }
+        
+// 渲染消息
+函数renderMessages(){
+messageList.innerHTML="；
+            
+if(！selectedChat){
+messageList.innerHTML='<div class="text-center py-5 text-muted">请选择一个聊天</div>'；
+返回；
+            }
+            
+mockMessages.forEach(message=>{
+常量为outgoing=message.senderId===1；
+Const messageElement=document.createElement('div')；
+messageElement.className='message${isOutgoing？'message-outgoing'：'message-incoming'}'；
+                
+messageElement.innerHTML='
+<img src="https://ui-avatars.com/api/?name=${message.sendername}"alt="${message。sendername}"class="user-avatar">
+<div class="message-content-wrapper">
+<div class="message-bubble">${message.content}</div>
+const messageInput=document.getElementById('message-input')；
+</div>
+Const currentUsername=document.getElement BYID('current-username')；
+Const UserList=document.getElementById('user-list')；
+Const messageListAdmin=文件.getElementById('message-list-admin')；
+            });
+const onlineCount=document.getElement BYID('online-count')；
+// 滚动到底部
+常量usercount=document.getElementById('user-count')；
+        }
+        
+// 渲染用户列表（管理员）
+函数renderUserList(){
+让selectedChat=空；
+            
+mockUsers.forEach(user=>{
+Const row=document.createElement('tr')；
+row.innerHTML='
+<td><input type="checkbox"class="user-checkbox"data-id="${user.id}"></td>
+<td>${user.id}</td>
+<td>
+<div class="d-flex对齐项-中心">
+<img src="${user.头像}"alt="${user.username}"class="user-头像ME-2">
+<span>${user.username}</span>
+</div>
+</td>
+在线计数。textContent=mockUsers.筛选器(u=>u.状态==='在线')。长度；
+<td><span class="badge${user.Role==='admin'？'bg-primary'：'bg-info'}">${user.角色==='admin'？'管理员'：'用户'}</span></td>
+<td>
+<div class="btn-group">
+<button class="btn btn-sm btn-outline-primary下拉列表-切换"type="button"data-bs-toggle="dropdown">
+操作
+</button>
+<ul class="下拉菜单">
+<li><a class="dropdown-item"href="#"data-action="edit"data-id="${user。ID}">编辑</a></li>
+常量contactlist=文档.QuerySelector('#contacts.list-group')；
+<li><hr class="dropdown-divider"></li>
+<li><a class="下拉项text-danger"href="#"data-action="delete"data-id="${user。ID}">删除</a></锂>
+</ul>
+</div>
+</td>
+`;
+                
+userList.appendChild(row)；
+            });
+        }
+<img src="${user.Avatar}"alt="${user。username}"class="user-avatar Me-3">
+// 渲染消息列表（管理员）
+函数renderMessageListAdmin(){
+<small class="text-muted">${用户。状态==='在线'？'在线'：'离线'}</small>
+            
+mockMessages.forEach(message=>{
+Const sender=mockUsers.查找(u=>u.ID===message.SenderID)；
+Const receiver=mockUsers.Find(u=>u.身份标识！==消息。发件人ID&&U.身份标识！==1)；
+                
+文件。querySelectorAll(".联系人项").foreach(item=>item.classList.移除(“活动”))；
+row.innerHTML='
+<td><input type="checkbox"class="message-checkbox"data-id="${message.id}"></td>
+<td>${message.timestamp}</td>
+<td>${sender？.username||'未知用户'}</td>
+<td>${receiver？.username||'群聊'}</td>
+<td>${message.content}</td>
+<td>
+<button class="btn btn-sm btn-danger delete-message-btn"data-id="${message.id}">
+<i class="fas fa-trash"></i>
+</button>
+</td>
+`;
+                
+messageListAdmin.appendChild(row)；
+            });
+        }
+        
+// 渲染违规词列表
+函数renderBannedWordsList(){
+bannedWordsList.innerHTML="；
+            
+bannedWords.forEach((word，index)=>{
+const listItem=document.createElement('li')；
+listItem.className='列表-组-项d-flex对齐-内容-对齐-项-中心'；
+listItem.innerHTML='
+${word}
+<button class="btn btn-sm btn-danger delete-word-btn"data-index="${index}">
+<i class="fas fa-trash"></i>
+</button>
+`;
+                
+bannedWordsList.appendChild(listItem)；
+            });
+        }
+<td><span class="badge${user.status==='在线'？'bg-success'：'bg-secondary'}">${user。status==='online'？'在线'：'离线'}</span></td>
+<td><span class="badge${user.Role==='admin'？'bg-primary'：'bg-info'}">${user.角色==='admin'？'管理员'：'用户'}</span></td>
+函数initMessageChart(){
+<button class="btn btn-outline-primary">搜索</button>
+<div class="d-flex">
+<div class="操作按钮">
+<button class="btn btn-danger"id="Ban-selected">禁用账户</button>
+<button class="btn btn-warning"id="delete-selected">删除账户</button>
+</div>
+<li><a class="dropdown-item"href="#"data-action="ban"data-id="${user。ID}">${用户。status==='在线'？'禁用'：'启用'}</a></li>
+<div>
+<table class="table table-hover">
+<Thead>
+<tr>
+<th><input type="checkbox"id="select-all"></th>
+<th>ID</th>
+<th>用户名</th>
+<th>状态</th>
+<th>角色</th>
+<th>操作</th>
+</tr>
+</thead>
+<tbody id="user-list">
+<！--用户列表将通过JavaScript动态生成-->
+</tbody>
+</table>
+                }
+<nav>
+<ul class="分页对齐-内容-中心"id="用户分页">
+<！--分页将通过JavaScript动态生成-->
+// 发送消息
+</nav>
+常量内容=messageInput.value.trim()；
+if(！content||！selectedChat)返回；
+<! -- 消息监控 -->
+<div class="tab-pane"id="message-monitor">
+<div class="d-flex对齐-内容-MB-3之间">
+if(containsBannedWord){
+<input type="text"class="表单控件ME-2"id="消息搜索"占位符="搜索关键词...">
+<button class="btn btn-outline-primary">搜索</button>
+            }
+<div class="操作按钮">
+<button class="btn btn-danger"id="delete-messages">删除消息</button>
+常量newMessage={
+ID:Date.now()，
+发件人ID:1，
+<table class="table table-hover">
+<Thead>
+<tr>
+<th><input type="checkbox"id="全选消息"></th>
+<th>时间</th>
+<th>发送者</th>
+<th>接收者</th>
+<th>内容</th>
+<th>操作</th>
+</tr>
+</thead>
+<tbody id="message-list-admin">
+<！--消息列表将通过JavaScript动态生成-->
+</tbody>
+</table>
+常量usercount=document.getElementById('user-count')；
+<nav>
+<ul class="分页justify-content-center"id="message-pagination">
+<！--分页将通过JavaScript动态生成-->
+设isAdmin=false；
+</nav>
+常量contactlist=文档.QuerySelector('#contacts.list-group')；
+文件。querySelectorAll(“.Group-item”)。foreach(item=>item.classList.remove('active'))；
+<! -- 违规词管理 -->
+<div class="tab-pane"id="禁止词">
+<div class="MB-4">
+if(用户名和密码){
+groupList.appendChild(groupItem)；
+renderMessageListAdmin()；
+renderBannedWordsList()；
+initMessageChart()；
+// 选择聊天
+功能选择Chat(聊天){
+selectedChat=聊天；
+文件。getElementById('current-chat-name')。textContent=聊天。用户名||聊天。姓名；
+文件。getElementById('current-chat-status')。textContent=聊天。状态？(chat.status==='在线'？'在线'：'离线')：'${chat.member}成员'；
+// 初始化消息图表
+initMessageChart()；
+                
+<td><span class="badge${user.status==='在线'？'bg-success'：'bg-secondary'}">${user。status==='online'？'在线'：'离线'}</span></td>
+// 渲染联系人列表
+函数renderContactList(){
+常量contactlist=文档.QuerySelector('#contacts.list-group')；
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+messageList.innerHTML="；
+messageElement.className='message${isOutgoing？'message-outgoing'：'message-incoming'}'；
+if(user.id===1)返回；//跳过当前用户
+messageList.innerHTML='<div class="text-center py-5 text-muted">请选择一个聊天</div>'；
+Const contactItem=document.createElement('a')；
+contactItem.className='list-group-item list-group-item-action contact-item${selected Chat？.id===user.id？'active'："}'；
+contactItem.innerHTML='
+<div class="d-flex对齐项-中心">
+<span class="状态指示器${user.status}"></span>
+<img src="${user.Avatar}"alt="${user。username}"class="user-avatar Me-3">
+<div>
+<h6class="mb-0">${user.username}</h6>
+<small class="text-muted">${用户。状态==='在线'？'在线'：'离线'}</small>
+<button class="btn btn-sm btn-danger delete-message-btn"data-id="${message.id}">
+// 滚动到底部
+messagelist。scrollTop=messagelist。scrollHeight；
+sendButton.AddEventListener('click'，sendMessage)；
+contactItem.addEventListener('click'，()=>{
+文件。querySelectorAll(".联系人项").foreach(item=>item.classList.移除(“活动”))；
+contactItem.classList.add('active')；
+选择Chat(用户)；
+maintainAspectRatio:false，
+mockUsers.forEach(user=>{
+contactList.appendChild(contactItem)；
+类型：'行'，
+<td><input type="checkbox"class="user-checkbox"data-id="${user.id}"></td>
+<td>${user.id}</td>
+// 渲染群聊列表
+函数renderGroupList(){
+常量组列表=文档。querySelector('#组。列表组')；
+groupList.innerHTML="；
+const sendButton=document.getElementById('send-button')；
+mockGroups.forEach(group=>{
+Const groupItem=document.createElement('a')；
+groupItem.className='list-group-item list-group-item-action group-item${selected Chat？.id===group.id？'active'："}'；
+groupItem.innerHTML='
+const onlineCount=document.getElement BYID('online-count')；
+<img src="${group.Avatar}"alt="${group.name}"class="user-avatar Me-3">
+<div>
+<h6class="mb-0">${group.name}</h6>
+<small class="text-muted">${group.members}成员</small>
+让currentUser=null；
+设isAdmin=false；
+让selectedChat=空；
+// 删除消息（管理员）
+groupItem.addEventListener('click'，()=>{
+文件。querySelectorAll(“.Group-item”)。foreach(item=>item.classList.remove('active'))；
+groupItem.classList.add('active')；
+选择聊天(组)；
+时间戳记：新建日期().toLocaleTimeString([]，{小时：'2位数'，分钟：'2位数'})
+mockMessages.splice(索引，1)；
+renderMessageListAdmin()；
+                }
+            }
+        });
+        
+// 模拟系统健康状态
+setInterval(()=>{
+常量运行状况指标=文档。querySelector(“.运行状况指示器”)；
+Const width=parseInt(healthIndicator.style.width)；
+Const newWidth=width>10？width-1:95；
+healthIndicator.style.width="${newWidth}%"；
+}, 5000);
+</script>
+</body>
+</html>
