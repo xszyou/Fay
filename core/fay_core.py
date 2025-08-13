@@ -249,7 +249,6 @@ class FeiFei:
             uid = member_db.new_instance().find_user(interact.data.get("user"))
             is_end = interact.data.get("isend", False)
             is_first = interact.data.get("isfirst", False)
-
             if is_first == True:
                 conv = "conv_" + str(uuid.uuid4())
                 conv_no = 0
@@ -260,12 +259,10 @@ class FeiFei:
 
             if not is_first and not is_end and (text is None or text.strip() == ""):
                 return None
-                
             self.__send_panel_message(text, interact.data.get('user'), uid, 0, type)
             
             # 处理think标签
             is_start_think = False
-            
             # 第一步：处理结束标记</think>
             if "</think>" in text:
                 # 设置用户退出思考模式
@@ -293,15 +290,14 @@ class FeiFei:
                 if wsa_server.get_instance().is_connected(interact.data.get("user")):
                     content = {'Topic': 'human', 'Data': {'Key': 'log', 'Value': "思考中..."}, 'Username' : interact.data.get('user'), 'robot': f'{cfg.fay_url}/robot/Thinking.jpg'}
                     wsa_server.get_instance().add_cmd(content)
-
-            if self.think_mode_users[uid] == True and time.time() - self.think_time_users[uid] >= 5:
+            if self.think_mode_users.get(uid, False) == True and time.time() - self.think_time_users[uid] >= 5:
                 self.think_time_users[uid] = time.time()
                 text = "请稍等..."
             
             # 流式输出think中的内容
+                
             elif self.think_mode_users.get(uid, False) == True and "</think>" not in text:
                 return None
-            
             result = None
             audio_url = interact.data.get('audio')#透传的音频
             if audio_url is not None:#透传音频下载
@@ -327,7 +323,7 @@ class FeiFei:
                 return result         
                 
         except BaseException as e:
-            print(e)
+            print(e) #TODO 不合成声音时，这里打印了1，调试了一下
         return None
     
     #下载wav
