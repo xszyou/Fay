@@ -34,13 +34,19 @@ class MainWindow(QMainWindow):
     def runnable(self):
         while True:
             if not self.isVisible():
-                # try:
-                #     wsa_server.get_instance().stop_server()
-                #     wsa_server.get_web_instance().stop_server()
-                #     thread_manager.stopAll()
-                # except BaseException as e:
-                #     print(e)
-                os.system("taskkill /F /PID {}".format(os.getpid()))
+                try:
+                    # 正常关闭服务
+                    import fay_booter
+                    if fay_booter.is_running():
+                        print("窗口关闭，正在停止Fay服务...")
+                        fay_booter.stop()
+                        time.sleep(0.5)  # 给服务一点时间完成清理
+                    print("服务已停止")
+                except BaseException as e:
+                    print(f"正常关闭服务时出错: {e}")
+                finally:
+                    # 如果正常关闭失败，再强制终止
+                    os.system("taskkill /F /PID {}".format(os.getpid()))
             time.sleep(0.05)
 
     def center(self):

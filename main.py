@@ -6,6 +6,9 @@ import time
 import psutil
 import re
 import argparse
+import signal
+import atexit
+import threading
 from utils import config_util, util
 from asr import ali_nls
 from core import wsa_server
@@ -14,6 +17,83 @@ from core import content_db
 import fay_booter
 from scheduler.thread_manager import MyThread
 from core.interact import Interact
+
+# import sys, io, traceback
+# class StdoutInterceptor(io.TextIOBase):
+#     def __init__(self, orig):
+#         self._orig = orig
+#     def write(self, s):
+#         try:
+#             if s.strip() == "1":
+#                 self._orig.write("[debug] caught raw '1', stack:\n")
+#                 traceback.print_stack(limit=8, file=self._orig)
+#         except Exception:
+#             pass
+#         return self._orig.write(s)
+#     def flush(self): 
+#         return self._orig.flush()
+# sys.stdout = StdoutInterceptor(sys.stdout)
+
+# 程序退出处理
+def cleanup_on_exit():
+    """程序退出时的清理函数"""
+    try:
+        util.log(1, '程序退出，正在清理资源...')
+        if fay_booter.is_running():
+            fay_booter.stop()
+        
+        # 停止所有自定义线程
+        try:
+            from scheduler.thread_manager import stopAll
+            util.log(1, '正在停止所有线程...')
+            stopAll()
+            util.log(1, '所有线程已停止')
+        except Exception as e:
+            util.log(1, f'停止线程时出错: {e}')
+            
+        util.log(1, '资源清理完成')
+    except Exception as e:
+        util.log(1, f'清理资源时出错: {e}')
+
+# 信号处理函数
+def signal_handler(signum, frame):
+    """处理终止信号"""
+    util.log(1, f'收到信号 {signum}，正在退出程序...')
+    
+    # 使用独立线程进行清理，避免信号处理器被阻塞
+    def cleanup_and_exit():
+        try:
+            cleanup_on_exit()
+        except Exception as e:
+            util.log(1, f'清理过程异常: {e}')
+        finally:
+            # 给其他线程一点时间完成清理
+            time.sleep(1.0)
+            
+            # 强制退出，避免被非守护线程阻塞
+            util.log(1, '程序即将强制退出...')
+            os._exit(0)  # 立即退出，不调用atexit处理器
+    
+    # 在单独线程中执行清理，避免阻塞信号处理器
+    cleanup_thread = threading.Thread(target=cleanup_and_exit, daemon=True)
+    cleanup_thread.start()
+    
+    # 如果清理线程超过5秒还没完成，强制退出
+    cleanup_thread.join(timeout=5.0)
+    if cleanup_thread.is_alive():
+        util.log(1, '清理超时，立即强制退出...')
+        os._exit(1)
+
+# 注册退出处理和信号处理
+atexit.register(cleanup_on_exit)
+try:
+    signal.signal(signal.SIGINT, signal_handler)   # Ctrl+C
+    signal.signal(signal.SIGTERM, signal_handler)  # 终止信号
+    # Windows特有信号
+    if hasattr(signal, 'SIGBREAK'):
+        signal.signal(signal.SIGBREAK, signal_handler)
+except Exception as e:
+    util.log(1, f'注册信号处理器失败: {e}')
 
 #载入配置
 config_util.load_config()
@@ -38,7 +118,11 @@ def __clear_logs():
         os.mkdir("./logs")
     for file_name in os.listdir('./logs'):
         if file_name.endswith('.log'):
-            os.remove('./logs/' + file_name)        
+            try:
+                os.remove('./logs/' + file_name)
+            except PermissionError:
+                print(f"Warning: Cannot delete {file_name} - file is in use by another process")
+                continue        
 
 def __create_memory():
     if not os.path.exists("./memory"):

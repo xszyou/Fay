@@ -78,11 +78,14 @@ class StreamManager:
         if len(sentence) > 10240:  # 10KB限制
             sentence = sentence[:10240]
 
-        if sentence.endswith('_<isfirst>'):
-            self.clear_Stream(username)
-
         # 使用锁保护获取和写入操作
         with self.lock:
+            # 检查是否包含_<isfirst>标记（可能在句子中间）
+            if '_<isfirst>' in sentence:
+                # 清空文本流
+                self._clear_Stream_internal(username)
+                # 清空音频队列（打断时需要清空音频）
+                self._clear_audio_queue(username)
             try:
                 Stream, nlp_Stream = self.get_Stream(username)
                 success = Stream.write(sentence)
@@ -92,16 +95,41 @@ class StreamManager:
                 print(f"写入句子时出错: {e}")
                 return False
 
+    def _clear_Stream_internal(self, username):
+        """
+        内部清除文本流方法，不获取锁（调用者必须已持有锁）
+        :param username: 用户名
+        """
+        if username in self.streams:
+            self.streams[username].clear()
+        if username in self.nlp_streams:
+            self.nlp_streams[username].clear()
+
+    def _clear_audio_queue(self, username):
+        """
+        清空指定用户的音频队列
+        :param username: 用户名
+        """
+        import queue
+        fay_core = fay_booter.feiFei
+        fay_core.sound_query = queue.Queue()
+
     def clear_Stream(self, username):
         """
-        清除指定用户ID的文本流数据
+        清除指定用户ID的文本流数据（外部调用接口，仅清除文本流）
         :param username: 用户名
         """
         with self.lock:
-            if username in self.streams:
-                self.streams[username].clear()
-            if username in self.nlp_streams:
-                self.nlp_streams[username].clear()
+            self._clear_Stream_internal(username)
+
+    def clear_Stream_with_audio(self, username):
+        """
+        清除指定用户ID的文本流数据和音频队列（完全清除）
+        :param username: 用户名
+        """
+        with self.lock:
+            self._clear_Stream_internal(username)
+            self._clear_audio_queue(username)
 
     def listen(self, username, stream, nlp_stream):
         while self.running:

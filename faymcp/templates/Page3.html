@@ -292,17 +292,82 @@
         flex-wrap: wrap;
       }
       .mcp-info-item {
-        width: 33.33%;
+        width: 50%;
         margin-bottom: 10px;
         display: flex;
+      }
+      /* 让工具列表占满整行 */
+      .mcp-info-item:nth-child(4) {
+        width: 100%;
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      /* 工具列表容器样式 */
+      .tools-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 5px;
+        width: 100%;
+      }
+      /* 工具按钮样式 */
+      .tool-btn {
+        padding: 6px 12px;
+        border-radius: 20px;
+        border: 1px solid #dcdfe6;
+        background-color: #fff;
+        color: #606266;
+        cursor: pointer;
+        transition: all 0.3s;
+        font-size: 14px;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        user-select: none;
+      }
+      .tool-btn:hover {
+        border-color: #409eff;
+        color: #409eff;
+      }
+      /* 工具启用状态 */
+      .tool-btn.enabled {
+        background-color: #409eff;
+        color: #fff;
+        border-color: #409eff;
+      }
+      .tool-btn.enabled:hover {
+        background-color: #66b1ff;
+        border-color: #66b1ff;
+      }
+      /* 工具禁用状态 */
+      .tool-btn.disabled {
+        background-color: #f5f7fa;
+        color: #c0c4cc;
+        border-color: #e4e7ed;
+        cursor: not-allowed;
+      }
+      /* 状态指示点 */
+      .tool-status-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background-color: #c0c4cc;
+      }
+      .tool-btn.enabled .tool-status-dot {
+        background-color: #67c23a;
       }
       .mcp-info-label {
         font-weight: bold;
         width: 100px;
         color: #606266;
+        flex-shrink: 0;
+        margin-right: 10px;
       }
       .mcp-info-value {
         color: #303133;
+        flex: 1;
+        word-break: break-word;
+        line-height: 1.5;
       }
       /* 让 main_right 成为定位上下文 */
       .main_right {
@@ -337,7 +402,7 @@
           <div class="mcp-container">
             <!-- 使用Jinja2模板循环渲染MCP服务器卡片 -->
             {% for server in mcp_servers %}
-            <div class="mcp-card tooltip" data-server-id="{{ server.id }}">
+            <div class="mcp-card tooltip" data-server-id="{{ server.id }}" data-transport="{{ server.transport or 'sse' }}" data-command="{{ server.command or '' }}" data-args="{{ (server.args | join(' ')) if server.args else '' }}" data-cwd="{{ server.cwd or '' }}">
               <div class="mcp-header">
                 <div class="mcp-title">{{ server.name }}</div>
                 <div class="status-{{ server.status }}">
@@ -387,12 +452,41 @@
                     <input type="text" class="mcp-input" id="mcpName" placeholder="请输入名称">
                   </div>
                   <div class="mcp-form-item">
-                    <label class="mcp-label">SSE服务器:</label>
-                    <input type="text" class="mcp-input" id="mcpIp" placeholder="请输入SSE地址">
+                    <label class="mcp-label">类型:</label>
+                    <select class="mcp-input" id="mcpTransport">
+                      <option value="sse" selected>SSE（远程）</option>
+                      <option value="stdio">STDIO（本地）</option>
+                    </select>
                   </div>
-                  <div class="mcp-form-item">
-                    <label class="mcp-label">Key:</label>
-                    <input type="text" class="mcp-input" id="mcpKey" placeholder="（可留空）请输入Key">
+                  <!-- SSE 配置 -->
+                  <div id="sseFields">
+                    <div class="mcp-form-item">
+                      <label class="mcp-label">SSE服务器:</label>
+                      <input type="text" class="mcp-input" id="mcpIp" placeholder="请输入SSE地址">
+                    </div>
+                    <div class="mcp-form-item">
+                      <label class="mcp-label">Key:</label>
+                      <input type="text" class="mcp-input" id="mcpKey" placeholder="（可留空）请输入Key">
+                    </div>
+                  </div>
+                  <!-- STDIO 配置 -->
+                  <div id="stdioFields" style="display:none;">
+                    <div class="mcp-form-item">
+                      <label class="mcp-label">命令:</label>
+                      <input type="text" class="mcp-input" id="mcpCommand" placeholder="例如: node">
+                    </div>
+                    <div class="mcp-form-item">
+                      <label class="mcp-label">参数:</label>
+                      <input type="text" class="mcp-input" id="mcpArgs" placeholder='例如: ./servers/fs-server.js --port 0'>
+                    </div>
+                    <div class="mcp-form-item">
+                      <label class="mcp-label">工作目录:</label>
+                      <input type="text" class="mcp-input" id="mcpCwd" placeholder="可留空，默认当前目录">
+                    </div>
+                    <div class="mcp-form-item">
+                      <label class="mcp-label">环境变量(JSON):</label>
+                      <input type="text" class="mcp-input" id="mcpEnv" placeholder='例如: {"MODE":"local"}'>
+                    </div>
                   </div>
                 </div>
                 <div class="mcp-dialog-footer">
@@ -414,7 +508,7 @@
               </div>
               <div class="mcp-info-item">
                 <span class="mcp-info-label">服务器类型:</span>
-                <span class="mcp-info-value">SSE</span>
+                <span class="mcp-info-value">--</span>
               </div>
               <div class="mcp-info-item">
                 <span class="mcp-info-label">延迟:</span>
@@ -422,7 +516,11 @@
               </div>
               <div class="mcp-info-item">
                 <span class="mcp-info-label">可用工具:</span>
-                <span class="mcp-info-value">--</span>
+                <div class="mcp-info-value">
+                  <div class="tools-container" id="toolsContainer">
+                    <span style="color: #909399;">--</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -446,23 +544,42 @@
         console.log("添加按钮被点击");
         // 获取输入值
         const name = document.getElementById('mcpName').value.trim();
-        const ip = document.getElementById('mcpIp').value.trim();
-        const key = document.getElementById('mcpKey').value.trim();
-        
-        console.log("输入值:", name, ip, key ? "(Key已输入)" : "(无Key)");
-        
-        // 简单验证
-        if (!name || !ip) {
-          alert('请填写完整的MCP信息');
-          return;
+        const transport = document.getElementById('mcpTransport').value;
+
+        let data = { name, transport };
+        if (transport === 'stdio') {
+          const command = document.getElementById('mcpCommand').value.trim();
+          const argsStr = document.getElementById('mcpArgs').value.trim();
+          const cwd = document.getElementById('mcpCwd').value.trim();
+          const envStr = document.getElementById('mcpEnv').value.trim();
+
+          if (!name || !command) {
+            alert('请填写名称与命令');
+            return;
+          }
+
+          let args = [];
+          if (argsStr) {
+            // 简单按空格拆分，支持引号可后续优化
+            args = argsStr.match(/\"[^\"]*\"|'[^']*'|[^\s]+/g) || [];
+            args = args.map(s => s.replace(/^"|"$/g, '').replace(/^'|'$/g, ''));
+          }
+
+          let env = {};
+          if (envStr) {
+            try { env = JSON.parse(envStr); } catch (e) { alert('环境变量需为合法JSON'); return; }
+          }
+
+          data = { ...data, command, args, cwd, env };
+        } else {
+          const ip = document.getElementById('mcpIp').value.trim();
+          const key = document.getElementById('mcpKey').value.trim();
+          if (!name || !ip) {
+            alert('请填写名称与SSE地址');
+            return;
+          }
+          data = { ...data, ip, key };
         }
-        
-        // 准备数据
-        const data = {
-          name: name,
-          ip: ip,
-          key: key  // 添加 Key 参数
-        };
         
         console.log("准备发送数据:", JSON.stringify(data));
         
@@ -513,6 +630,22 @@
           console.log('添加服务器按钮事件已绑定');
         } else {
           console.error('找不到添加服务器按钮元素');
+        }
+
+        // 绑定类型切换，显示/隐藏字段
+        const transportSel = document.getElementById('mcpTransport');
+        const sseFields = document.getElementById('sseFields');
+        const stdioFields = document.getElementById('stdioFields');
+        if (transportSel) {
+          transportSel.addEventListener('change', function() {
+            if (this.value === 'stdio') {
+              sseFields.style.display = 'none';
+              stdioFields.style.display = 'block';
+            } else {
+              sseFields.style.display = 'block';
+              stdioFields.style.display = 'none';
+            }
+          });
         }
       });
 
@@ -639,22 +772,18 @@
               // 更新信息面板
               updateInfoPanel(data.server, toolsInfo);
               
-              // 选中当前卡片
-              mcpCards.forEach(c => c.classList.remove('selected'));
+              // 选中当前卡片并更新面板
+              document.querySelectorAll('.mcp-card.selected').forEach(c => c.classList.remove('selected'));
               card.classList.add('selected');
-              
-              // 触发卡片点击事件，更新信息卡片
-              card.click();
+              onCardSelected(card);
             } else {
               // 没有工具时也更新信息面板
               updateInfoPanel(data.server, '无可用工具');
               
-              // 选中当前卡片
-              mcpCards.forEach(c => c.classList.remove('selected'));
+              // 选中当前卡片并更新面板
+              document.querySelectorAll('.mcp-card.selected').forEach(c => c.classList.remove('selected'));
               card.classList.add('selected');
-              
-              // 触发卡片点击事件，更新信息卡片
-              card.click();
+              onCardSelected(card);
             }
           } else {
             // 连接失败
@@ -796,22 +925,18 @@
               // 更新信息面板
               updateInfoPanel(data.server, toolsInfo);
               
-              // 选中当前卡片
-              mcpCards.forEach(c => c.classList.remove('selected'));
+              // 选中当前卡片并更新面板
+              document.querySelectorAll('.mcp-card.selected').forEach(c => c.classList.remove('selected'));
               card.classList.add('selected');
-              
-              // 触发卡片点击事件，更新信息卡片
-              card.click();
+              onCardSelected(card);
             } else {
               // 没有工具时也更新信息面板
               updateInfoPanel(data.server, '无可用工具');
               
-              // 选中当前卡片
-              mcpCards.forEach(c => c.classList.remove('selected'));
+              // 选中当前卡片并更新面板
+              document.querySelectorAll('.mcp-card.selected').forEach(c => c.classList.remove('selected'));
               card.classList.add('selected');
-              
-              // 触发卡片点击事件，更新信息卡片
-              card.click();
+              onCardSelected(card);
             }
           } else {
             // 连接失败
@@ -855,9 +980,10 @@
       
       // 卡片选中功能
       const mcpCards = document.querySelectorAll('.mcp-card');
+      const container = document.querySelector('.mcp-container');
       const infoPanel = document.querySelector('.mcp-info-panel');
       const infoValues = document.querySelectorAll('.mcp-info-value');
-      
+
       // 处理长文本，超出长度使用省略号替代
       function truncateText(text, maxLength = 30) {
         if (!text) return '';
@@ -865,82 +991,178 @@
         return text.substring(0, maxLength - 3) + '...';
       }
       
-      mcpCards.forEach((card, index) => {
-        // 处理卡片中的服务器地址，如果太长则使用省略号替代
-        const ipValue = card.querySelector('.mcp-info:nth-child(2) .mcp-value');
-        if (ipValue) {
-          ipValue.textContent = truncateText(ipValue.textContent);
-          // 添加完整地址的 title 属性，鼠标悬停时显示完整地址
-          ipValue.title = ipValue.getAttribute('data-full-ip') || ipValue.textContent;
+      // 首次渲染：处理省略显示
+      mcpCards.forEach((card) => {
+        const ipNode = card.querySelector('.mcp-info:nth-child(2) .mcp-value');
+        if (ipNode) {
+          const full = ipNode.getAttribute('data-full-ip') || ipNode.textContent;
+          ipNode.textContent = truncateText(full);
+          ipNode.title = full;
         }
-        
-        card.addEventListener('click', () => {
-          // 移除其他卡片的选中状态
-          mcpCards.forEach(c => c.classList.remove('selected'));
-          
-          // 添加当前卡片的选中状态
-          card.classList.add('selected');
-          
-          // 显示信息面板
-          infoPanel.classList.add('active');
-          
-          // 获取服务器ID和信息
-          const serverId = card.getAttribute('data-server-id');
-          const serverName = card.querySelector('.mcp-title').textContent;
-          const serverIp = card.querySelector('.mcp-info:nth-child(2) .mcp-value').getAttribute('data-full-ip') || 
-                           card.querySelector('.mcp-info:nth-child(2) .mcp-value').textContent;
-          const serverLatency = card.querySelector('.mcp-info:nth-child(3) .mcp-value').textContent;
-          const serverStatus = card.querySelector('.status-online, .status-offline').className;
-          
-          // 更新信息面板内容
-          const ipValue = infoPanel.querySelector('.mcp-info-item:nth-child(1) .mcp-info-value');
-          const typeValue = infoPanel.querySelector('.mcp-info-item:nth-child(2) .mcp-info-value');
-          const latencyValue = infoPanel.querySelector('.mcp-info-item:nth-child(3) .mcp-info-value');
-          const toolsValue = infoPanel.querySelector('.mcp-info-item:nth-child(4) .mcp-info-value');
-          
-          if (ipValue) {
-            ipValue.textContent = truncateText(serverIp);
-            ipValue.title = serverIp; // 添加完整地址的 title 属性
-          }
-          if (latencyValue) latencyValue.textContent = serverLatency;
-          
-          // 如果服务器在线，获取工具列表
-          if (serverStatus.includes('online')) {
-            // 显示加载状态
-            if (toolsValue) toolsValue.textContent = '加载中...';
-            
-            // 发送请求获取工具列表
-            fetch(`/api/mcp/servers/${serverId}/tools`, {
-              method: 'GET'
-            })
-            .then(response => response.json())
-            .then(data => {
-              if (data.success && data.tools && data.tools.length > 0) {
-                const toolNames = data.tools.map(tool => {
-                  if (typeof tool === 'object' && tool !== null && tool.name) {
-                    return tool.name;
-                  } else if (typeof tool === 'string') {
-                    return tool;
-                  } else {
-                    return '未知工具';
-                  }
-                });
-                
-                toolsValue.textContent = toolNames.join(', ');
-              } else {
-                toolsValue.textContent = '无可用工具';
-              }
-            })
-            .catch(error => {
-              console.error('获取工具列表失败:', error);
-              toolsValue.textContent = '获取工具列表失败';
-            });
-          } else {
-            // 服务器离线
-            if (toolsValue) toolsValue.textContent = '服务器离线';
-          }
-        });
       });
+
+      // 统一的卡片点击处理
+      function initCardSelection() {
+        const cards = document.querySelectorAll('.mcp-card');
+        cards.forEach((card) => {
+          card.addEventListener('click', function(e) {
+            // 如果点击的是操作按钮区域，不处理选中逻辑
+            if (e.target.closest('.mcp-actions')) {
+              e.stopPropagation();
+              return;
+            }
+            // 移除所有选中状态
+            document.querySelectorAll('.mcp-card.selected').forEach(c => c.classList.remove('selected'));
+            // 添加当前卡片选中状态
+            this.classList.add('selected');
+            // 调用选中处理函数
+            onCardSelected(this);
+          });
+        });
+      }
+      
+      // 页面加载完成后初始化
+      function initPage() {
+        initCardSelection();
+        
+        // 自动选中第一个在线的服务器卡片
+        const onlineCard = document.querySelector('.mcp-card .status-online')?.closest('.mcp-card');
+        const firstCard = document.querySelector('.mcp-card');
+        
+        if (onlineCard) {
+          onlineCard.classList.add('selected');
+          onCardSelected(onlineCard);
+        } else if (firstCard) {
+          // 如果没有在线的，选中第一个卡片
+          firstCard.classList.add('selected');
+          onCardSelected(firstCard);
+        }
+      }
+      
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initPage);
+      } else {
+        initPage();
+      }
+
+      function onCardSelected(card) {
+        const infoPanel = document.querySelector('.mcp-info-panel');
+        if (!infoPanel) return;
+        
+        infoPanel.classList.add('active');
+        const serverId = card.getAttribute('data-server-id');
+        const nameNode = card.querySelector('.mcp-title');
+        const ipNode = card.querySelector('.mcp-info:nth-child(2) .mcp-value');
+        const latencyNode = card.querySelector('.mcp-info:nth-child(3) .mcp-value');
+        const connectionTimeNode = card.querySelector('.mcp-info:nth-child(4) .mcp-value');
+        const statusDiv = card.querySelector('.status-online, .status-offline');
+        const transport = card.getAttribute('data-transport') || 'sse';
+
+        const server = {
+          name: nameNode ? nameNode.textContent : '--',
+          ip: ipNode ? (ipNode.getAttribute('data-full-ip') || ipNode.textContent) : '--',
+          latency: latencyNode ? latencyNode.textContent : '--',
+          connectionTime: connectionTimeNode ? connectionTimeNode.textContent : '--',
+          transport: transport
+        };
+
+        // 更新面板基础信息
+        const ipValue = infoPanel.querySelector('.mcp-info-item:nth-child(1) .mcp-info-value');
+        const typeValue = infoPanel.querySelector('.mcp-info-item:nth-child(2) .mcp-info-value');
+        const latencyValue = infoPanel.querySelector('.mcp-info-item:nth-child(3) .mcp-info-value');
+        const toolsValue = infoPanel.querySelector('.mcp-info-item:nth-child(4) .mcp-info-value');
+        
+        if (ipValue) { 
+          ipValue.textContent = truncateText(server.ip); 
+          ipValue.title = server.ip; 
+        }
+        if (typeValue) {
+          typeValue.textContent = transport === 'stdio' ? 'STDIO（本地）' : 'SSE（远程）';
+        }
+        if (latencyValue) { 
+          latencyValue.textContent = server.latency; 
+        }
+        const toolsContainer = document.getElementById('toolsContainer');
+        if (toolsContainer) { 
+          toolsContainer.innerHTML = '<span style="color: #909399;">加载中...</span>'; 
+        }
+
+        // 检查是否在线
+        const isOnline = statusDiv && statusDiv.classList.contains('status-online');
+        if (!isOnline) {
+          const toolsContainer = document.getElementById('toolsContainer');
+          if (toolsContainer) {
+            toolsContainer.innerHTML = '<span style="color: #909399;">服务器离线（点击"连接"按钮后可查看工具）</span>';
+          }
+          return;
+        }
+
+        // 加载工具列表
+        fetch(`/api/mcp/servers/${serverId}/tools`)
+          .then(response => {
+            if (!response.ok) {
+              throw new Error('Failed to fetch tools');
+            }
+            return response.json();
+          })
+          .then(data => {
+            console.log('工具数据:', data); // 调试信息
+            const toolsContainer = document.getElementById('toolsContainer');
+            if (toolsContainer) {
+              toolsContainer.innerHTML = '';
+              const tools = data.tools || [];
+              
+              if (tools.length > 0) {
+                tools.forEach(tool => {
+                  console.log('工具对象:', tool); // 调试信息
+                  let toolName = '';
+                  let toolEnabled = true; // 默认启用
+                  
+                  if (typeof tool === 'object' && tool !== null) {
+                    toolName = tool.name || '未知工具';
+                    // 如果后端返回了启用状态，使用它
+                    if (typeof tool.enabled !== 'undefined') {
+                      toolEnabled = tool.enabled;
+                      console.log(`工具 ${toolName} 状态:`, toolEnabled); // 调试信息
+                    }
+                  } else if (typeof tool === 'string') {
+                    toolName = tool;
+                  } else {
+                    toolName = '未知工具';
+                  }
+                  
+                  // 创建工具按钮
+                  const toolBtn = document.createElement('div');
+                  toolBtn.className = `tool-btn ${toolEnabled ? 'enabled' : ''}`;
+                  toolBtn.innerHTML = `
+                    <span class="tool-status-dot"></span>
+                    <span>${toolName}</span>
+                  `;
+                  toolBtn.title = `点击${toolEnabled ? '禁用' : '启用'}工具: ${toolName}`;
+                  toolBtn.dataset.toolName = toolName;
+                  toolBtn.dataset.serverId = serverId;
+                  toolBtn.dataset.enabled = toolEnabled;
+                  
+                  // 添加点击事件
+                  toolBtn.addEventListener('click', function() {
+                    toggleTool(this, serverId, toolName);
+                  });
+                  
+                  toolsContainer.appendChild(toolBtn);
+                });
+              } else {
+                toolsContainer.innerHTML = '<span style="color: #909399;">无可用工具</span>';
+              }
+            }
+          })
+          .catch(err => {
+            console.error('获取工具列表失败:', err);
+            const toolsContainer = document.getElementById('toolsContainer');
+            if (toolsContainer) {
+              toolsContainer.innerHTML = '<span style="color: #f56c6c;">获取工具列表失败</span>';
+            }
+          });
+      }
 
       // 更新信息面板
       function updateInfoPanel(server, toolsInfo) {
@@ -949,7 +1171,7 @@
         
         const ipValue = infoPanel.querySelector('.mcp-info-item:nth-child(1) .mcp-info-value');
         const latencyValue = infoPanel.querySelector('.mcp-info-item:nth-child(3) .mcp-info-value');
-        const toolsValue = infoPanel.querySelector('.mcp-info-item:nth-child(4) .mcp-info-value');
+        const toolsContainer = document.getElementById('toolsContainer');
         
         if (ipValue && server && server.ip) {
           ipValue.textContent = truncateText(server.ip);
@@ -960,14 +1182,62 @@
           latencyValue.textContent = server.latency;
         }
         
-        if (toolsValue && toolsInfo) {
-          toolsValue.textContent = toolsInfo;
+        if (toolsContainer && toolsInfo) {
+          // 简单显示工具信息文本，连接成功后会由onCardSelected更新为按钮
+          toolsContainer.innerHTML = `<span style="color: #303133;">${toolsInfo}</span>`;
         }
         
         // 显示信息面板
         infoPanel.classList.add('active');
       }
 
+      // 切换工具状态
+      function toggleTool(btn, serverId, toolName) {
+        const isEnabled = btn.dataset.enabled === 'true';
+        const newState = !isEnabled;
+        
+        // 立即更新UI
+        btn.dataset.enabled = newState;
+        if (newState) {
+          btn.classList.add('enabled');
+          btn.title = `点击禁用工具: ${toolName}`;
+        } else {
+          btn.classList.remove('enabled');
+          btn.title = `点击启用工具: ${toolName}`;
+        }
+        
+        // 发送API请求更新状态
+        fetch(`/api/mcp/servers/${serverId}/tools/${encodeURIComponent(toolName)}/toggle`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ enabled: newState })
+        })
+        .then(response => {
+          if (!response.ok) {
+            throw new Error('Failed to toggle tool state');
+          }
+          return response.json();
+        })
+        .then(data => {
+          console.log(`工具 ${toolName} 已${newState ? '启用' : '禁用'}`);
+        })
+        .catch(err => {
+          console.error('切换工具状态失败:', err);
+          // 恢复原状态
+          btn.dataset.enabled = isEnabled;
+          if (isEnabled) {
+            btn.classList.add('enabled');
+            btn.title = `点击禁用工具: ${toolName}`;
+          } else {
+            btn.classList.remove('enabled');
+            btn.title = `点击启用工具: ${toolName}`;
+          }
+          alert(`切换工具状态失败: ${err.message}`);
+        });
+      }
+      
       // 初始化Vue实例
       new Vue({
         el: '#app',

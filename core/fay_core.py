@@ -323,7 +323,7 @@ class FeiFei:
                 return result         
                 
         except BaseException as e:
-            print(e) #TODO 不合成声音时，这里打印了1，调试了一下
+            print(e) 
         return None
     
     #下载wav

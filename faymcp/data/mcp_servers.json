@@ -1,9 +1,30 @@
 [
     {
         "id": 1,
-        "name": "time",
-        "ip": "https://mcp.api-inference.modelscope.cn/sse/896ded03280143",
-        "connection_time": "2025-05-17 01:11:25",
-        "key": ""
+        "name": "tools",
+        "ip": "",
+        "connection_time": "2025-08-28 00:17:54",
+        "key": "",
+        "transport": "stdio",
+        "command": "python",
+        "args": [
+            "test/mcp_stdio_example.py"
+        ],
+        "cwd": "",
+        "env": {}
+    },
+    {
+        "id": 2,
+        "name": "Fay日程管理",
+        "ip": "",
+        "connection_time": "2025-08-28 00:17:57",
+        "key": "",
+        "transport": "stdio",
+        "command": "python",
+        "args": [
+            "server.py"
+        ],
+        "cwd": "mcp_servers/schedule_manager",
+        "env": {}
     }
 ]

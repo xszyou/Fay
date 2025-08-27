@@ -1,0 +1,16 @@
+{
+    "5": {
+        "now": true,
+        "add": false,
+        "upper": false,
+        "echo": false,
+        "ping": false
+    },
+    "1": {
+        "add": false,
+        "upper": false,
+        "echo": false,
+        "ping": false
+    },
+    "2": {}
+}

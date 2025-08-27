@@ -38,6 +38,29 @@ def remove_thread(thread: MyThread):
 
 
 def stopAll():
-    for thread in __thread_list:
-        thread.raise_exception()
-        thread.join()
+    """停止所有MyThread线程"""
+    if not __thread_list:
+        return
+    
+    # 先尝试正常停止
+    stopped_threads = []
+    for thread in __thread_list[:]:  # 使用副本避免修改时出错
+        try:
+            if thread.is_alive():
+                thread.raise_exception()
+                stopped_threads.append(thread)
+        except Exception as e:
+            print(f"停止线程异常: {e}")
+    
+    # 等待线程结束，但设置超时避免无限等待
+    import time
+    for thread in stopped_threads:
+        try:
+            thread.join(timeout=2.0)  # 最多等待2秒
+            if thread.is_alive():
+                print(f"线程 {thread.name} 超时未结束")
+        except Exception as e:
+            print(f"等待线程结束异常: {e}")
+    
+    # 清空线程列表
+    __thread_list.clear()

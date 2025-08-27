@@ -17,6 +17,7 @@ import tempfile
 import wave
 from core import fay_core
 from core import interact
+from core import stream_manager
 # 麦克风启动时间 (秒)
 _ATTACK = 0.1
 
@@ -135,6 +136,7 @@ class Recorder:
 
                             intt = interact.Interact("auto_play", 2, {'user': self.username, 'text': "在呢，你说？" , "isfirst" : True, "isend" : True})
                             self.__fay.on_interact(intt)
+                            stream_manager.new_instance().clear_Stream_with_audio(self.username)
                             self.processing = False
                             self.timer.cancel()  # 取消之前的计时器任务
                             
@@ -169,9 +171,8 @@ class Recorder:
                         if wsa_server.get_instance().is_connected(self.username):
                             content = {'Topic': 'human', 'Data': {'Key': 'log', 'Value': "唤醒成功！"}, 'Username' : self.username, 'robot': f'{cfg.fay_url}/robot/Listening.jpg'}
                             wsa_server.get_instance().add_cmd(content)
-                        #去除唤醒词后语句
-                        question = text#[len(wake_up_word):].lstrip()
-                        self.__fay.sound_query = Queue()
+                        question = text#[len(wake_up_word):].lstrip()不去除唤醒词
+                        stream_manager.new_instance().clear_Stream_with_audio(self.username)
                         time.sleep(0.3)
                         self.on_speaking(question)
                         self.processing = False

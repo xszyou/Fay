@@ -43,7 +43,7 @@ from core import stream_manager
 os.environ["LANGCHAIN_TRACING_V2"] = "true"
 os.environ["LANGCHAIN_ENDPOINT"] = "https://api.smith.langchain.com"
 os.environ["LANGCHAIN_API_KEY"] = "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"
-os.environ["LANGCHAIN_PROJECT"] = "fay3.1.2_github"
+os.environ["LANGCHAIN_PROJECT"] = "fay3.8.2_github"
 
 # 加载配置
 cfg.load_config()
@@ -818,7 +818,7 @@ def question(content, username, observation=None):
     # 2. 存在mcp工具，走react agent
     if mcp_tools:
 
-        is_agent_think_start = False
+        is_agent_think_start = False#记录是否已经写入start标签
         #2.1 构建react agent
         tools = [_build_tool(t) for t in mcp_tools] if mcp_tools else []
         react_agent = create_react_agent(llm, tools)
@@ -830,7 +830,7 @@ def question(content, username, observation=None):
         for chunk in react_agent.stream(
                     {"messages": messages}, {"configurable": {"thread_id": "tid{}".format(username)}}
                 ):
-            react_response_text = ""
+            react_response_text = ""           
             # 消息类型1：检测工具调用开始
             if "agent" in chunk and "tool_calls" in str(chunk):
                 try:
@@ -845,6 +845,8 @@ def question(content, username, observation=None):
                         if is_first_sentence:
                             content_temp = react_response_text + "_<isfirst>"
                             is_first_sentence = False
+                        else:
+                            content_temp = react_response_text
 
                         stream_manager.new_instance().write_sentence(username, content_temp)
                 except (KeyError, IndexError, AttributeError) as e:
@@ -1065,9 +1067,14 @@ def perform_daily_reflection():
         
         # 执行反思，传入当前时间戳
         for username, agent in agents.items():
-            # 获取当前时间作为time_step
-            current_time_step = get_current_time_step(username)
-            agent.reflect(topic, time_step=current_time_step)
+            try:
+                # 获取当前时间作为time_step
+                current_time_step = get_current_time_step(username)
+                agent.reflect(topic, time_step=current_time_step)
+            except KeyError as e:
+                util.log(1, f"反思时出现KeyError: {e}，跳过此次反思")
+            except Exception as e:
+                util.log(1, f"反思时出现错误: {e}，跳过此次反思")
         
         # 记录反思执行情况
         util.log(1, f"反思主题: {topic}")

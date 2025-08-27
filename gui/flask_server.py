@@ -459,7 +459,7 @@ def non_streaming_response(last_content, username):
         text += sentence.replace("_<isfirst>", "").replace("_<isend>", "")
         if is_end:
             if username in fay_booter.feiFei.nlp_streams:
-                stream_manager.new_instance().clear_Stream(username)
+                stream_manager.new_instance().clear_Stream(username) 
             break
     return jsonify({
         "id": "fay-" + str(uuid.uuid4()),
@@ -562,6 +562,8 @@ def to_stop_talking():
         username = data.get('username', 'User')
         message = data.get('text', '你好，请说？')
         observation = data.get('observation', '')
+        from queue import Queue
+        stream_manager.clear_Stream_with_audio(username)
         interact = Interact("stop_talking", 2, {'user': username, 'text': message, 'observation': str(observation)})
         result = fay_booter.feiFei.on_interact(interact)
         return jsonify({

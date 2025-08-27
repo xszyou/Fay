@@ -4,6 +4,7 @@
 from flask import Flask, render_template, request, jsonify, redirect, url_for
 import os
 import sys
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import json
 import time
 import threading
@@ -12,6 +13,8 @@ from datetime import datetime
 from flask_cors import CORS
 from faymcp.mcp_client import McpClient
 from utils import util
+
+
 
 # 创建Flask应用
 app = Flask(__name__)
@@ -23,6 +26,9 @@ CORS(app, resources={r"/*": {"origins": "*"}})
 # MCP服务器数据文件路径
 MCP_DATA_FILE = os.path.join(os.path.dirname(__file__), 'data', 'mcp_servers.json')
 
+# MCP工具状态数据文件路径
+MCP_TOOL_STATES_FILE = os.path.join(os.path.dirname(__file__), 'data', 'mcp_tool_states.json')
+
 # 确保data目录存在
 os.makedirs(os.path.dirname(MCP_DATA_FILE), exist_ok=True)
 
@@ -31,6 +37,9 @@ mcp_clients = {}
 
 # 存储MCP服务器工具列表的字典，键为服务器ID
 mcp_tools = {}
+
+# 存储工具状态的字典，键为服务器ID，值为工具名称->状态的字典
+mcp_tool_states = {}
 
 # 连接检查定时器
 connection_check_timer = None
@@ -61,6 +70,42 @@ def load_mcp_servers():
         util.log(1, f"加载MCP服务器数据失败: {e}")
         return default_mcp_servers
 
+# 加载MCP工具状态数据
+def load_mcp_tool_states():
+    try:
+        if os.path.exists(MCP_TOOL_STATES_FILE):
+            with open(MCP_TOOL_STATES_FILE, 'r', encoding='utf-8') as f:
+                states = json.load(f)
+                # 转换字符串键为整数（因为JSON中的键总是字符串）
+                converted_states = {}
+                for server_id_str, tools in states.items():
+                    try:
+                        server_id = int(server_id_str)
+                        converted_states[server_id] = tools
+                    except ValueError:
+                        continue
+                return converted_states
+        else:
+            return {}
+    except Exception as e:
+        util.log(1, f"加载MCP工具状态数据失败: {e}")
+        return {}
+
+# 保存MCP工具状态数据
+def save_mcp_tool_states():
+    try:
+        # 转换整数键为字符串（JSON要求）
+        states_to_save = {}
+        for server_id, tools in mcp_tool_states.items():
+            states_to_save[str(server_id)] = tools
+            
+        with open(MCP_TOOL_STATES_FILE, 'w', encoding='utf-8') as f:
+            json.dump(states_to_save, f, ensure_ascii=False, indent=4)
+        return True
+    except Exception as e:
+        util.log(1, f"保存MCP工具状态数据失败: {e}")
+        return False
+
 # 保存MCP服务器数据
 def save_mcp_servers(servers):
     try:
@@ -71,9 +116,14 @@ def save_mcp_servers(servers):
             server_copy = {
                 "id": server['id'],
                 "name": server['name'],
-                "ip": server['ip'],
+                "ip": server.get('ip', ''),
                 "connection_time": server.get('connection_time', ''),
-                "key": server.get('key', '')  # 保存Key字段
+                "key": server.get('key', ''),  # 保存Key字段
+                "transport": server.get('transport', 'sse'),
+                "command": server.get('command', ''),
+                "args": server.get('args', []),
+                "cwd": server.get('cwd', ''),
+                "env": server.get('env', {})
             }
             servers_to_save.append(server_copy)
             
@@ -87,6 +137,24 @@ def save_mcp_servers(servers):
 # 初始化MCP服务器数据
 mcp_servers = load_mcp_servers()
 
+# 初始化MCP工具状态数据
+mcp_tool_states = load_mcp_tool_states()
+
+# 工具状态管理函数
+def get_tool_state(server_id, tool_name):
+    """获取工具的启用状态，默认为True"""
+    if server_id not in mcp_tool_states:
+        mcp_tool_states[server_id] = {}
+    return mcp_tool_states[server_id].get(tool_name, True)
+
+def set_tool_state(server_id, tool_name, enabled):
+    """设置工具的启用状态"""
+    if server_id not in mcp_tool_states:
+        mcp_tool_states[server_id] = {}
+    mcp_tool_states[server_id][tool_name] = enabled
+    # 立即保存到文件
+    save_mcp_tool_states()
+
 # 连接真实MCP服务器
 def connect_to_real_mcp(server):
     """
@@ -96,15 +164,39 @@ def connect_to_real_mcp(server):
     """
     global mcp_clients
     try:
-        # 获取服务器IP、ID和Key
-        ip = server['ip']
+        # 获取服务器配置
         server_id = server['id']
-        api_key = server.get('key', '')  # 获取Key，如果不存在则为空字符串
+        transport = server.get('transport', 'sse')
+        api_key = server.get('key', '')  # 获取Key
         
-        # 构建MCP服务器端点URL
-        endpoint = ip
-        # 创建MCP客户端，传入API密钥
-        client = McpClient(endpoint, api_key)
+        # 如果已存在旧连接，先断开并清理（防止重复连接）
+        if server_id in mcp_clients:
+            try:
+                old_client = mcp_clients[server_id]
+                if hasattr(old_client, 'disconnect'):
+                    old_client.disconnect()
+                # util.log(1, f"已断开服务器 {server['name']} (ID: {server_id}) 的旧连接")
+            except Exception as e:
+                pass  # 静默处理断开旧连接的错误
+            del mcp_clients[server_id]
+        
+        client = None
+        if transport == 'stdio':
+            # 统一默认工作目录为项目根目录（faymcp 的上一级），避免相对路径在不同启动目录下失效
+            repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+            cfg_cwd = server.get('cwd')
+            cwd = cfg_cwd if (cfg_cwd and str(cfg_cwd).strip()) else repo_root
+            stdio_config = {
+                "command": server.get('command'),
+                "args": server.get('args', []) or [],
+                "cwd": cwd,
+                "env": (server.get('env') or None),
+            }
+            client = McpClient(server_url=None, api_key=None, transport='stdio', stdio_config=stdio_config)
+        else:
+            ip = server.get('ip', '')
+            endpoint = ip
+            client = McpClient(endpoint, api_key)
         
         # 记录开始时间
         start_time = time.time()
@@ -156,6 +248,54 @@ def get_mcp_client(server_id):
     """
     return mcp_clients.get(server_id)
 
+# 断开所有MCP服务连接
+def disconnect_all_mcp_servers():
+    """
+    断开所有MCP服务器连接，清理资源
+    """
+    global mcp_clients, mcp_tools, mcp_servers, connection_check_timer
+    
+    util.log(1, f'开始断开 {len(mcp_clients)} 个MCP服务连接...')
+    
+    # 停止连接检查定时器
+    if connection_check_timer:
+        try:
+            connection_check_timer.cancel()
+            util.log(1, '连接检查定时器已停止')
+        except Exception as e:
+            util.log(1, f'停止连接检查定时器失败: {e}')
+        connection_check_timer = None
+    
+    # 断开所有MCP客户端连接
+    disconnected_count = 0
+    for server_id, client in list(mcp_clients.items()):
+        try:
+            if hasattr(client, 'disconnect'):
+                client.disconnect()
+            elif hasattr(client, 'close'):
+                client.close()
+            disconnected_count += 1
+            util.log(1, f'已断开MCP服务器连接: ID {server_id}')
+        except Exception as e:
+            util.log(1, f'断开MCP服务器连接失败 (ID: {server_id}): {e}')
+    
+    # 清理所有数据
+    mcp_clients.clear()
+    mcp_tools.clear()
+    
+    # 更新所有服务器状态为离线
+    for server in mcp_servers:
+        server['status'] = 'offline'
+        server['latency'] = '0ms'
+    
+    # 保存服务器状态
+    try:
+        save_mcp_servers(mcp_servers)
+    except Exception as e:
+        util.log(1, f'保存MCP服务器状态失败: {e}')
+    
+    util.log(1, f'成功断开 {disconnected_count} 个MCP服务连接，资源已清理')
+
 # 调用MCP服务器工具
 def call_mcp_tool(server_id, method, params=None):
     """
@@ -166,6 +306,10 @@ def call_mcp_tool(server_id, method, params=None):
     :return: (是否成功, 结果或错误信息)
     """
     try:
+        # 检查工具是否被启用
+        if not get_tool_state(server_id, method):
+            return False, f"工具 '{method}' 已被禁用"
+        
         # 获取客户端对象
         client = get_mcp_client(server_id)
         if not client:
@@ -204,25 +348,35 @@ def add_mcp_server():
     data = request.json
     
     # 验证必要字段
-    required_fields = ['name', 'ip']
-    for field in required_fields:
-        if field not in data:
-            return jsonify({"error": f"缺少必要字段: {field}"}), 400
-    
+    transport = data.get('transport', 'sse')
+    if transport == 'stdio':
+        if 'name' not in data or 'command' not in data:
+            return jsonify({"error": "缺少必要字段: name 或 command"}), 400
+    else:
+        required_fields = ['name', 'ip']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({"error": f"缺少必要字段: {field}"}), 400
+
     # 生成新ID (当前最大ID + 1)
     new_id = 1
     if mcp_servers:
         new_id = max(server['id'] for server in mcp_servers) + 1
-    
+
     # 创建新服务器对象
     new_server = {
         "id": new_id,
         "name": data['name'],
         "status": "offline",
-        "ip": data['ip'],
+        "ip": data.get('ip', ''),
         "latency": "0ms",
         "connection_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "key": data.get('key', '')  # 添加Key字段，如果不存在则为空字符串
+        "key": data.get('key', ''),  # 添加Key字段
+        "transport": transport,
+        "command": data.get('command', ''),
+        "args": data.get('args', []),
+        "cwd": data.get('cwd', ''),
+        "env": data.get('env', {})
     }
     
     # 如果请求中包含 auto_connect 字段并且为 True，则尝试连接
@@ -245,9 +399,11 @@ def add_mcp_server():
                         for tool in tools:
                             if hasattr(tool, 'name'):
                                 # 如果是对象，转换为字典
+                                tool_name = str(getattr(tool, 'name', '未知'))
                                 tool_dict = {
-                                    'name': str(getattr(tool, 'name', '未知')),
+                                    'name': tool_name,
                                     'description': str(getattr(tool, 'description', '')),
+                                    'enabled': get_tool_state(server_id, tool_name)
                                 }
                                 
                                 # 处理 inputSchema
@@ -261,18 +417,31 @@ def add_mcp_server():
                             else:
                                 # 如果是字典
                                 if isinstance(tool, dict) and 'name' in tool:
+                                    tool_name = str(tool.get('name', '未知'))
                                     tools_list.append({
-                                        'name': str(tool.get('name', '未知')),
+                                        'name': tool_name,
                                         'description': str(tool.get('description', '')),
-                                        'inputSchema': tool.get('inputSchema', {})
+                                        'inputSchema': tool.get('inputSchema', {}),
+                                        'enabled': get_tool_state(server_id, tool_name)
                                     })
                                 else:
                                     # 其他情况，尝试转换为字符串
-                                    tools_list.append({'name': str(tool), 'description': ''})
+                                    tool_name = str(tool)
+                                    tools_list.append({
+                                        'name': tool_name, 
+                                        'description': '',
+                                        'enabled': get_tool_state(server_id, tool_name)
+                                    })
                     except Exception as e:
                         util.log(1, f"工具列表序列化失败: {e}")
                         # 如果转换失败，只返回工具名称
-                        tools_list = [{'name': str(tool)} for tool in tools]
+                        tools_list = []
+                        for tool in tools:
+                            tool_name = str(tool)
+                            tools_list.append({
+                                'name': tool_name,
+                                'enabled': get_tool_state(server_id, tool_name)
+                            })
                 
         except Exception as e:
             util.log(1, f"自动连接失败: {e}")
@@ -493,11 +662,22 @@ def get_server_tools(server_id):
             
             # 检查是否已有缓存的工具列表
             if server_id in mcp_tools and mcp_tools[server_id]:
-                # 使用缓存的工具列表，添加到结果中
+                # 使用缓存的工具列表，但需要更新enabled状态
+                cached_tools = mcp_tools[server_id]
+                updated_tools = []
+                for tool in cached_tools:
+                    if isinstance(tool, dict) and 'name' in tool:
+                        tool_name = tool['name']
+                        updated_tool = tool.copy()
+                        updated_tool['enabled'] = get_tool_state(server_id, tool_name)
+                        updated_tools.append(updated_tool)
+                    else:
+                        updated_tools.append(tool)
+                
                 return jsonify({
                     "success": True,
-                    "message": "获取工具列表成功（缓存）",
-                    "tools": mcp_tools[server_id]
+                    "message": "获取工具列表成功（缓存+状态更新）",
+                    "tools": updated_tools
                 })
                 
             # 获取客户端对象
@@ -521,9 +701,11 @@ def get_server_tools(server_id):
                         for tool in tools:
                             if hasattr(tool, 'name'):
                                 # 如果是对象，转换为字典
+                                tool_name = str(getattr(tool, 'name', '未知'))
                                 tool_dict = {
-                                    'name': str(getattr(tool, 'name', '未知')),
+                                    'name': tool_name,
                                     'description': str(getattr(tool, 'description', '')),
+                                    'enabled': get_tool_state(server_id, tool_name)
                                 }
                                 
                                 # 处理 inputSchema
@@ -537,18 +719,31 @@ def get_server_tools(server_id):
                             else:
                                 # 如果是字典
                                 if isinstance(tool, dict) and 'name' in tool:
+                                    tool_name = str(tool.get('name', '未知'))
                                     tools_list.append({
-                                        'name': str(tool.get('name', '未知')),
+                                        'name': tool_name,
                                         'description': str(tool.get('description', '')),
-                                        'inputSchema': tool.get('inputSchema', {})
+                                        'inputSchema': tool.get('inputSchema', {}),
+                                        'enabled': get_tool_state(server_id, tool_name)
                                     })
                                 else:
                                     # 其他情况，尝试转换为字符串
-                                    tools_list.append({'name': str(tool), 'description': ''})
+                                    tool_name = str(tool)
+                                    tools_list.append({
+                                        'name': tool_name, 
+                                        'description': '',
+                                        'enabled': get_tool_state(server_id, tool_name)
+                                    })
                     except Exception as e:
                         util.log(1, f"工具列表序列化失败: {e}")
                         # 如果转换失败，只返回工具名称
-                        tools_list = [{'name': str(tool)} for tool in tools]
+                        tools_list = []
+                        for tool in tools:
+                            tool_name = str(tool)
+                            tools_list.append({
+                                'name': tool_name,
+                                'enabled': get_tool_state(server_id, tool_name)
+                            })
                 
                 # 保存工具列表到全局字典中
                 mcp_tools[server_id] = tools_list
@@ -585,8 +780,18 @@ def get_all_online_server_tools():
             
             # 检查是否有缓存的工具列表
             if server_id in mcp_tools and mcp_tools[server_id]:
-                # 使用缓存的工具列表，添加到结果中
-                all_tools.extend(mcp_tools[server_id])
+                # 使用缓存的工具列表，但需要更新enabled状态
+                cached_tools = mcp_tools[server_id]
+                updated_tools = []
+                for tool in cached_tools:
+                    if isinstance(tool, dict) and 'name' in tool:
+                        tool_name = tool['name']
+                        updated_tool = tool.copy()
+                        updated_tool['enabled'] = get_tool_state(server_id, tool_name)
+                        updated_tools.append(updated_tool)
+                    else:
+                        updated_tools.append(tool)
+                all_tools.extend(updated_tools)
             else:
                 # 获取客户端对象
                 client = get_mcp_client(server_id)
@@ -690,8 +895,12 @@ def call_mcp_tool_direct(tool_name):
             tools = client.list_tools()
             tool_names = [str(getattr(tool, 'name', tool)) for tool in tools]
             
-            # 检查工具是否存在
+            # 检查工具是否存在且被启用
             if tool_name in tool_names:
+                # 检查工具是否被启用
+                if not get_tool_state(server_id, tool_name):
+                    continue  # 如果工具被禁用，跳过这个服务器
+                
                 # 调用工具
                 success, result = call_mcp_tool(server_id, tool_name, params)
                 
@@ -835,6 +1044,49 @@ def schedule_connection_check():
     connection_check_timer.daemon = True  # 设置为守护线程，这样主程序退出时它会自动结束
     connection_check_timer.start()
 
+# API路由 - 切换工具状态
+@app.route('/api/mcp/servers/<int:server_id>/tools/<string:tool_name>/toggle', methods=['POST'])
+def toggle_tool_state(server_id, tool_name):
+    """
+    切换工具的启用/禁用状态
+    """
+    try:
+        # 获取请求数据
+        data = request.json or {}
+        enabled = data.get('enabled', True)
+        
+        # 验证服务器是否存在
+        server = None
+        for s in mcp_servers:
+            if s['id'] == server_id:
+                server = s
+                break
+        
+        if not server:
+            return jsonify({
+                "success": False,
+                "message": "服务器不存在"
+            }), 404
+        
+        # 设置工具状态
+        set_tool_state(server_id, tool_name, enabled)
+        
+        util.log(1, f"工具 {tool_name} 在服务器 {server['name']} 上已{'启用' if enabled else '禁用'}")
+        
+        return jsonify({
+            "success": True,
+            "message": f"工具 {tool_name} 已{'启用' if enabled else '禁用'}",
+            "tool_name": tool_name,
+            "enabled": enabled
+        })
+        
+    except Exception as e:
+        util.log(1, f"切换工具状态失败: {e}")
+        return jsonify({
+            "success": False,
+            "message": f"切换工具状态失败: {str(e)}"
+        }), 500
+
 # 启动连接检查
 def start_connection_check():
     """
@@ -870,3 +1122,10 @@ def start():
     # 启动服务器
     from scheduler.thread_manager import MyThread
     MyThread(target=run).start()
+
+if __name__ == '__main__':
+    import logging
+    logging.basicConfig(level=logging.DEBUG)
+    app.logger.setLevel(logging.DEBUG)
+    logging.getLogger('werkzeug').setLevel(logging.DEBUG)
+    app.run(host='0.0.0.0', port=5010, debug=True)

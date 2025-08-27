@@ -291,6 +291,15 @@ def stop():
     util.log(1, '正在关闭服务...')
     __running = False
     
+    # 断开所有MCP服务连接
+    util.log(1, '正在断开所有MCP服务连接...')
+    try:
+        from faymcp import mcp_service
+        mcp_service.disconnect_all_mcp_servers()
+        util.log(1, '所有MCP服务连接已断开')
+    except Exception as e:
+        util.log(1, f'断开MCP服务连接失败: {str(e)}')
+    
     # 保存代理记忆
     util.log(1, '正在保存代理记忆...')
     try:
