@@ -228,11 +228,13 @@ class FeiFei:
     #触发语音交互
     def on_interact(self, interact: Interact):
         #创建用户
-        username = interact.data.get("user", "User")
-        if member_db.new_instance().is_username_exist(username)  == "notexists":
-            member_db.new_instance().add_user(username)
-        MyThread(target=self.__process_interact, args=[interact]).start()
-        return None
+        if interact.interact_type == 1:
+            username = interact.data.get("user", "User")
+            if member_db.new_instance().is_username_exist(username)  == "notexists":
+                member_db.new_instance().add_user(username)
+            MyThread(target=self.__process_interact, args=[interact]).start()
+        else:
+            return self.__process_interact(interact)
 
     #获取不同情绪声音
     def __get_mood_voice(self):
@@ -298,8 +300,9 @@ class FeiFei:
                 
             elif self.think_mode_users.get(uid, False) == True and "</think>" not in text:
                 return None
+            
             result = None
-            audio_url = interact.data.get('audio')#透传的音频
+            audio_url = interact.data.get('audio', None)#透传的音频
             if audio_url is not None:#透传音频下载
                 file_name = 'sample-' + str(int(time.time() * 1000)) + audio_url[-4:]
                 result = self.download_wav(audio_url, './samples/', file_name)

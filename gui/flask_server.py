@@ -589,8 +589,8 @@ def transparent_pass():
             data = json.loads(data)
         user = data.get('user', 'User')
         response_text = data.get('text', '')
-        audio_url = data.get('audio', '')
-        interact = Interact('transparent_pass', 2, {'user': user, 'text': response_text, 'audio': audio_url})
+        audio_url = data.get('audio', None)
+        interact = Interact('transparent_pass', 2, {'user': user, 'text': response_text, 'audio': audio_url, 'isend':True, 'isfirst':True})
         util.printInfo(1, user, '透传播放：{}，{}'.format(response_text, audio_url), time.time())
         success = fay_booter.feiFei.on_interact(interact)
         if (success == 'success'):
