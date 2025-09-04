@@ -754,7 +754,7 @@ def question(content, username, observation=None):
             related_memories = agent.memory_stream.retrieve(
                 [f"""{"主人" if username == "User" else username}提出了问题：{content}"""],  # 查询句子列表
                 current_time_step,  # 当前时间步
-                n_count=100,  # 获取5条相关记忆
+                n_count=100,  # 获取100条相关记忆
                 curr_filter="all",  # 获取所有类型的记忆
                 hp=[0.8, 0.5, 0.5],  # 权重：[时间近度权重recency_w, 相关性权重relevance_w, 重要性权重importance_w]
                 stateless=False
@@ -830,6 +830,11 @@ def question(content, username, observation=None):
         for chunk in react_agent.stream(
                     {"messages": messages}, {"configurable": {"thread_id": "tid{}".format(username)}}
                 ):
+            # 检查是否需要停止生成
+            if stream_manager.new_instance().should_stop_generation(username):
+                util.log(1, f"检测到停止标志，中断React Agent文本生成: {username}")
+                break
+                
             react_response_text = ""           
             # 消息类型1：检测工具调用开始
             if "agent" in chunk and "tool_calls" in str(chunk):
@@ -925,6 +930,11 @@ def question(content, username, observation=None):
         try:
             # 2.2 使用全局定义的llm对象进行流式请求
             for chunk in llm.stream(messages):
+                # 检查是否需要停止生成
+                if stream_manager.new_instance().should_stop_generation(username):
+                    util.log(1, f"检测到停止标志，中断LLM文本生成: {username}")
+                    break
+                    
                 flush_text = chunk.content
                 if not flush_text:
                     continue

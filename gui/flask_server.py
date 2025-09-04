@@ -309,6 +309,7 @@ def api_get_Msg():
     except Exception as e:
         return jsonify({'list': [], 'message': f'获取消息时出错: {e}'}), 500
 
+#文字沟通接口
 @__app.route('/v1/chat/completions', methods=['post'])
 @__app.route('/api/send/v1/chat/completions', methods=['post'])
 def api_send_v1_chat_completions():
@@ -563,9 +564,10 @@ def to_stop_talking():
         message = data.get('text', '你好，请说？')
         observation = data.get('observation', '')
         from queue import Queue
-        stream_manager.clear_Stream_with_audio(username)
-        interact = Interact("stop_talking", 2, {'user': username, 'text': message, 'observation': str(observation)})
-        result = fay_booter.feiFei.on_interact(interact)
+        stream_manager.new_instance().clear_Stream_with_audio(username)
+        # 打断操作完成，不输出任何内容，避免时序冲突
+        util.printInfo(1, username, "执行打断操作，清空所有处理队列")
+        result = "interrupted"  # 简单的结果标识
         return jsonify({
             'status': 'success',
             'data': str(result) if result is not None else '',
@@ -595,7 +597,7 @@ def transparent_pass():
         success = fay_booter.feiFei.on_interact(interact)
         if (success == 'success'):
             return jsonify({'code': 200, 'message' : '成功'})
-        return jsonify({'code': 500, 'message' : '未错原因出错'})
+        return jsonify({'code': 500, 'message' : '未知原因出错'})
     except Exception as e:
         return jsonify({'code': 500, 'message': f'出错: {e}'}), 500
 

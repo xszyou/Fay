@@ -145,6 +145,32 @@ class FeiFei:
             # 失败时也要确保结束会话
             state_manager.force_reset_user_state(username)
 
+    def __process_stream_output(self, text, username, session_type="type2_stream"):
+        """
+        按流式方式分割和发送 type=2 的文本
+        使用安全的流式文本处理器和状态管理器
+        """
+        if not text or text.strip() == "":
+            return
+
+        # 使用安全的流式文本处理器
+        from utils.stream_text_processor import get_processor
+        from utils.stream_state_manager import get_state_manager
+
+        processor = get_processor()
+        state_manager = get_state_manager()
+
+        # 处理流式文本，is_qa=False表示普通模式
+        success = processor.process_stream_text(text, username, is_qa=False, session_type=session_type)
+
+        if success:
+            # 普通模式结束会话
+            state_manager.end_session(username)
+        else:
+            util.log(1, f"type=2流式处理失败，文本长度: {len(text)}")
+            # 失败时也要确保结束会话
+            state_manager.force_reset_user_state(username)
+
     #语音消息处理检查是否命中q&a
     def __get_answer(self, interleaver, text):
         answer = None
@@ -156,14 +182,18 @@ class FeiFei:
             return None, None
         
        
-    #语音消息处理
+    #消息处理
     def __process_interact(self, interact: Interact):
         if self.__running:
             try:
                 index = interact.interact_type
                 username = interact.data.get("user", "User")
                 uid = member_db.new_instance().find_user(username)
-                if index == 1: #语音文字交互
+                if index == 1: #语音、文字交互
+                    # 用户发送新消息，重置中断标志，开始新对话
+                    stream_manager.new_instance().set_stop_generation(username, False)
+                    util.printInfo(1, username, "用户新输入，重置中断标志")
+                    
                     #记录用户问题,方便obs等调用
                     self.write_to_file("./logs", "asr_result.txt",  interact.data["msg"])
 
@@ -204,9 +234,10 @@ class FeiFei:
 
                     if interact.data.get("text"):
                         text = interact.data.get("text")
-                        # 使用统一的文本处理方法，空列表表示没有额外回复
+                        # 使用统一的文本处理方法
                         self.__process_text_output(text, username, uid)
-                        MyThread(target=self.say, args=[interact, text]).start()  
+                        # 使用流式处理，按标点分割发送
+                        self.__process_stream_output(text, username, f"type2_{interact.interleaver}")  
                     return 'success'
    
             except BaseException as e:
@@ -308,6 +339,11 @@ class FeiFei:
                 result = self.download_wav(audio_url, './samples/', file_name)
             elif config_util.config["interact"]["playSound"] or wsa_server.get_instance().is_connected(interact.data.get("user")) or self.__is_send_remote_device_audio(interact):#tts
                 if text != None and text.replace("*", "").strip() != "":
+                    # 检查是否需要停止TTS处理
+                    if stream_manager.new_instance().should_stop_generation(interact.data.get("user", "User")):
+                        util.printInfo(1, interact.data.get('user'), 'TTS处理被打断，跳过音频合成')
+                        return None
+                        
                     # 先过滤表情符号，然后再合成语音
                     filtered_text = self.__remove_emojis(text.replace("*", ""))
                     if filtered_text is not None and filtered_text.strip() != "":
@@ -485,7 +521,11 @@ class FeiFei:
             #面板播放
             config_util.load_config()
             if config_util.config["interact"]["playSound"]:
-                  self.sound_query.put((file_url, audio_length, interact))
+                # 检查是否需要停止音频播放
+                if stream_manager.new_instance().should_stop_generation(interact.data.get("user", "User")):
+                    util.printInfo(1, interact.data.get('user'), '音频播放被打断，跳过加入播放队列')
+                    return
+                self.sound_query.put((file_url, audio_length, interact))
             else:
                 if wsa_server.get_web_instance().is_connected(interact.data.get('user')):
                     wsa_server.get_web_instance().add_cmd({"panelMsg": "", 'Username' : interact.data.get('user'), 'robot': f'{cfg.fay_url}/robot/Normal.jpg'})

@@ -69,6 +69,7 @@ class StreamTextProcessor:
             util.log(1, f"文本已截断到: {len(accumulated_text)} 字符")
 
         # 主处理循环，带安全保护
+        first_sentence_sent = False  # 跟踪是否已发送第一个句子
         while accumulated_text and iteration_count < self.max_iterations:
             # 超时检查
             if time.time() - start_time > self.timeout_seconds:
@@ -97,12 +98,15 @@ class StreamTextProcessor:
                 if len(sentence_text) >= self.min_length:
                     # 使用状态管理器准备句子
                     marked_text, is_first, is_end = state_manager.prepare_sentence(
-                        username, sentence_text, force_first=False, force_end=False
+                        username, sentence_text, 
+                        force_first=(not first_sentence_sent),  # 第一句=True，其他=False
+                        force_end=False
                     )
 
                     success = stream_manager.new_instance().write_sentence(username, marked_text)
                     if success:
                         accumulated_text = accumulated_text[punct_index + 1:].lstrip()
+                        first_sentence_sent = True  # 标记已发送第一个句子
                         sent_successfully = True
                         break
                     else:
@@ -115,7 +119,16 @@ class StreamTextProcessor:
         # 发送剩余文本，如果是最后的文本则标记为结束
         if accumulated_text:
             marked_text, _, _ = state_manager.prepare_sentence(
-                username, accumulated_text, force_first=False, force_end=True
+                username, accumulated_text, 
+                force_first=(not first_sentence_sent),  # 如果还没发送过句子，这是第一个
+                force_end=True
+            )
+            stream_manager.new_instance().write_sentence(username, marked_text)
+            first_sentence_sent = True
+        elif not first_sentence_sent:
+            # 如果整个文本都没有找到合适的分割点，作为完整句子发送
+            marked_text, _, _ = state_manager.prepare_sentence(
+                username, text, force_first=True, force_end=True
             )
             stream_manager.new_instance().write_sentence(username, marked_text)
         else:

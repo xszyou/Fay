@@ -42,6 +42,7 @@ class StreamManager:
         self.running = True  # 控制监听线程的运行状态
         self._initialized = True  # 标记是否已初始化
         self.msgid = ""  # 消息ID
+        self.stop_generation_flags = {}  # 存储用户的停止生成标志
 
     def get_Stream(self, username):
         """
@@ -86,6 +87,8 @@ class StreamManager:
                 self._clear_Stream_internal(username)
                 # 清空音频队列（打断时需要清空音频）
                 self._clear_audio_queue(username)
+                # 重置停止生成标志，开始新的对话
+                self._set_stop_generation_internal(username, False)
             try:
                 Stream, nlp_Stream = self.get_Stream(username)
                 success = Stream.write(sentence)
@@ -105,14 +108,50 @@ class StreamManager:
         if username in self.nlp_streams:
             self.nlp_streams[username].clear()
 
+    def set_stop_generation(self, username, stop=True):
+        """
+        设置指定用户的停止生成标志
+        :param username: 用户名
+        :param stop: 是否停止，默认True
+        """
+        with self.lock:
+            self.stop_generation_flags[username] = stop
+
+    def should_stop_generation(self, username):
+        """
+        检查指定用户是否应该停止生成
+        :param username: 用户名
+        :return: 是否应该停止
+        """
+        with self.lock:
+            return self.stop_generation_flags.get(username, False)
+
+    def _set_stop_generation_internal(self, username, stop=True):
+        """
+        设置停止生成标志的内部方法（不使用锁，调用者必须已持有锁）
+        :param username: 用户名
+        :param stop: 是否停止，默认True
+        """
+        self.stop_generation_flags[username] = stop
+
+    def _should_stop_generation_internal(self, username):
+        """
+        检查停止生成标志的内部方法（不使用锁，调用者必须已持有锁）
+        :param username: 用户名
+        :return: 是否应该停止
+        """
+        return self.stop_generation_flags.get(username, False)
+
     def _clear_audio_queue(self, username):
         """
-        清空指定用户的音频队列
+        清空指定用户的音频队列并停止文本生成
         :param username: 用户名
         """
         import queue
         fay_core = fay_booter.feiFei
         fay_core.sound_query = queue.Queue()
+        # 设置停止生成标志，阻止新的文本继续生成和转换为音频
+        self._set_stop_generation_internal(username, True)
 
     def clear_Stream(self, username):
         """
@@ -145,6 +184,15 @@ class StreamManager:
         :param username: 用户名
         :param sentence: 要处理的句子
         """
+        # 使用临时变量避免多次锁获取
+        should_stop = False
+        with self.lock:
+            should_stop = self._should_stop_generation_internal(username)
+        
+        # 检查是否应该停止生成，如果是则不处理新的句子
+        if should_stop:
+            return
+            
         fay_core = fay_booter.feiFei
 
         is_first = "_<isfirst>" in sentence
