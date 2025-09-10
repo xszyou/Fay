@@ -723,6 +723,11 @@ def question(content, username, observation=None):
     punctuation_marks = [",", "，","。", "！", "？", ".", "!", "?", "\n"]  
     is_first_sentence = True
     
+    # 记录当前会话版本，用于精准中断
+    from core import stream_manager
+    sm = stream_manager.new_instance()
+    session_version = sm.get_session_version(username)
+
     # 创建代理
     agent = create_agent(username)
     
@@ -831,7 +836,7 @@ def question(content, username, observation=None):
                     {"messages": messages}, {"configurable": {"thread_id": "tid{}".format(username)}}
                 ):
             # 检查是否需要停止生成
-            if stream_manager.new_instance().should_stop_generation(username):
+            if sm.should_stop_generation(username, session_version=session_version):
                 util.log(1, f"检测到停止标志，中断React Agent文本生成: {username}")
                 break
                 
@@ -909,21 +914,22 @@ def question(content, username, observation=None):
             
             full_response_text += react_response_text
         
-        # 确保React Agent最后一段文本也被发送，并标记为结束
+        # 确保React Agent最后一段文本也被发送，并标记为结束（若会话未被取消）
         from utils.stream_state_manager import get_state_manager
         state_manager = get_state_manager()
 
-        if accumulated_text:
-            # 使用状态管理器准备最后的文本，强制标记为结束
-            marked_text, _, _ = state_manager.prepare_sentence(username, accumulated_text, force_end=True)
-            stream_manager.new_instance().write_sentence(username, marked_text)
-        else:
-            # 如果没有剩余文本，检查是否需要发送结束标记
-            session_info = state_manager.get_session_info(username)
-            if session_info and not session_info.get('is_end_sent', False):
-                # 发送一个空的结束标记
-                marked_text, _, _ = state_manager.prepare_sentence(username, "", force_end=True)
+        if not sm.should_stop_generation(username, session_version=session_version):
+            if accumulated_text:
+                # 使用状态管理器准备最后的文本，强制标记为结束
+                marked_text, _, _ = state_manager.prepare_sentence(username, accumulated_text, force_end=True)
                 stream_manager.new_instance().write_sentence(username, marked_text)
+            else:
+                # 如果没有剩余文本，检查是否需要发送结束标记
+                session_info = state_manager.get_session_info(username)
+                if session_info and not session_info.get('is_end_sent', False):
+                    # 发送一个空的结束标记
+                    marked_text, _, _ = state_manager.prepare_sentence(username, "", force_end=True)
+                    stream_manager.new_instance().write_sentence(username, marked_text)
                      
                      
     else:
@@ -931,7 +937,7 @@ def question(content, username, observation=None):
             # 2.2 使用全局定义的llm对象进行流式请求
             for chunk in llm.stream(messages):
                 # 检查是否需要停止生成
-                if stream_manager.new_instance().should_stop_generation(username):
+                if sm.should_stop_generation(username, session_version=session_version):
                     util.log(1, f"检测到停止标志，中断LLM文本生成: {username}")
                     break
                     
@@ -967,27 +973,30 @@ def question(content, username, observation=None):
                         accumulated_text = accumulated_text[last_punct_pos + 1:].lstrip()
                         
                 full_response_text += flush_text
-            # 确保最后一段文本也被发送，并标记为结束
+            # 确保最后一段文本也被发送，并标记为结束（若会话未被取消）
             from utils.stream_state_manager import get_state_manager
             state_manager = get_state_manager()
 
-            if accumulated_text:
-                # 使用状态管理器准备最后的文本，强制标记为结束
-                marked_text, _, _ = state_manager.prepare_sentence(username, accumulated_text, force_end=True)
-                stream_manager.new_instance().write_sentence(username, marked_text)
-            else:
-                # 如果没有剩余文本，检查是否需要发送结束标记
-                session_info = state_manager.get_session_info(username)
-                if session_info and not session_info.get('is_end_sent', False):
-                    # 发送一个空的结束标记
-                    marked_text, _, _ = state_manager.prepare_sentence(username, "", force_end=True)
+            if not sm.should_stop_generation(username, session_version=session_version):
+                if accumulated_text:
+                    # 使用状态管理器准备最后的文本，强制标记为结束
+                    marked_text, _, _ = state_manager.prepare_sentence(username, accumulated_text, force_end=True)
                     stream_manager.new_instance().write_sentence(username, marked_text)
+                else:
+                    # 如果没有剩余文本，检查是否需要发送结束标记
+                    session_info = state_manager.get_session_info(username)
+                    if session_info and not session_info.get('is_end_sent', False):
+                        # 发送一个空的结束标记
+                        marked_text, _, _ = state_manager.prepare_sentence(username, "", force_end=True)
+                        stream_manager.new_instance().write_sentence(username, marked_text)
 
 
         except requests.exceptions.RequestException as e:
             util.log(1, f"请求失败: {e}")
             error_message = "抱歉，我现在太忙了，休息一会，请稍后再试。"
-            stream_manager.new_instance().write_sentence(username, "_<isfirst>" + error_message + "_<isend>")
+            # 会话未被取消时才发送错误提示
+            if not sm.should_stop_generation(username, session_version=session_version):
+                stream_manager.new_instance().write_sentence(username, "_<isfirst>" + error_message + "_<isend>")
             full_response_text = error_message
 
     # 结束会话（不再需要发送额外的结束标记）

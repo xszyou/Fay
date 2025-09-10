@@ -190,9 +190,18 @@ class FeiFei:
                 username = interact.data.get("user", "User")
                 uid = member_db.new_instance().find_user(username)
                 if index == 1: #语音、文字交互
-                    # 用户发送新消息，重置中断标志，开始新对话
-                    stream_manager.new_instance().set_stop_generation(username, False)
-                    util.printInfo(1, username, "用户新输入，重置中断标志")
+                    util.printInfo(1, username, "重置中断标志，开始新的对话处理")
+                    # 切换到新会话，令上一会话的流式输出/音频尽快结束
+                    try:
+                        sm = stream_manager.new_instance()
+                        new_version = sm.bump_session(username)
+                        # 将当前会话版本附加到交互数据
+                        interact.data["session_version"] = new_version
+                        # 允许新的生成
+                        sm.set_stop_generation(username, stop=False)
+                    except Exception:
+                        pass
+                    # 已通过上方 sm.set_stop_generation(username, False) 复位
                     
                     #记录用户问题,方便obs等调用
                     self.write_to_file("./logs", "asr_result.txt",  interact.data["msg"])
@@ -256,7 +265,7 @@ class FeiFei:
             file.flush()  
             os.fsync(file.fileno()) 
 
-    #触发语音交互
+    #触发交互
     def on_interact(self, interact: Interact):
         #创建用户
         if interact.interact_type == 1:
@@ -282,6 +291,14 @@ class FeiFei:
             uid = member_db.new_instance().find_user(interact.data.get("user"))
             is_end = interact.data.get("isend", False)
             is_first = interact.data.get("isfirst", False)
+            # 提前进行会话有效性与中断检查，避免产生多余面板/数字人输出
+            try:
+                user_for_stop = interact.data.get("user", "User")
+                session_ver = interact.data.get("session_version")
+                if stream_manager.new_instance().should_stop_generation(user_for_stop, session_version=session_ver):
+                    return None
+            except Exception:
+                pass
             if is_first == True:
                 conv = "conv_" + str(uuid.uuid4())
                 conv_no = 0
@@ -292,7 +309,14 @@ class FeiFei:
 
             if not is_first and not is_end and (text is None or text.strip() == ""):
                 return None
-            self.__send_panel_message(text, interact.data.get('user'), uid, 0, type)
+            # 仅在会话有效时才发送面板消息
+            try:
+                user_for_stop = interact.data.get("user", "User")
+                session_ver = interact.data.get("session_version")
+                if not stream_manager.new_instance().should_stop_generation(user_for_stop, session_version=session_ver):
+                    self.__send_panel_message(text, interact.data.get('user'), uid, 0, type)
+            except Exception:
+                self.__send_panel_message(text, interact.data.get('user'), uid, 0, type)
             
             # 处理think标签
             is_start_think = False
@@ -318,11 +342,19 @@ class FeiFei:
                 self.think_time_users[uid] = time.time()
             
             if self.think_mode_users.get(uid, False) and is_start_think:
-                if wsa_server.get_web_instance().is_connected(interact.data.get('user')):
-                    wsa_server.get_web_instance().add_cmd({"panelMsg": "思考中...", "Username" : interact.data.get('user'), 'robot': f'{cfg.fay_url}/robot/Thinking.jpg'})
-                if wsa_server.get_instance().is_connected(interact.data.get("user")):
-                    content = {'Topic': 'human', 'Data': {'Key': 'log', 'Value': "思考中..."}, 'Username' : interact.data.get('user'), 'robot': f'{cfg.fay_url}/robot/Thinking.jpg'}
-                    wsa_server.get_instance().add_cmd(content)
+                # 会话有效时才提示“思考中...”
+                try:
+                    user_for_stop = interact.data.get("user", "User")
+                    session_ver = interact.data.get("session_version")
+                    should_block = stream_manager.new_instance().should_stop_generation(user_for_stop, session_version=session_ver)
+                except Exception:
+                    should_block = False
+                if not should_block:
+                    if wsa_server.get_web_instance().is_connected(interact.data.get('user')):
+                        wsa_server.get_web_instance().add_cmd({"panelMsg": "思考中...", "Username" : interact.data.get('user'), 'robot': f'{cfg.fay_url}/robot/Thinking.jpg'})
+                    if wsa_server.get_instance().is_connected(interact.data.get("user")):
+                        content = {'Topic': 'human', 'Data': {'Key': 'log', 'Value': "思考中..."}, 'Username' : interact.data.get('user'), 'robot': f'{cfg.fay_url}/robot/Thinking.jpg'}
+                        wsa_server.get_instance().add_cmd(content)
             if self.think_mode_users.get(uid, False) == True and time.time() - self.think_time_users[uid] >= 5:
                 self.think_time_users[uid] = time.time()
                 text = "请稍等..."
@@ -339,8 +371,11 @@ class FeiFei:
                 result = self.download_wav(audio_url, './samples/', file_name)
             elif config_util.config["interact"]["playSound"] or wsa_server.get_instance().is_connected(interact.data.get("user")) or self.__is_send_remote_device_audio(interact):#tts
                 if text != None and text.replace("*", "").strip() != "":
-                    # 检查是否需要停止TTS处理
-                    if stream_manager.new_instance().should_stop_generation(interact.data.get("user", "User")):
+                    # 检查是否需要停止TTS处理（按会话）
+                    if stream_manager.new_instance().should_stop_generation(
+                        interact.data.get("user", "User"),
+                        session_version=interact.data.get("session_version")
+                    ):
                         util.printInfo(1, interact.data.get('user'), 'TTS处理被打断，跳过音频合成')
                         return None
                         
@@ -350,6 +385,14 @@ class FeiFei:
                         util.printInfo(1,  interact.data.get('user'), '合成音频...')
                         tm = time.time()
                         result = self.sp.to_sample(filtered_text, self.__get_mood_voice())
+                        # 合成完成后再次检查会话是否仍有效，避免继续输出旧会话结果
+                        try:
+                            user_for_stop = interact.data.get("user", "User")
+                            session_ver = interact.data.get("session_version")
+                            if stream_manager.new_instance().should_stop_generation(user_for_stop, session_version=session_ver):
+                                return None
+                        except Exception:
+                            pass
                         util.printInfo(1,  interact.data.get("user"), "合成音频完成. 耗时: {} ms 文件:{}".format(math.floor((time.time() - tm) * 1000), result))
             else:
                 if is_end and wsa_server.get_web_instance().is_connected(interact.data.get('user')):
@@ -486,6 +529,14 @@ class FeiFei:
     #输出音频处理
     def __process_output_audio(self, file_url, interact, text):
         try:
+            # 会话有效性与中断检查（最早返回，避免向面板/数字人发送任何旧会话输出）
+            try:
+                user_for_stop = interact.data.get("user", "User")
+                session_ver = interact.data.get("session_version")
+                if stream_manager.new_instance().should_stop_generation(user_for_stop, session_version=session_ver):
+                    return
+            except Exception:
+                pass
             try:
                 if file_url is None:
                     audio_length = 0
@@ -521,8 +572,11 @@ class FeiFei:
             #面板播放
             config_util.load_config()
             if config_util.config["interact"]["playSound"]:
-                # 检查是否需要停止音频播放
-                if stream_manager.new_instance().should_stop_generation(interact.data.get("user", "User")):
+                # 检查是否需要停止音频播放（按会话）
+                if stream_manager.new_instance().should_stop_generation(
+                    interact.data.get("user", "User"),
+                    session_version=interact.data.get("session_version")
+                ):
                     util.printInfo(1, interact.data.get('user'), '音频播放被打断，跳过加入播放队列')
                     return
                 self.sound_query.put((file_url, audio_length, interact))

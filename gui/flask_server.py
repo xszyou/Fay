@@ -15,6 +15,11 @@ import uuid
 import fay_booter
 from tts import tts_voice
 from gevent import pywsgi
+try:
+    # Use gevent.sleep to avoid blocking the gevent loop; fallback to time.sleep if unavailable
+    from gevent import sleep as gsleep
+except Exception:
+    from time import sleep as gsleep
 from scheduler.thread_manager import MyThread
 from utils import config_util, util
 from core import wsa_server
@@ -270,6 +275,12 @@ def api_send():
         if not username or not msg:
             return jsonify({'result': 'error', 'message': '用户名和消息内容不能为空'})
         msg = msg.strip()
+        
+        # 新消息到达，立即中断该用户之前的所有处理（文本流+音频队列）
+        util.printInfo(1, username, f'[API中断] 新消息到达，完整中断用户 {username} 之前的所有处理')
+        stream_manager.new_instance().clear_Stream_with_audio(username)
+        util.printInfo(1, username, f'[API中断] 用户 {username} 的文本流和音频队列已清空，准备处理新消息')
+        
         interact = Interact("text", 1, {'user': username, 'msg': msg})
         util.printInfo(1, username, '[文字发送按钮]{}'.format(interact.data["msg"]), time.time())
         fay_booter.feiFei.on_interact(interact)
@@ -398,12 +409,18 @@ def adopt_msg():
         return jsonify({'status':'error', 'msg': f'采纳消息时出错: {e}'}), 500
 
 def gpt_stream_response(last_content, username):
-    _, nlp_Stream = stream_manager.new_instance().get_Stream(username)
+    sm = stream_manager.new_instance()
+    _, nlp_Stream = sm.get_Stream(username)
+    session_version = sm.get_session_version(username)
     def generate():
         while True:
+            # If interrupted or session switched, end the SSE stream promptly
+            if sm.should_stop_generation(username, session_version=session_version):
+                yield 'data: [DONE]\n\n'
+                break
             sentence = nlp_Stream.read()
             if sentence is None:
-                time.sleep(0.01)
+                gsleep(0.01)
                 continue
             
             # 处理特殊标记
@@ -439,19 +456,24 @@ def gpt_stream_response(last_content, username):
                 yield f"data: {json.dumps(message)}\n\n"
             if is_end:
                 break
-            time.sleep(0.01)
+            gsleep(0.01)
         yield 'data: [DONE]\n\n'
     
     return Response(generate(), mimetype='text/event-stream')
 
 # 处理非流式响应
 def non_streaming_response(last_content, username):
-    _, nlp_Stream = stream_manager.new_instance().get_Stream(username)
+    sm = stream_manager.new_instance()
+    _, nlp_Stream = sm.get_Stream(username)
+    session_version = sm.get_session_version(username)
     text = ""
     while True:
+        # If interrupted or session switched, stop waiting and return what we have
+        if sm.should_stop_generation(username, session_version=session_version):
+            break
         sentence = nlp_Stream.read()
         if sentence is None:
-            time.sleep(0.01)
+            gsleep(0.01)
             continue
         
         # 处理特殊标记
@@ -561,19 +583,21 @@ def to_stop_talking():
     try:
         data = request.get_json()
         username = data.get('username', 'User')
-        message = data.get('text', '你好，请说？')
         observation = data.get('observation', '')
-        from queue import Queue
+        
+        util.printInfo(1, username, f"开始执行打断操作，清空用户 {username} 的处理队列")
         stream_manager.new_instance().clear_Stream_with_audio(username)
-        # 打断操作完成，不输出任何内容，避免时序冲突
-        util.printInfo(1, username, "执行打断操作，清空所有处理队列")
+        util.printInfo(1, username, f"打断操作完成，用户 {username} 的所有队列已清空")
+        
         result = "interrupted"  # 简单的结果标识
         return jsonify({
             'status': 'success',
             'data': str(result) if result is not None else '',
-            'msg': '已停止说话'
+            'msg': f'已停止用户 {username} 的说话'
         }), 200
     except Exception as e:
+        username_str = username if 'username' in locals() else 'Unknown'
+        util.printInfo(1, username_str, f"打断操作失败: {str(e)}")
         return jsonify({
             'status': 'error',
             'msg': str(e)
