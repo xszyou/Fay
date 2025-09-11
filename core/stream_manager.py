@@ -98,11 +98,12 @@ class StreamManager:
         with self.stream_lock:
             return self._get_Stream_internal(username)
 
-    def write_sentence(self, username, sentence):
+    def write_sentence(self, username, sentence, session_version=None):
         """
         写入句子到指定用户的文本流（线程安全）
         :param username: 用户名
         :param sentence: 要写入的句子
+        :param session_version: 句子产生时的会话版本（可选）
         :return: 写入是否成功
         """
         # 检查句子长度，防止过大的句子导致内存问题
@@ -110,12 +111,15 @@ class StreamManager:
             sentence = sentence[:10240]
 
         # 若当前处于停止状态且这不是新会话的首句，则丢弃写入，避免残余输出
-        try:
-            with self.control_lock:
-                if self.stop_generation_flags.get(username, False) and ('_<isfirst>' not in sentence):
-                    return False
-        except Exception:
-            pass
+        with self.control_lock:
+            stop_flag = self.stop_generation_flags.get(username, False)
+            current_version = self.session_versions.get(username, 0)
+        if stop_flag and ('_<isfirst>' not in sentence):
+            return False
+
+        # 如果提供了句子产生时的会话版本，且与当前版本不一致，则丢弃写入
+        if session_version is not None and session_version != current_version:
+            return False
 
         # 检查是否包含_<isfirst>标记（可能在句子中间）
         if '_<isfirst>' in sentence:
@@ -236,7 +240,7 @@ class StreamManager:
         :param username: 用户名
         """
         # 第一步：切换会话版本，令现有读/写循环尽快退出
-        self.bump_session(username)
+        # 不在清理时递增会话版本，由新交互开始时统一递增
 
         # 第二步：设置停止标志（独立操作）
         with self.control_lock:

@@ -1,4 +1,4 @@
-#作用是处理交互逻辑，文字输入，语音、文字及情绪的发送、播放及展示输出
+﻿#作用是处理交互逻辑，文字输入，语音、文字及情绪的发送、播放及展示输出
 import math
 from operator import index
 import os

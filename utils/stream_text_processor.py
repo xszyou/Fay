@@ -45,15 +45,20 @@ class StreamTextProcessor:
         if not state_manager.is_session_active(username):
             state_manager.start_new_session(username, session_type)
 
+        # 捕获本次流式处理对应的会话版本（用于精确隔离）
+        from core import stream_manager
+        sm = stream_manager.new_instance()
+        session_version = sm.get_session_version(username)
+
         try:
-            return self._safe_process_text(text, username, is_qa, state_manager)
+            return self._safe_process_text(text, username, is_qa, state_manager, session_version)
         except Exception as e:
             util.log(1, f"流式文本处理出错: {str(e)}")
             # 发生异常时，直接发送完整文本作为备用方案
-            self._send_fallback_text(text, username, state_manager)
+            self._send_fallback_text(text, username, state_manager, session_version)
             return False
     
-    def _safe_process_text(self, text, username, is_qa, state_manager):
+    def _safe_process_text(self, text, username, is_qa, state_manager, session_version):
         """
         安全的文本处理核心逻辑，包含缓存溢出保护
         """
@@ -103,7 +108,7 @@ class StreamTextProcessor:
                         force_end=False
                     )
 
-                    success = stream_manager.new_instance().write_sentence(username, marked_text)
+                    success = stream_manager.new_instance().write_sentence(username, marked_text, session_version=session_version)
                     if success:
                         accumulated_text = accumulated_text[punct_index + 1:].lstrip()
                         first_sentence_sent = True  # 标记已发送第一个句子
@@ -123,14 +128,14 @@ class StreamTextProcessor:
                 force_first=(not first_sentence_sent),  # 如果还没发送过句子，这是第一个
                 force_end=True
             )
-            stream_manager.new_instance().write_sentence(username, marked_text)
+            stream_manager.new_instance().write_sentence(username, marked_text, session_version=session_version)
             first_sentence_sent = True
         elif not first_sentence_sent:
             # 如果整个文本都没有找到合适的分割点，作为完整句子发送
             marked_text, _, _ = state_manager.prepare_sentence(
                 username, text, force_first=True, force_end=True
             )
-            stream_manager.new_instance().write_sentence(username, marked_text)
+            stream_manager.new_instance().write_sentence(username, marked_text, session_version=session_version)
         else:
             # 如果没有剩余文本，需要确保最后发送的句子包含结束标记
             session_info = state_manager.get_session_info(username)
@@ -138,7 +143,7 @@ class StreamTextProcessor:
                 marked_text, _, _ = state_manager.prepare_sentence(
                     username, "", force_first=False, force_end=True
                 )
-                stream_manager.new_instance().write_sentence(username, marked_text)
+                stream_manager.new_instance().write_sentence(username, marked_text, session_version=session_version)
 
         # 结束会话
         state_manager.end_session(username)
@@ -169,7 +174,7 @@ class StreamTextProcessor:
             util.log(1, f"查找标点符号时出错: {str(e)}")
             return []
     
-    def _send_fallback_text(self, text, username, state_manager):
+    def _send_fallback_text(self, text, username, state_manager, session_version):
         """
         备用发送方案，直接发送完整文本
         """
@@ -178,7 +183,7 @@ class StreamTextProcessor:
             marked_text, _, _ = state_manager.prepare_sentence(
                 username, text, force_first=True, force_end=True
             )
-            stream_manager.new_instance().write_sentence(username, marked_text)
+            stream_manager.new_instance().write_sentence(username, marked_text, session_version=session_version)
             util.log(1, "使用备用方案发送完整文本")
         except Exception as e:
             util.log(1, f"备用发送方案也失败: {str(e)}")

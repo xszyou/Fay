@@ -24,7 +24,7 @@
             "indifferent": 10,
             "join": 10
         },
-        "playSound": false,
+        "playSound": true,
         "visualization": false
     },
     "items": [],
