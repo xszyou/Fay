@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import importlib
 import json
 import time
@@ -411,11 +412,11 @@ def adopt_msg():
 def gpt_stream_response(last_content, username):
     sm = stream_manager.new_instance()
     _, nlp_Stream = sm.get_Stream(username)
-    session_version = sm.get_session_version(username)
+    conversation_id = sm.get_conversation_id(username)
     def generate():
         while True:
             # If interrupted or session switched, end the SSE stream promptly
-            if sm.should_stop_generation(username, session_version=session_version):
+            if sm.should_stop_generation(username, conversation_id=conversation_id):
                 yield 'data: [DONE]\n\n'
                 break
             sentence = nlp_Stream.read()
@@ -465,11 +466,11 @@ def gpt_stream_response(last_content, username):
 def non_streaming_response(last_content, username):
     sm = stream_manager.new_instance()
     _, nlp_Stream = sm.get_Stream(username)
-    session_version = sm.get_session_version(username)
+    conversation_id = sm.get_conversation_id(username)
     text = ""
     while True:
         # If interrupted or session switched, stop waiting and return what we have
-        if sm.should_stop_generation(username, session_version=session_version):
+        if sm.should_stop_generation(username, conversation_id=conversation_id):
             break
         sentence = nlp_Stream.read()
         if sentence is None:

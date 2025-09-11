@@ -1,3 +1,4 @@
+﻿# -*- coding: utf-8 -*-
 import threading
 import time
 from utils import stream_sentence
@@ -45,7 +46,7 @@ class StreamManager:
         self._initialized = True  # 标记是否已初始化
         self.msgid = ""  # 消息ID
         self.stop_generation_flags = {}  # 存储用户的停止生成标志
-        self.session_versions = {}  # 存储每个用户的会话版本（单调递增）
+        self.conversation_ids = {}  # 存储每个用户的会话ID（conv_前缀）
 
     def bump_session(self, username):
         """
@@ -61,6 +62,16 @@ class StreamManager:
         """获取用户当前会话版本（不存在则为0）。"""
         with self.control_lock:
             return self.session_versions.get(username, 0)
+
+    def set_current_conversation(self, username, conversation_id):
+        """设置当前会话ID（conv_*）"""
+        with self.control_lock:
+            self.conversation_ids[username] = conversation_id
+
+    def get_conversation_id(self, username):
+        """获取当前会话ID（可能为空字符串）"""
+        with self.control_lock:
+            return self.conversation_ids.get(username, "")
 
     def is_session_valid(self, username, version):
         """检查给定版本是否仍为该用户的当前会话版本。"""
@@ -98,12 +109,13 @@ class StreamManager:
         with self.stream_lock:
             return self._get_Stream_internal(username)
 
-    def write_sentence(self, username, sentence, session_version=None):
+    def write_sentence(self, username, sentence, conversation_id=None, session_version=None):
         """
         写入句子到指定用户的文本流（线程安全）
         :param username: 用户名
         :param sentence: 要写入的句子
-        :param session_version: 句子产生时的会话版本（可选）
+        :param conversation_id: 句子产生时的会话ID（可选，优先于版本判断）
+        :param session_version: 句子产生时的会话版本（可选，兼容旧路径）
         :return: 写入是否成功
         """
         # 检查句子长度，防止过大的句子导致内存问题
@@ -113,13 +125,15 @@ class StreamManager:
         # 若当前处于停止状态且这不是新会话的首句，则丢弃写入，避免残余输出
         with self.control_lock:
             stop_flag = self.stop_generation_flags.get(username, False)
-            current_version = self.session_versions.get(username, 0)
+            current_cid = self.conversation_ids.get(username, "")
         if stop_flag and ('_<isfirst>' not in sentence):
             return False
 
-        # 如果提供了句子产生时的会话版本，且与当前版本不一致，则丢弃写入
-        if session_version is not None and session_version != current_version:
+        # 优先使用会话ID进行校验
+        if conversation_id is not None and conversation_id != current_cid:
             return False
+        # 兼容旧逻辑：按版本校验
+        
 
         # 检查是否包含_<isfirst>标记（可能在句子中间）
         if '_<isfirst>' in sentence:
@@ -138,7 +152,10 @@ class StreamManager:
             try:
                 # 使用内部方法避免重复加锁
                 Stream, nlp_Stream = self._get_Stream_internal(username)
-                success = Stream.write(sentence)
+                # 将会话ID以隐藏标签形式附在主流句子尾部，便于入口解析
+                tag_cid = conversation_id if conversation_id is not None else current_cid
+                tagged_sentence = f"{sentence}__<cid={tag_cid}>__" if tag_cid else sentence
+                success = Stream.write(tagged_sentence)
                 nlp_success = nlp_Stream.write(sentence)
                 return success and nlp_success
             except Exception as e:
@@ -164,7 +181,7 @@ class StreamManager:
         with self.control_lock:
             self.stop_generation_flags[username] = stop
 
-    def should_stop_generation(self, username, session_version=None):
+    def should_stop_generation(self, username, conversation_id=None, session_version=None):
         """
         检查指定用户是否应该停止生成
         :param username: 用户名
@@ -174,9 +191,11 @@ class StreamManager:
             flag = self.stop_generation_flags.get(username, False)
             if flag:
                 return True
-            if session_version is not None:
-                if session_version != self.session_versions.get(username, 0):
-                    return True
+            # 优先按会话ID判断
+            current_cid = self.conversation_ids.get(username, "")
+            if conversation_id is not None and conversation_id != current_cid:
+                return True
+            # 兼容旧逻辑：按版本判断
             return False
 
     # 内部方法已移除，直接使用带锁的公共方法
@@ -267,6 +286,17 @@ class StreamManager:
         :param username: 用户名
         :param sentence: 要处理的句子
         """
+        # 从句子尾部解析隐藏的会话ID标签
+        producer_cid = None
+        try:
+            import re as _re
+            m = _re.search(r"__<cid=([^>]+)>__", sentence)
+            if m:
+                producer_cid = m.group(1)
+                sentence = sentence.replace(m.group(0), "")
+        except Exception:
+            producer_cid = None
+
         # 检查停止标志（使用control_lock）
         with self.control_lock:
             should_stop = self.stop_generation_flags.get(username, False)
@@ -274,10 +304,11 @@ class StreamManager:
         if should_stop:
             return
 
-        # 进一步进行基于会话版本的快速拦截（避免进入下游 say）
+        # 进一步进行基于会话ID/版本的快速拦截（避免进入下游 say）
         try:
-            current_version = self.get_session_version(username)
-            if self.should_stop_generation(username, session_version=current_version):
+            current_cid = getattr(self, 'conversation_ids', {}).get(username, "")
+            check_cid = producer_cid if producer_cid is not None else current_cid
+            if self.should_stop_generation(username, conversation_id=check_cid):
                 return
         except Exception:
             pass
@@ -290,8 +321,12 @@ class StreamManager:
         # 执行实际处理（无锁，避免死锁）
         if sentence or is_first or is_end:
             fay_core = fay_booter.feiFei
-            # 附带当前会话版本，方便下游按会话控制输出
-            session_version = self.get_session_version(username)
-            interact = Interact("stream", 1, {"user": username, "msg": sentence, "isfirst": is_first, "isend": is_end, "session_version": session_version})
+            # 附带当前会话ID，方便下游按会话控制输出
+            effective_cid = producer_cid if producer_cid is not None else getattr(self, 'conversation_ids', {}).get(username, "")
+            interact = Interact("stream", 1, {"user": username, "msg": sentence, "isfirst": is_first, "isend": is_end, "conversation_id": effective_cid})
             fay_core.say(interact, sentence)  # 调用核心处理模块进行响应
         time.sleep(0.01)  # 短暂休眠以控制处理频率
+
+
+
+

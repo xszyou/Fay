@@ -1,4 +1,5 @@
-﻿#作用是处理交互逻辑，文字输入，语音、文字及情绪的发送、播放及展示输出
+﻿# -*- coding: utf-8 -*-
+#作用是处理交互逻辑，文字输入，语音、文字及情绪的发送、播放及展示输出
 import math
 from operator import index
 import os
@@ -194,9 +195,11 @@ class FeiFei:
                     # 切换到新会话，令上一会话的流式输出/音频尽快结束
                     try:
                         sm = stream_manager.new_instance()
-                        new_version = sm.bump_session(username)
-                        # 将当前会话版本附加到交互数据
-                        interact.data["session_version"] = new_version
+                        import uuid
+                        conv_id = "conv_" + str(uuid.uuid4())
+                        sm.set_current_conversation(username, conv_id)
+                        # 将当前会话ID附加到交互数据
+                        interact.data["conversation_id"] = conv_id
                         # 允许新的生成
                         sm.set_stop_generation(username, stop=False)
                     except Exception:
@@ -294,13 +297,13 @@ class FeiFei:
             # 提前进行会话有效性与中断检查，避免产生多余面板/数字人输出
             try:
                 user_for_stop = interact.data.get("user", "User")
-                session_ver = interact.data.get("session_version")
-                if stream_manager.new_instance().should_stop_generation(user_for_stop, session_version=session_ver):
+                conv_id_for_stop = interact.data.get("conversation_id")
+                if stream_manager.new_instance().should_stop_generation(user_for_stop, conversation_id=conv_id_for_stop):
                     return None
             except Exception:
                 pass
             if is_first == True:
-                conv = "conv_" + str(uuid.uuid4())
+                conv = interact.data.get("conversation_id") or ("conv_" + str(uuid.uuid4()))
                 conv_no = 0
                 self.user_conv_map[interact.data.get("user", "User")] = {"conversation_id" : conv, "conversation_msg_no" : conv_no}
             else:
@@ -312,8 +315,8 @@ class FeiFei:
             # 仅在会话有效时才发送面板消息
             try:
                 user_for_stop = interact.data.get("user", "User")
-                session_ver = interact.data.get("session_version")
-                if not stream_manager.new_instance().should_stop_generation(user_for_stop, session_version=session_ver):
+                conv_id_for_stop = interact.data.get("conversation_id")
+                if not stream_manager.new_instance().should_stop_generation(user_for_stop, conversation_id=conv_id_for_stop):
                     self.__send_panel_message(text, interact.data.get('user'), uid, 0, type)
             except Exception:
                 self.__send_panel_message(text, interact.data.get('user'), uid, 0, type)
@@ -345,8 +348,8 @@ class FeiFei:
                 # 会话有效时才提示“思考中...”
                 try:
                     user_for_stop = interact.data.get("user", "User")
-                    session_ver = interact.data.get("session_version")
-                    should_block = stream_manager.new_instance().should_stop_generation(user_for_stop, session_version=session_ver)
+                    conv_id_for_stop = interact.data.get("conversation_id")
+                    should_block = stream_manager.new_instance().should_stop_generation(user_for_stop, conversation_id=conv_id_for_stop)
                 except Exception:
                     should_block = False
                 if not should_block:
@@ -374,7 +377,7 @@ class FeiFei:
                     # 检查是否需要停止TTS处理（按会话）
                     if stream_manager.new_instance().should_stop_generation(
                         interact.data.get("user", "User"),
-                        session_version=interact.data.get("session_version")
+                        conversation_id=interact.data.get("conversation_id")
                     ):
                         util.printInfo(1, interact.data.get('user'), 'TTS处理被打断，跳过音频合成')
                         return None
@@ -388,8 +391,8 @@ class FeiFei:
                         # 合成完成后再次检查会话是否仍有效，避免继续输出旧会话结果
                         try:
                             user_for_stop = interact.data.get("user", "User")
-                            session_ver = interact.data.get("session_version")
-                            if stream_manager.new_instance().should_stop_generation(user_for_stop, session_version=session_ver):
+                            conv_id_for_stop = interact.data.get("conversation_id")
+                            if stream_manager.new_instance().should_stop_generation(user_for_stop, conversation_id=conv_id_for_stop):
                                 return None
                         except Exception:
                             pass
@@ -480,6 +483,17 @@ class FeiFei:
                     # 播放过程中计时，直到音频播放完毕
                     length = 0
                     while length < audio_length:
+                        try:
+                            user_for_stop = interact.data.get("user", "User")
+                            conv_id_for_stop = interact.data.get("conversation_id")
+                            if stream_manager.new_instance().should_stop_generation(user_for_stop, conversation_id=conv_id_for_stop):
+                                try:
+                                    pygame.mixer.music.stop()
+                                except Exception:
+                                    pass
+                                break
+                        except Exception:
+                            pass
                         length += 0.01
                         time.sleep(0.01)
 
@@ -532,8 +546,8 @@ class FeiFei:
             # 会话有效性与中断检查（最早返回，避免向面板/数字人发送任何旧会话输出）
             try:
                 user_for_stop = interact.data.get("user", "User")
-                session_ver = interact.data.get("session_version")
-                if stream_manager.new_instance().should_stop_generation(user_for_stop, session_version=session_ver):
+                conv_id_for_stop = interact.data.get("conversation_id")
+                if stream_manager.new_instance().should_stop_generation(user_for_stop, conversation_id=conv_id_for_stop):
                     return
             except Exception:
                 pass
@@ -575,7 +589,7 @@ class FeiFei:
                 # 检查是否需要停止音频播放（按会话）
                 if stream_manager.new_instance().should_stop_generation(
                     interact.data.get("user", "User"),
-                    session_version=interact.data.get("session_version")
+                    conversation_id=interact.data.get("conversation_id")
                 ):
                     util.printInfo(1, interact.data.get('user'), '音频播放被打断，跳过加入播放队列')
                     return
@@ -710,3 +724,4 @@ class FeiFei:
 
 import importlib
 fay_booter = importlib.import_module('fay_booter')
+
