@@ -190,21 +190,22 @@ class FeiFei:
                 index = interact.interact_type
                 username = interact.data.get("user", "User")
                 uid = member_db.new_instance().find_user(username)
+
+                # 切换到新会话，令上一会话的流式输出/音频尽快结束
+                util.printInfo(1, username, "重置中断标志，开始新的对话处理") 
+                try:
+                    sm = stream_manager.new_instance()
+                    import uuid
+                    conv_id = "conv_" + str(uuid.uuid4())
+                    sm.set_current_conversation(username, conv_id)
+                    # 将当前会话ID附加到交互数据
+                    interact.data["conversation_id"] = conv_id
+                    # 允许新的生成
+                    sm.set_stop_generation(username, stop=False)
+                except Exception:
+                    pass
+                 
                 if index == 1: #语音、文字交互
-                    util.printInfo(1, username, "重置中断标志，开始新的对话处理")
-                    # 切换到新会话，令上一会话的流式输出/音频尽快结束
-                    try:
-                        sm = stream_manager.new_instance()
-                        import uuid
-                        conv_id = "conv_" + str(uuid.uuid4())
-                        sm.set_current_conversation(username, conv_id)
-                        # 将当前会话ID附加到交互数据
-                        interact.data["conversation_id"] = conv_id
-                        # 允许新的生成
-                        sm.set_stop_generation(username, stop=False)
-                    except Exception:
-                        pass
-                    # 已通过上方 sm.set_stop_generation(username, False) 复位
                     
                     #记录用户问题,方便obs等调用
                     self.write_to_file("./logs", "asr_result.txt",  interact.data["msg"])
@@ -237,19 +238,36 @@ class FeiFei:
                         # 使用流式分割处理Q&A答案
                         self.__process_qa_stream(text, username)
                            
-                    #完整文本记录回复并输出到各个终端
-                    self.__process_text_output(text, username, uid  )
 
                     return text      
                 
-                elif (index == 2):#透传模式，用于适配自动播报控制及agent的通知工具
+                elif (index == 2):#透传模式：有音频则仅播音频；仅文本则流式+TTS
+                    audio_url = interact.data.get("audio")
+                    text = interact.data.get("text")
 
-                    if interact.data.get("text"):
-                        text = interact.data.get("text")
-                        # 使用统一的文本处理方法
-                        self.__process_text_output(text, username, uid)
-                        # 使用流式处理，按标点分割发送
-                        self.__process_stream_output(text, username, f"type2_{interact.interleaver}")  
+                    # 1) 存在音频：忽略文本，仅播放音频
+                    if audio_url and str(audio_url).strip():
+                        try:
+                            audio_interact = Interact(
+                                "stream", 1,
+                                {"user": username, "msg": "", "isfirst": True, "isend": True, "audio": audio_url}
+                            )
+                            self.say(audio_interact, "")
+                        except Exception:
+                            pass
+                        return 'success'
+
+                    # 2) 只有文本：执行流式切分并TTS
+                    if text and str(text).strip():
+                        # 进行流式处理（用于TTS，流式处理中会记录到数据库）
+                        self.__process_stream_output(text, username, f"type2_{interact.interleaver}")
+                        
+                        # 不再需要额外记录，因为流式处理已经记录了
+                        # self.__process_text_output(text, username, uid)
+                        
+                        return 'success'
+
+                    # 没有有效内容
                     return 'success'
    
             except BaseException as e:
@@ -294,6 +312,8 @@ class FeiFei:
             uid = member_db.new_instance().find_user(interact.data.get("user"))
             is_end = interact.data.get("isend", False)
             is_first = interact.data.get("isfirst", False)
+            username = interact.data.get("user", "User")
+            
             # 提前进行会话有效性与中断检查，避免产生多余面板/数字人输出
             try:
                 user_for_stop = interact.data.get("user", "User")
@@ -302,13 +322,38 @@ class FeiFei:
                     return None
             except Exception:
                 pass
+                
+            # 初始化content_id变量
+            content_id = 0
+            
             if is_first == True:
                 conv = interact.data.get("conversation_id") or ("conv_" + str(uuid.uuid4()))
                 conv_no = 0
-                self.user_conv_map[interact.data.get("user", "User")] = {"conversation_id" : conv, "conversation_msg_no" : conv_no}
+                # 创建第一条数据库记录，获得content_id
+                if text and text.strip():
+                    content_id = content_db.new_instance().add_content('fay', 'speak', text, username, uid)
+                else:
+                    content_id = content_db.new_instance().add_content('fay', 'speak', '', username, uid)
+                
+                # 保存content_id到会话映射中
+                self.user_conv_map[username] = {
+                    "conversation_id": conv, 
+                    "conversation_msg_no": conv_no,
+                    "content_id": content_id  # 新增：保存content_id
+                }
             else:
-                self.user_conv_map[interact.data.get("user", "User")]["conversation_msg_no"] += 1
-
+                self.user_conv_map[username]["conversation_msg_no"] += 1
+                # 获取之前保存的content_id
+                content_id = self.user_conv_map.get(username, {}).get("content_id", 0)
+                
+                # 如果有新内容，更新数据库
+                if content_id > 0 and text and text.strip():
+                    # 获取当前已有内容
+                    existing_content = content_db.new_instance().get_content_by_id(content_id)
+                    if existing_content:
+                        # 累积内容
+                        accumulated_text = existing_content[3] + text
+                        content_db.new_instance().update_content(content_id, accumulated_text)
 
             if not is_first and not is_end and (text is None or text.strip() == ""):
                 return None
@@ -317,9 +362,9 @@ class FeiFei:
                 user_for_stop = interact.data.get("user", "User")
                 conv_id_for_stop = interact.data.get("conversation_id")
                 if not stream_manager.new_instance().should_stop_generation(user_for_stop, conversation_id=conv_id_for_stop):
-                    self.__send_panel_message(text, interact.data.get('user'), uid, 0, type)
+                    self.__process_text_output(text, interact.data.get('user'), uid, content_id, type)
             except Exception:
-                self.__send_panel_message(text, interact.data.get('user'), uid, 0, type)
+                self.__process_text_output(text, interact.data.get('user'), uid, content_id, type)
             
             # 处理think标签
             is_start_think = False
@@ -700,9 +745,9 @@ class FeiFei:
             }
             wsa_server.get_instance().add_cmd(content)
 
-    def __process_text_output(self, text, username, uid):
+    def __process_text_output(self, text, username, uid, content_id, type):
         """
-        处理文本输出到各个终端
+        完整文本输出到各个终端
         :param text: 主要回复文本
         :param textlist: 额外回复列表
         :param username: 用户名
@@ -713,10 +758,10 @@ class FeiFei:
             text = text.strip()
             
         # 记录主回复
-        content_id = self.__record_response(text, username, uid)
+        # content_id = self.__record_response(text, username, uid)
         
         # 发送主回复到面板和数字人
-        # self.__send_panel_message(text, username, uid, content_id, type)
+        self.__send_panel_message(text, username, uid, content_id, type)
         self.__send_digital_human_message(text, username)
         
         # 打印日志

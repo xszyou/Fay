@@ -204,32 +204,30 @@ class FayInterface {
       }
 
       if (vueInstance.selectedUser && data.panelReply.username === vueInstance.selectedUser[1]) {
-        // 处理content_id为0的消息
-        if (data.panelReply.id === 0) {
-          // 查找最后一条消息
-          const lastIndex = vueInstance.messages.length - 1;
-          if (lastIndex >= 0) {
-            const lastMessage = vueInstance.messages[lastIndex];
-            // 如果最后一条消息也是content_id为0,则更新它
-            if (lastMessage.id === 0) {
-              lastMessage.content = lastMessage.content + data.panelReply.content;
-              lastMessage.timetext = this.getTime();
-              // 强制更新视图
-              vueInstance.$forceUpdate();
-              return;
-            }
-          }
-        }
+        // 查找是否已存在相同content_id的消息
+        const existingMessageIndex = vueInstance.messages.findIndex(
+          msg => msg.id === data.panelReply.id && msg.type === data.panelReply.type
+        );
         
-        // 添加新消息
-        vueInstance.messages.push({
-          id: data.panelReply.id,
-          username: data.panelReply.username,
-          content: data.panelReply.content,
-          type: data.panelReply.type,
-          timetext: this.getTime(),
-          is_adopted: data.panelReply.is_adopted ? 1 : 0
-        });
+        if (existingMessageIndex !== -1) {
+          // 更新现有消息（拼接内容）
+          const existingMessage = vueInstance.messages[existingMessageIndex];
+          // 拼接新内容到现有内容
+          existingMessage.content = existingMessage.content + data.panelReply.content;
+          existingMessage.timetext = this.getTime();
+          // 强制更新视图
+          vueInstance.$forceUpdate();
+        } else {
+          // 添加新消息
+          vueInstance.messages.push({
+            id: data.panelReply.id,
+            username: data.panelReply.username,
+            content: data.panelReply.content,
+            type: data.panelReply.type,
+            timetext: this.getTime(),
+            is_adopted: data.panelReply.is_adopted ? 1 : 0
+          });
+        }
 
         // 滚动到底部
         vueInstance.$nextTick(() => {

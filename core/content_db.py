@@ -64,6 +64,29 @@ class Content_Db:
         conn.close()
         return last_id
 
+    # 更新对话内容
+    @synchronized
+    def update_content(self, msg_id, content):
+        """
+        更新指定ID的消息内容
+        :param msg_id: 消息ID
+        :param content: 新的内容
+        :return: 是否更新成功
+        """
+        conn = sqlite3.connect("memory/fay.db")
+        conn.text_factory = str
+        cur = conn.cursor()
+        try:
+            cur.execute("UPDATE T_Msg SET content = ? WHERE id = ?", (content, msg_id))
+            conn.commit()
+            affected_rows = cur.rowcount
+        except Exception as e:
+            util.log(1, f"更新消息内容失败: {e}")
+            conn.close()
+            return False
+        conn.close()
+        return affected_rows > 0
+
     # 根据ID查询对话记录
     @synchronized
     def get_content_by_id(self, msg_id):

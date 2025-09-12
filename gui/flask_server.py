@@ -614,14 +614,19 @@ def transparent_pass():
             data = request.get_json()
         else:
             data = json.loads(data)
-        user = data.get('user', 'User')
-        response_text = data.get('text', '')
+        username = data.get('user', 'User')
+        response_text = data.get('text', None)
         audio_url = data.get('audio', None)
-        interact = Interact('transparent_pass', 2, {'user': user, 'text': response_text, 'audio': audio_url, 'isend':True, 'isfirst':True})
-        util.printInfo(1, user, '透传播放：{}，{}'.format(response_text, audio_url), time.time())
-        success = fay_booter.feiFei.on_interact(interact)
-        if (success == 'success'):
-            return jsonify({'code': 200, 'message' : '成功'})
+        if response_text or audio_url:
+            # 新消息到达，立即中断该用户之前的所有处理（文本流+音频队列）
+            util.printInfo(1, username, f'[API中断] 新消息到达，完整中断用户 {username} 之前的所有处理')
+            stream_manager.new_instance().clear_Stream_with_audio(username)
+            util.printInfo(1, username, f'[API中断] 用户 {username} 的文本流和音频队列已清空，准备处理新消息')
+            interact = Interact('transparent_pass', 2, {'user': username, 'text': response_text, 'audio': audio_url, 'isend':True, 'isfirst':True})
+            util.printInfo(1, username, '透传播放：{}，{}'.format(response_text, audio_url), time.time())
+            success = fay_booter.feiFei.on_interact(interact)
+            if (success == 'success'):
+                return jsonify({'code': 200, 'message' : '成功'})
         return jsonify({'code': 500, 'message' : '未知原因出错'})
     except Exception as e:
         return jsonify({'code': 500, 'message': f'出错: {e}'}), 500
