@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 #作用是处理交互逻辑，文字输入，语音、文字及情绪的发送、播放及展示输出
 import math
 from operator import index
@@ -140,7 +140,7 @@ class FeiFei:
 
         if success:
             # Q&A模式结束会话（不再需要发送额外的结束标记）
-            state_manager.end_session(username)
+            state_manager.end_session(username, conversation_id=stream_manager.new_instance().get_conversation_id(username))
         else:
             util.log(1, f"Q&A流式处理失败，文本长度: {len(text)}")
             # 失败时也要确保结束会话
@@ -166,7 +166,7 @@ class FeiFei:
 
         if success:
             # 普通模式结束会话
-            state_manager.end_session(username)
+            state_manager.end_session(username, conversation_id=stream_manager.new_instance().get_conversation_id(username))
         else:
             util.log(1, f"type=2流式处理失败，文本长度: {len(text)}")
             # 失败时也要确保结束会话

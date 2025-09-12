@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 import time
 from utils import util
 from core import stream_manager
@@ -44,14 +44,15 @@ class StreamTextProcessor:
         if not text or not text.strip():
             return True
 
-        # 获取状态管理器并开始新会话（若未开始）
-        state_manager = get_state_manager()
-        if not state_manager.is_session_active(username):
-            state_manager.start_new_session(username, session_type)
-
         # 捕获本次流式处理对应的会话ID（用于精确隔离）
         sm = stream_manager.new_instance()
         conversation_id = sm.get_conversation_id(username)
+
+        # 获取状态管理器并开始新会话（若未开始或会话不匹配则对齐）
+        state_manager = get_state_manager()
+        session_info = state_manager.get_session_info(username)
+        if (not session_info) or (session_info.get('conversation_id') != conversation_id):
+            state_manager.start_new_session(username, session_type, conversation_id=conversation_id)
 
         try:
             return self._safe_process_text(text, username, is_qa, state_manager, conversation_id)
@@ -110,6 +111,7 @@ class StreamTextProcessor:
                         sentence_text,
                         force_first=(not first_sentence_sent),  # 第一段 True，其它 False
                         force_end=False,
+                        conversation_id=conversation_id,
                     )
 
                     success = stream_manager.new_instance().write_sentence(
@@ -134,6 +136,7 @@ class StreamTextProcessor:
                 accumulated_text,
                 force_first=(not first_sentence_sent),  # 如果还没发送过句子，这是第一段
                 force_end=True,
+                conversation_id=conversation_id,
             )
             stream_manager.new_instance().write_sentence(
                 username, marked_text, conversation_id=conversation_id
@@ -142,7 +145,7 @@ class StreamTextProcessor:
         elif not first_sentence_sent:
             # 如果整个文本都没有找到合适的分割点，作为完整句子发送
             marked_text, _, _ = state_manager.prepare_sentence(
-                username, text, force_first=True, force_end=True
+                username, text, force_first=True, force_end=True, conversation_id=conversation_id
             )
             stream_manager.new_instance().write_sentence(
                 username, marked_text, conversation_id=conversation_id
@@ -152,14 +155,14 @@ class StreamTextProcessor:
             session_info = state_manager.get_session_info(username)
             if session_info and not session_info.get("is_end_sent", False):
                 marked_text, _, _ = state_manager.prepare_sentence(
-                    username, "", force_first=False, force_end=True
+                    username, "", force_first=False, force_end=True, conversation_id=conversation_id
                 )
                 stream_manager.new_instance().write_sentence(
                     username, marked_text, conversation_id=conversation_id
                 )
 
         # 结束会话
-        state_manager.end_session(username)
+        state_manager.end_session(username, conversation_id=conversation_id)
 
         # 记录处理统计
         if iteration_count >= self.max_iterations:
@@ -194,7 +197,7 @@ class StreamTextProcessor:
         try:
             # 使用状态管理器准备完整文本
             marked_text, _, _ = state_manager.prepare_sentence(
-                username, text, force_first=True, force_end=True
+                username, text, force_first=True, force_end=True, conversation_id=conversation_id
             )
             stream_manager.new_instance().write_sentence(
                 username, marked_text, conversation_id=conversation_id
@@ -216,4 +219,3 @@ def get_processor():
     if _processor_instance is None:
         _processor_instance = StreamTextProcessor()
     return _processor_instance
-

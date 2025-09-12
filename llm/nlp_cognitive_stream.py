@@ -902,7 +902,7 @@ def question(content, username, observation=None):
                             if last_punct_pos > 10:  # 确保有足够的内容发送
                                 sentence_text = accumulated_text[:last_punct_pos + 1]
                                 # 使用状态管理器准备句子
-                                marked_text, _, _ = state_manager.prepare_sentence(username, sentence_text)
+                                marked_text, _, _ = state_manager.prepare_sentence(username, sentence_text, conversation_id=conversation_id)
                                 stream_manager.new_instance().write_sentence(username, marked_text, conversation_id=conversation_id)
                                 accumulated_text = accumulated_text[last_punct_pos + 1:].lstrip()
                         
@@ -922,14 +922,14 @@ def question(content, username, observation=None):
         if not sm.should_stop_generation(username, conversation_id=conversation_id):
             if accumulated_text:
                 # 使用状态管理器准备最后的文本，强制标记为结束
-                marked_text, _, _ = state_manager.prepare_sentence(username, accumulated_text, force_end=True)
+                marked_text, _, _ = state_manager.prepare_sentence(username, accumulated_text, force_end=True, conversation_id=conversation_id)
                 stream_manager.new_instance().write_sentence(username, marked_text, conversation_id=conversation_id)
             else:
                 # 如果没有剩余文本，检查是否需要发送结束标记
-                session_info = state_manager.get_session_info(username)
+                session_info = state_manager.get_session_info(username, conversation_id=conversation_id)
                 if session_info and not session_info.get('is_end_sent', False):
                     # 发送一个空的结束标记
-                    marked_text, _, _ = state_manager.prepare_sentence(username, "", force_end=True)
+                    marked_text, _, _ = state_manager.prepare_sentence(username, "", force_end=True, conversation_id=conversation_id)
                     stream_manager.new_instance().write_sentence(username, marked_text, conversation_id=conversation_id)
                      
                      
@@ -969,26 +969,26 @@ def question(content, username, observation=None):
                     if last_punct_pos > 10:  # 确保有足够的内容发送
                         sentence_text = accumulated_text[:last_punct_pos + 1]
                         # 使用状态管理器准备句子
-                        marked_text, _, _ = state_manager.prepare_sentence(username, sentence_text)
+                        marked_text, _, _ = state_manager.prepare_sentence(username, sentence_text, conversation_id=conversation_id)
                         stream_manager.new_instance().write_sentence(username, marked_text, conversation_id=conversation_id)
                         accumulated_text = accumulated_text[last_punct_pos + 1:].lstrip()
                         
                 full_response_text += flush_text
-            # 确保最后一段文本也被发送，并标记为结束（若会话未被取消）
+            # 确保最后一段文本及结束标记也被发送（若会话未被取消）
             from utils.stream_state_manager import get_state_manager
             state_manager = get_state_manager()
 
             if not sm.should_stop_generation(username, conversation_id=conversation_id):
                 if accumulated_text:
                     # 使用状态管理器准备最后的文本，强制标记为结束
-                    marked_text, _, _ = state_manager.prepare_sentence(username, accumulated_text, force_end=True)
+                    marked_text, _, _ = state_manager.prepare_sentence(username, accumulated_text, force_end=True, conversation_id=conversation_id)
                     stream_manager.new_instance().write_sentence(username, marked_text, conversation_id=conversation_id)
                 else:
                     # 如果没有剩余文本，检查是否需要发送结束标记
-                    session_info = state_manager.get_session_info(username)
+                    session_info = state_manager.get_session_info(username, conversation_id=conversation_id)
                     if session_info and not session_info.get('is_end_sent', False):
                         # 发送一个空的结束标记
-                        marked_text, _, _ = state_manager.prepare_sentence(username, "", force_end=True)
+                        marked_text, _, _ = state_manager.prepare_sentence(username, "", force_end=True, conversation_id=conversation_id)
                         stream_manager.new_instance().write_sentence(username, marked_text, conversation_id=conversation_id)
 
 
@@ -1003,7 +1003,7 @@ def question(content, username, observation=None):
     # 结束会话（不再需要发送额外的结束标记）
     from utils.stream_state_manager import get_state_manager
     state_manager = get_state_manager()
-    state_manager.end_session(username)
+    state_manager.end_session(username, conversation_id=conversation_id)
 
     # 在单独线程中记忆对话内容
     MyThread(target=remember_conversation_thread, args=(username, content, full_response_text.split("</think>")[-1])).start()

@@ -48,35 +48,33 @@ class StreamManager:
         self.stop_generation_flags = {}  # 存储用户的停止生成标志
         self.conversation_ids = {}  # 存储每个用户的会话ID（conv_前缀）
 
-    def bump_session(self, username):
-        """
-        切换到新会话：为用户的会话版本号 +1 并返回新版本号。
-        """
-        with self.control_lock:
-            current = self.session_versions.get(username, 0)
-            current += 1
-            self.session_versions[username] = current
-            return current
 
-    def get_session_version(self, username):
-        """获取用户当前会话版本（不存在则为0）。"""
-        with self.control_lock:
-            return self.session_versions.get(username, 0)
-
-    def set_current_conversation(self, username, conversation_id):
-        """设置当前会话ID（conv_*）"""
+    def set_current_conversation(self, username, conversation_id, session_type=None):
+        """设置当前会话ID（conv_*）并对齐状态管理器的会话。
+        session_type 可选；未提供则沿用已存在状态的类型或默认 'stream'。
+        """
         with self.control_lock:
             self.conversation_ids[username] = conversation_id
+
+        # 对齐 StreamStateManager 的会话，以防用户名级状态跨会话串线
+        try:
+            from utils.stream_state_manager import get_state_manager  # 延迟导入避免循环依赖
+            smgr = get_state_manager()
+            info = smgr.get_session_info(username)
+            if (not info) or (info.get('conversation_id') != conversation_id):
+                smgr.start_new_session(
+                    username,
+                    session_type if session_type else (info.get('session_type') if info else 'stream'),
+                    conversation_id=conversation_id,
+                )
+        except Exception:
+            # 状态对齐失败不阻断主流程
+            pass
 
     def get_conversation_id(self, username):
         """获取当前会话ID（可能为空字符串）"""
         with self.control_lock:
             return self.conversation_ids.get(username, "")
-
-    def is_session_valid(self, username, version):
-        """检查给定版本是否仍为该用户的当前会话版本。"""
-        with self.control_lock:
-            return version == self.session_versions.get(username, 0)
 
     def _get_Stream_internal(self, username):
         """
