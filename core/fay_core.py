@@ -120,33 +120,7 @@ class FeiFei:
 
         return filtered_text
 
-    def __process_qa_stream(self, text, username):
-        """
-        按流式方式分割和发送Q&A答案
-        使用安全的流式文本处理器和状态管理器
-        """
-        if not text or text.strip() == "":
-            return
-
-        # 使用安全的流式文本处理器
-        from utils.stream_text_processor import get_processor
-        from utils.stream_state_manager import get_state_manager
-
-        processor = get_processor()
-        state_manager = get_state_manager()
-
-        # 处理Q&A流式文本，is_qa=True表示Q&A模式
-        success = processor.process_stream_text(text, username, is_qa=True, session_type="qa")
-
-        if success:
-            # Q&A模式结束会话（不再需要发送额外的结束标记）
-            state_manager.end_session(username, conversation_id=stream_manager.new_instance().get_conversation_id(username))
-        else:
-            util.log(1, f"Q&A流式处理失败，文本长度: {len(text)}")
-            # 失败时也要确保结束会话
-            state_manager.force_reset_user_state(username)
-
-    def __process_stream_output(self, text, username, session_type="type2_stream"):
+    def __process_stream_output(self, text, username, session_type="type2_stream", is_qa=False):
         """
         按流式方式分割和发送 type=2 的文本
         使用安全的流式文本处理器和状态管理器
@@ -162,7 +136,7 @@ class FeiFei:
         state_manager = get_state_manager()
 
         # 处理流式文本，is_qa=False表示普通模式
-        success = processor.process_stream_text(text, username, is_qa=False, session_type=session_type)
+        success = processor.process_stream_text(text, username, is_qa=is_qa, session_type=session_type)
 
         if success:
             # 普通模式结束会话
@@ -236,7 +210,7 @@ class FeiFei:
                     else: 
                         text = answer
                         # 使用流式分割处理Q&A答案
-                        self.__process_qa_stream(text, username)
+                        self.__process_stream_output(text, username, session_type="qa", is_qa=True)
                            
 
                     return text      
@@ -260,7 +234,7 @@ class FeiFei:
                     # 2) 只有文本：执行流式切分并TTS
                     if text and str(text).strip():
                         # 进行流式处理（用于TTS，流式处理中会记录到数据库）
-                        self.__process_stream_output(text, username, f"type2_{interact.interleaver}")
+                        self.__process_stream_output(text, username, f"type2_{interact.interleaver}", is_qa=False)
                         
                         # 不再需要额外记录，因为流式处理已经记录了
                         # self.__process_text_output(text, username, uid)

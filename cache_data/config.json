@@ -1,0 +1,49 @@
+{
+    "attribute": {
+        "additional": "发呆",
+        "age": "成年",
+        "birth": "Github",
+        "constellation": "水瓶座",
+        "contact": "qq467665317",
+        "gender": "女",
+        "goal": "工作协助",
+        "hobby": "发呆",
+        "job": "助理",
+        "name": "菲菲",
+        "position": "陪伴",
+        "voice": "zhixiaomei",
+        "zodiac": "蛇"
+    },
+    "interact": {
+        "QnA": "qa.csv",
+        "maxInteractTime": 15,
+        "perception": {
+            "chat": 10,
+            "follow": 10,
+            "gift": 10,
+            "indifferent": 10,
+            "join": 10
+        },
+        "playSound": false,
+        "visualization": false
+    },
+    "items": [],
+    "memory": {
+        "isolate_by_user": true
+    },
+    "source": {
+        "automatic_player_status": false,
+        "automatic_player_url": "http://127.0.0.1:6000",
+        "liveRoom": {
+            "enabled": true,
+            "url": ""
+        },
+        "record": {
+            "device": "",
+            "enabled": false
+        },
+        "wake_word": "你好",
+        "wake_word_enabled": false,
+        "wake_word_type": "front"
+    }
+}
