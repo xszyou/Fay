@@ -56,7 +56,7 @@ class StreamStateManager:
             }
             return conversation_id
 
-    def prepare_sentence(self, username, text, force_first=False, force_end=False, conversation_id=None):
+    def prepare_sentence(self, username, text, force_first=False, force_end=False, is_qa=False, conversation_id=None):
         """
         准备要发送的句子：根据需要追加首尾标记并安全更新状态。
 
@@ -107,6 +107,8 @@ class StreamStateManager:
                 marked_text += "_<isfirst>"
             if is_end and not marked_text.endswith("_<isend>"):
                 marked_text += "_<isend>"
+            if is_qa and not marked_text.endswith("_<isqa>"):
+                marked_text += "_<isqa>"
             return marked_text, is_first, is_end
 
     def end_session(self, username, conversation_id=None):

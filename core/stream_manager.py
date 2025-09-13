@@ -314,15 +314,16 @@ class StreamManager:
         # 处理句子标记（无锁，避免长时间持有锁）
         is_first = "_<isfirst>" in sentence
         is_end = "_<isend>" in sentence
-        sentence = sentence.replace("_<isfirst>", "").replace("_<isend>", "")
+        is_qa = "_<isqa>" in sentence
+        sentence = sentence.replace("_<isfirst>", "").replace("_<isend>", "").replace("_<isqa>", "")
         
         # 执行实际处理（无锁，避免死锁）
-        if sentence or is_first or is_end:
+        if sentence or is_first or is_end or is_qa:
             fay_core = fay_booter.feiFei
             # 附带当前会话ID，方便下游按会话控制输出
             effective_cid = producer_cid if producer_cid is not None else getattr(self, 'conversation_ids', {}).get(username, "")
             interact = Interact("stream", 1, {"user": username, "msg": sentence, "isfirst": is_first, "isend": is_end, "conversation_id": effective_cid})
-            fay_core.say(interact, sentence)  # 调用核心处理模块进行响应
+            fay_core.say(interact, sentence, type="qa" if is_qa else "")  # 调用核心处理模块进行响应
         time.sleep(0.01)  # 短暂休眠以控制处理频率
 
 

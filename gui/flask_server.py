@@ -343,17 +343,21 @@ def api_send_v1_chat_completions():
 
         model = data.get('model', 'fay')
         observation = data.get('observation', '')
-        interact = Interact("text", 1, {'user': username, 'msg': last_content, 'observation': str(observation)})
-        util.printInfo(1, username, '[文字沟通接口]{}'.format(interact.data["msg"]), time.time())
-        fay_booter.feiFei.on_interact(interact)
+        
 
         # 检查请求中是否指定了流式传输
         stream_requested = data.get('stream', False)
         
         # 优先使用请求中的stream参数，如果没有指定则使用配置中的设置
         if stream_requested or model == 'fay-streaming':
+            interact = Interact("text", 1, {'user': username, 'msg': last_content, 'observation': str(observation), 'stream':True})
+            util.printInfo(1, username, '[文字沟通接口(流式)]{}'.format(interact.data["msg"]), time.time())
+            fay_booter.feiFei.on_interact(interact)
             return gpt_stream_response(last_content, username)
         else:
+            interact = Interact("text", 1, {'user': username, 'msg': last_content, 'observation': str(observation), 'stream':False})
+            util.printInfo(1, username, '[文字沟通接口(非流式)]{}'.format(interact.data["msg"]), time.time())
+            fay_booter.feiFei.on_interact(interact)
             return non_streaming_response(last_content, username)
     except Exception as e:
         return jsonify({'error': f'处理请求时出错: {e}'}), 500
@@ -415,10 +419,6 @@ def gpt_stream_response(last_content, username):
     conversation_id = sm.get_conversation_id(username)
     def generate():
         while True:
-            # If interrupted or session switched, end the SSE stream promptly
-            if sm.should_stop_generation(username, conversation_id=conversation_id):
-                yield 'data: [DONE]\n\n'
-                break
             sentence = nlp_Stream.read()
             if sentence is None:
                 gsleep(0.01)
@@ -469,9 +469,6 @@ def non_streaming_response(last_content, username):
     conversation_id = sm.get_conversation_id(username)
     text = ""
     while True:
-        # If interrupted or session switched, stop waiting and return what we have
-        if sm.should_stop_generation(username, conversation_id=conversation_id):
-            break
         sentence = nlp_Stream.read()
         if sentence is None:
             gsleep(0.01)

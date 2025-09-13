@@ -111,6 +111,7 @@ class StreamTextProcessor:
                         sentence_text,
                         force_first=(not first_sentence_sent),  # 第一段 True，其它 False
                         force_end=False,
+                        is_qa=is_qa,
                         conversation_id=conversation_id,
                     )
 
@@ -136,6 +137,7 @@ class StreamTextProcessor:
                 accumulated_text,
                 force_first=(not first_sentence_sent),  # 如果还没发送过句子，这是第一段
                 force_end=True,
+                is_qa=is_qa,
                 conversation_id=conversation_id,
             )
             stream_manager.new_instance().write_sentence(

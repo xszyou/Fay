@@ -267,7 +267,11 @@ class FeiFei:
             username = interact.data.get("user", "User")
             if member_db.new_instance().is_username_exist(username)  == "notexists":
                 member_db.new_instance().add_user(username)
-            MyThread(target=self.__process_interact, args=[interact]).start()
+            # 判断调用来源，如果是非stream调用则同步处理
+            if interact.data.get("stream", False):
+                MyThread(target=self.__process_interact, args=[interact]).start()
+            else:
+                return self.__process_interact(interact)        
         else:
             return self.__process_interact(interact)
 
@@ -739,7 +743,7 @@ class FeiFei:
         self.__send_digital_human_message(text, username)
         
         # 打印日志
-        util.printInfo(1, username, '({}) {}'.format(self.__get_mood_voice(), text))
+        util.printInfo(1, username, '({}) {}'.format("llm", text))
 
 import importlib
 fay_booter = importlib.import_module('fay_booter')
