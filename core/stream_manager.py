@@ -135,12 +135,6 @@ class StreamManager:
 
         # 检查是否包含_<isfirst>标记（可能在句子中间）
         if '_<isfirst>' in sentence:
-            # 直接使用stream_lock清除文本流
-            with self.stream_lock:
-                self._clear_Stream_internal(username)
-            # 清空音频队列（Queue本身线程安全，不需要锁）
-            self._clear_audio_queue(username)
-            
             # 收到新处理的第一个句子，重置停止标志，允许后续处理
             with self.control_lock:
                 self.stop_generation_flags[username] = False
@@ -154,7 +148,8 @@ class StreamManager:
                 tag_cid = conversation_id if conversation_id is not None else current_cid
                 tagged_sentence = f"{sentence}__<cid={tag_cid}>__" if tag_cid else sentence
                 success = Stream.write(tagged_sentence)
-                nlp_success = nlp_Stream.write(sentence)
+                # 让 NLP 流也携带隐藏的会话ID，便于前端按会话过滤
+                nlp_success = nlp_Stream.write(tagged_sentence)
                 return success and nlp_success
             except Exception as e:
                 print(f"写入句子时出错: {e}")
@@ -169,6 +164,21 @@ class StreamManager:
             self.streams[username].clear()
         if username in self.nlp_streams:
             self.nlp_streams[username].clear()
+
+        # 清除后写入一条结束标记，分别通知主流与NLP流结束
+        try:
+            # 确保流存在（监听线程也会在首次创建时启动）
+            stream, nlp_stream = self._get_Stream_internal(username)
+            cid = self.conversation_ids.get(username, "")
+            end_marker = "_<isend>"
+            # 主流带会话ID隐藏标签，供下游按会话拦截
+            tagged = f"{end_marker}__<cid={cid}>__" if cid else end_marker
+            stream.write(tagged)
+            # NLP 流也写入带会话ID的结束标记，前端会按会话过滤
+            nlp_stream.write(tagged)
+        except Exception:
+            # 忽略写入哨兵失败
+            pass
 
     def set_stop_generation(self, username, stop=True):
         """
@@ -241,15 +251,6 @@ class StreamManager:
         # 只清理特定用户的音频项，保留其他用户的音频
         self._clear_user_specific_audio(username, fay_core.sound_query)
 
-    def clear_Stream(self, username):
-        """
-        清除指定用户ID的文本流数据（外部调用接口，仅清除文本流）
-        :param username: 用户名
-        """
-        # 直接使用stream_lock，不再需要clear_lock
-        with self.stream_lock:
-            self._clear_Stream_internal(username)
-
     def clear_Stream_with_audio(self, username):
         """
         清除指定用户ID的文本流数据和音频队列（完全清除）
@@ -262,13 +263,15 @@ class StreamManager:
         # 第二步：设置停止标志（独立操作）
         with self.control_lock:
             self.stop_generation_flags[username] = True
+
+        # 第三步：清除音频队列（Queue线程安全，不需要锁）
+        self._clear_audio_queue(username)
         
-        # 第三步：清除文本流（独立操作）
+        # 第四步：清除文本流（独立操作）
         with self.stream_lock:
             self._clear_Stream_internal(username)
         
-        # 第四步：清除音频队列（Queue线程安全，不需要锁）
-        self._clear_audio_queue(username)
+
 
     def listen(self, username, stream, nlp_stream):
         while self.running:

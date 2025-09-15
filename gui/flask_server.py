@@ -246,7 +246,7 @@ def api_start_live():
     # 启动
     try:
         fay_booter.start()
-        time.sleep(1)
+        gsleep(1)
         wsa_server.get_web_instance().add_cmd({"liveState": 1})
         return '{"result":"successful"}'
     except Exception as e:
@@ -257,7 +257,7 @@ def api_stop_live():
     # 停止
     try:
         fay_booter.stop()
-        time.sleep(1)
+        gsleep(1)
         wsa_server.get_web_instance().add_cmd({"liveState": 0})
         return '{"result":"successful"}'
     except Exception as e:
@@ -276,12 +276,7 @@ def api_send():
         if not username or not msg:
             return jsonify({'result': 'error', 'message': '用户名和消息内容不能为空'})
         msg = msg.strip()
-        
-        # 新消息到达，立即中断该用户之前的所有处理（文本流+音频队列）
-        util.printInfo(1, username, f'[API中断] 新消息到达，完整中断用户 {username} 之前的所有处理')
-        stream_manager.new_instance().clear_Stream_with_audio(username)
-        util.printInfo(1, username, f'[API中断] 用户 {username} 的文本流和音频队列已清空，准备处理新消息')
-        
+      
         interact = Interact("text", 1, {'user': username, 'msg': msg})
         util.printInfo(1, username, '[文字发送按钮]{}'.format(interact.data["msg"]), time.time())
         fay_booter.feiFei.on_interact(interact)
@@ -343,12 +338,8 @@ def api_send_v1_chat_completions():
 
         model = data.get('model', 'fay')
         observation = data.get('observation', '')
-        
-
         # 检查请求中是否指定了流式传输
         stream_requested = data.get('stream', False)
-        
-        # 优先使用请求中的stream参数，如果没有指定则使用配置中的设置
         if stream_requested or model == 'fay-streaming':
             interact = Interact("text", 1, {'user': username, 'msg': last_content, 'observation': str(observation), 'stream':True})
             util.printInfo(1, username, '[文字沟通接口(流式)]{}'.format(interact.data["msg"]), time.time())
@@ -416,7 +407,6 @@ def adopt_msg():
 def gpt_stream_response(last_content, username):
     sm = stream_manager.new_instance()
     _, nlp_Stream = sm.get_Stream(username)
-    conversation_id = sm.get_conversation_id(username)
     def generate():
         while True:
             sentence = nlp_Stream.read()
@@ -424,10 +414,16 @@ def gpt_stream_response(last_content, username):
                 gsleep(0.01)
                 continue
             
-            # 处理特殊标记
+            # 解析并移除隐藏会话ID标签
+            try:
+                m = re.search(r"__<cid=([^>]+)>__", sentence)
+                if m:
+                    sentence = sentence.replace(m.group(0), "")
+            except Exception:
+                pass
             is_first = "_<isfirst>" in sentence
             is_end = "_<isend>" in sentence
-            content = sentence.replace("_<isfirst>", "").replace("_<isend>", "")
+            content = sentence.replace("_<isfirst>", "").replace("_<isend>", "").replace("_<isqa>", "")
             if content or is_first or is_end:  # 只有当有实际内容时才发送
                 message = {
                     "id": "faystreaming-" + str(uuid.uuid4()),
@@ -451,9 +447,6 @@ def gpt_stream_response(last_content, username):
                     },
                     "system_fingerprint": ""
                 }
-                if is_end:
-                    if username in fay_booter.feiFei.nlp_streams:
-                        stream_manager.new_instance().clear_Stream(username)
                 yield f"data: {json.dumps(message)}\n\n"
             if is_end:
                 break
@@ -466,7 +459,6 @@ def gpt_stream_response(last_content, username):
 def non_streaming_response(last_content, username):
     sm = stream_manager.new_instance()
     _, nlp_Stream = sm.get_Stream(username)
-    conversation_id = sm.get_conversation_id(username)
     text = ""
     while True:
         sentence = nlp_Stream.read()
@@ -475,12 +467,16 @@ def non_streaming_response(last_content, username):
             continue
         
         # 处理特殊标记
+        try:
+            m = re.search(r"__<cid=([^>]+)>__", sentence)
+            if m:
+                sentence = sentence.replace(m.group(0), "")
+        except Exception:
+            pass
         is_first = "_<isfirst>" in sentence
         is_end = "_<isend>" in sentence
-        text += sentence.replace("_<isfirst>", "").replace("_<isend>", "")
+        text += sentence.replace("_<isfirst>", "").replace("_<isend>", "").replace("_<isqa>", "")
         if is_end:
-            if username in fay_booter.feiFei.nlp_streams:
-                stream_manager.new_instance().clear_Stream(username) 
             break
     return jsonify({
         "id": "fay-" + str(uuid.uuid4()),
@@ -581,10 +577,10 @@ def to_stop_talking():
     try:
         data = request.get_json()
         username = data.get('username', 'User')
+        stream_manager.new_instance().clear_Stream_with_audio(username)
         observation = data.get('observation', '')
         
         util.printInfo(1, username, f"开始执行打断操作，清空用户 {username} 的处理队列")
-        stream_manager.new_instance().clear_Stream_with_audio(username)
         util.printInfo(1, username, f"打断操作完成，用户 {username} 的所有队列已清空")
         
         result = "interrupted"  # 简单的结果标识
@@ -617,7 +613,6 @@ def transparent_pass():
         if response_text or audio_url:
             # 新消息到达，立即中断该用户之前的所有处理（文本流+音频队列）
             util.printInfo(1, username, f'[API中断] 新消息到达，完整中断用户 {username} 之前的所有处理')
-            stream_manager.new_instance().clear_Stream_with_audio(username)
             util.printInfo(1, username, f'[API中断] 用户 {username} 的文本流和音频队列已清空，准备处理新消息')
             interact = Interact('transparent_pass', 2, {'user': username, 'text': response_text, 'audio': audio_url, 'isend':True, 'isfirst':True})
             util.printInfo(1, username, '透传播放：{}，{}'.format(response_text, audio_url), time.time())
@@ -755,7 +750,7 @@ def api_start_genagents():
         def monitor_shutdown():
             try:
                 while not is_shutdown_requested():
-                    time.sleep(1)
+                    gsleep(1)
                 util.log(1, f"检测到关闭请求，正在关闭决策分析服务...")
                 genagents_server.shutdown()
             except Exception as e:

@@ -73,7 +73,7 @@ class FeiFei:
         self.speaking = False #声音是否在播放
         self.__running = True
         self.sp.connect()  #TODO 预连接
-        self.cemotion = None
+
         self.timer = None
         self.sound_query = Queue()
         self.think_mode_users = {}  # 使用字典存储每个用户的think模式状态
@@ -164,6 +164,13 @@ class FeiFei:
                 index = interact.interact_type
                 username = interact.data.get("user", "User")
                 uid = member_db.new_instance().find_user(username)
+                
+                try:
+                    from utils.stream_state_manager import get_state_manager
+                    if get_state_manager().is_session_active(username):
+                        stream_manager.new_instance().clear_Stream_with_audio(username)
+                except Exception:
+                    pass
 
                 # 切换到新会话，令上一会话的流式输出/音频尽快结束
                 util.printInfo(1, username, "重置中断标志，开始新的对话处理") 
@@ -268,10 +275,8 @@ class FeiFei:
             if member_db.new_instance().is_username_exist(username)  == "notexists":
                 member_db.new_instance().add_user(username)
             # 判断调用来源，如果是非stream调用则同步处理
-            if interact.data.get("stream", False):
-                MyThread(target=self.__process_interact, args=[interact]).start()
-            else:
-                return self.__process_interact(interact)        
+            MyThread(target=self.__process_interact, args=[interact]).start()
+    
         else:
             return self.__process_interact(interact)
 
@@ -296,7 +301,7 @@ class FeiFei:
             try:
                 user_for_stop = interact.data.get("user", "User")
                 conv_id_for_stop = interact.data.get("conversation_id")
-                if stream_manager.new_instance().should_stop_generation(user_for_stop, conversation_id=conv_id_for_stop):
+                if not is_end and stream_manager.new_instance().should_stop_generation(user_for_stop, conversation_id=conv_id_for_stop):
                     return None
             except Exception:
                 pass
@@ -339,7 +344,7 @@ class FeiFei:
             try:
                 user_for_stop = interact.data.get("user", "User")
                 conv_id_for_stop = interact.data.get("conversation_id")
-                if not stream_manager.new_instance().should_stop_generation(user_for_stop, conversation_id=conv_id_for_stop):
+                if is_end or not stream_manager.new_instance().should_stop_generation(user_for_stop, conversation_id=conv_id_for_stop):
                     self.__process_text_output(text, interact.data.get('user'), uid, content_id, type)
             except Exception:
                 self.__process_text_output(text, interact.data.get('user'), uid, content_id, type)
@@ -425,7 +430,7 @@ class FeiFei:
                     wsa_server.get_web_instance().add_cmd({"panelMsg": "", 'Username' : interact.data.get('user'), 'robot': f'{cfg.fay_url}/robot/Normal.jpg'})
 
             if result is not None or is_first or is_end:
-                if is_end:#如果结束标记，则延迟1秒处理,免得is end比前面的音频tts要快
+                if is_end:#TODO 临时方案：如果结束标记，则延迟1秒处理,免得is end比前面的音频tts要快
                     time.sleep(1)          
                 MyThread(target=self.__process_output_audio, args=[result, interact, text]).start()
                 return result         
@@ -610,12 +615,6 @@ class FeiFei:
             config_util.load_config()
             if config_util.config["interact"]["playSound"]:
                 # 检查是否需要停止音频播放（按会话）
-                if stream_manager.new_instance().should_stop_generation(
-                    interact.data.get("user", "User"),
-                    conversation_id=interact.data.get("conversation_id")
-                ):
-                    util.printInfo(1, interact.data.get('user'), '音频播放被打断，跳过加入播放队列')
-                    return
                 self.sound_query.put((file_url, audio_length, interact))
             else:
                 if wsa_server.get_web_instance().is_connected(interact.data.get('user')):
@@ -648,9 +647,6 @@ class FeiFei:
 
     #启动核心服务
     def start(self):
-        if cfg.ltp_mode == "cemotion":
-            from cemotion import Cemotion
-            self.cemotion = Cemotion()
         MyThread(target=self.__play_sound).start()
 
     #停止核心服务
