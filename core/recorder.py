@@ -92,7 +92,7 @@ class Recorder:
             fay_core.can_auto_play = True
 
     def __waitingResult(self, iat: asrclient, audio_data):
-        self.processing = True
+        self.__processing = True
         t = time.time()
         tm = time.time()
         if self.ASRMode == "funasr"  or self.ASRMode == "sensevoice":
@@ -110,25 +110,41 @@ class Recorder:
                 #普通唤醒模式
                 if cfg.config['source']['wake_word_type'] == 'common':
 
-                    if not self.wakeup_matched:
+                    # 判断是否需要进行唤醒词检测
+                    # 1. 未唤醒状态需要检测
+                    # 2. 已唤醒但系统正在播放时也需要检测（用于打断）
+                    if not self.wakeup_matched or (self.wakeup_matched and self.__fay.speaking):
+                        # 记录是否为打断场景
+                        is_interrupt = self.wakeup_matched and self.__fay.speaking
+
                         #唤醒词判断
-                        wake_word =  cfg.config['source']['wake_word']
+                        wake_word = cfg.config['source']['wake_word']
                         wake_word_list = wake_word.split(',')
                         wake_up = False
                         for word in wake_word_list:
                             if word in text:
-                                    wake_up = True
+                                wake_up = True
+                                break
+
                         if wake_up:
-                            util.printInfo(1, self.username, "唤醒成功！")
+                            # 如果是打断场景，先清除当前播放
+                            if is_interrupt:
+                                util.printInfo(1, self.username, "检测到唤醒词，打断当前播放")
+                                stream_manager.new_instance().clear_Stream_with_audio(self.username)
+                            else:
+                                util.printInfo(1, self.username, "唤醒成功！")
+
+                            # 发送唤醒成功的UI提示
                             if wsa_server.get_web_instance().is_connected(self.username):
                                 wsa_server.get_web_instance().add_cmd({"panelMsg": "唤醒成功！", "Username" : self.username , 'robot': f'{cfg.fay_url}/robot/Listening.jpg'})
                             if wsa_server.get_instance().is_connected(self.username):
                                 content = {'Topic': 'human', 'Data': {'Key': 'log', 'Value': "唤醒成功！"}, 'Username' : self.username, 'robot': f'{cfg.fay_url}/robot/Listening.jpg'}
                                 wsa_server.get_instance().add_cmd(content)
+
                             self.wakeup_matched = True  # 唤醒成功
                             with fay_core.auto_play_lock:
                                 fay_core.can_auto_play = False
-                            #self.on_speaking(text)
+
                             # 使用状态管理器处理唤醒回复
                             from utils.stream_state_manager import get_state_manager
                             state_manager = get_state_manager()
@@ -136,20 +152,31 @@ class Recorder:
 
                             intt = interact.Interact("auto_play", 2, {'user': self.username, 'text': "在呢，你说？" , "isfirst" : True, "isend" : True})
                             self.__fay.on_interact(intt)
-                            stream_manager.new_instance().clear_Stream_with_audio(self.username)
-                            self.processing = False
-                            self.timer.cancel()  # 取消之前的计时器任务
-                            
+                            # 只在非打断场景下清除流，打断场景已在第133行清除过
+                            if not is_interrupt:
+                                stream_manager.new_instance().clear_Stream_with_audio(self.username)
+                            self.__processing = False
+                            if hasattr(self, 'timer') and self.timer:
+                                self.timer.cancel()  # 取消之前的计时器任务
+                            # 重新创建并启动timer
+                            self.timer = threading.Timer(60, self.reset_wakeup_status)
+                            self.timer.start()
                         else:
-                            util.printInfo(1, self.username, "[!] 待唤醒！")
-                            if wsa_server.get_web_instance().is_connected(self.username):
-                                wsa_server.get_web_instance().add_cmd({"panelMsg": "[!] 待唤醒！", "Username" : self.username , 'robot': f'{cfg.fay_url}/robot/Normal.jpg'})
-                            if wsa_server.get_instance().is_connected(self.username):
-                                content = {'Topic': 'human', 'Data': {'Key': 'log', 'Value': "[!] 待唤醒！"}, 'Username' : self.username, 'robot': f'{cfg.fay_url}/robot/Normal.jpg'}
-                                wsa_server.get_instance().add_cmd(content)
+                            # 没有检测到唤醒词
+                            if not is_interrupt:  # 只有真正的未唤醒状态才显示"待唤醒"
+                                util.printInfo(1, self.username, "[!] 待唤醒！")
+                                if wsa_server.get_web_instance().is_connected(self.username):
+                                    wsa_server.get_web_instance().add_cmd({"panelMsg": "[!] 待唤醒！", "Username" : self.username , 'robot': f'{cfg.fay_url}/robot/Normal.jpg'})
+                                if wsa_server.get_instance().is_connected(self.username):
+                                    content = {'Topic': 'human', 'Data': {'Key': 'log', 'Value': "[!] 待唤醒！"}, 'Username' : self.username, 'robot': f'{cfg.fay_url}/robot/Normal.jpg'}
+                                    wsa_server.get_instance().add_cmd(content)
+                            # 如果是打断场景但没有唤醒词，什么都不做（忽略输入）
+                            # 无论是否检测到唤醒词，都要重置处理状态，避免阻塞后续语音识别
+                            self.__processing = False
                     else:
+                        # 已唤醒且不在播放，正常处理用户输入
                         self.on_speaking(text)
-                        self.processing = False
+                        self.__processing = False
                         self.timer.cancel()  # 取消之前的计时器任务
                         self.timer = threading.Timer(60, self.reset_wakeup_status)  # 重设计时器为60秒
                         self.timer.start()
@@ -175,7 +202,7 @@ class Recorder:
                         stream_manager.new_instance().clear_Stream_with_audio(self.username)
                         time.sleep(0.3)
                         self.on_speaking(question)
-                        self.processing = False
+                        self.__processing = False
                     else:
                         util.printInfo(1, self.username, "[!] 待唤醒！")
                         if wsa_server.get_web_instance().is_connected(self.username):
@@ -187,12 +214,12 @@ class Recorder:
             #非唤醒模式
             else:
                  self.on_speaking(text)
-                 self.processing = False
+                 self.__processing = False
         else:
             #TODO 为什么这个设为False
             # if self.wakeup_matched:
             #     self.wakeup_matched = False
-            self.processing = False
+            self.__processing = False
             util.printInfo(1, self.username, "[!] 语音未检测到内容！")
             self.dynamic_threshold = self.__get_history_percentage(30)
             if wsa_server.get_web_instance().is_connected(self.username):
@@ -237,9 +264,10 @@ class Recorder:
             if cfg.config['source']['wake_word_enabled'] == False and self.__fay.speaking == True:
                 can_listen = False
             
-            #普通唤醒模式已经激活，并且面板或数字人正在输出声音时不能拾音
-            if cfg.config['source']['wake_word_enabled'] == True and cfg.config['source']['wake_word_type'] == 'common' and self.wakeup_matched == True and self.__fay.speaking == True:
-                can_listen = False
+            # 允许在播放时继续拾音，以便检测唤醒词实现打断功能
+            # 原代码会在播放时阻止拾音，导致无法用唤醒词打断
+            # if cfg.config['source']['wake_word_enabled'] == True and cfg.config['source']['wake_word_type'] == 'common' and self.wakeup_matched == True and self.__fay.speaking == True:
+            #     can_listen = False
 
             if can_listen == False:#掉弃录音
                 data = None

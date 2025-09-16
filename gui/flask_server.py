@@ -578,10 +578,6 @@ def to_stop_talking():
         data = request.get_json()
         username = data.get('username', 'User')
         stream_manager.new_instance().clear_Stream_with_audio(username)
-        observation = data.get('observation', '')
-        
-        util.printInfo(1, username, f"开始执行打断操作，清空用户 {username} 的处理队列")
-        util.printInfo(1, username, f"打断操作完成，用户 {username} 的所有队列已清空")
         
         result = "interrupted"  # 简单的结果标识
         return jsonify({
