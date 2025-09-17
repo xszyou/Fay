@@ -44,7 +44,7 @@ from core import stream_manager
 os.environ["LANGCHAIN_TRACING_V2"] = "true"
 os.environ["LANGCHAIN_ENDPOINT"] = "https://api.smith.langchain.com"
 os.environ["LANGCHAIN_API_KEY"] = "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"
-os.environ["LANGCHAIN_PROJECT"] = "fay3.8.2_github"
+os.environ["LANGCHAIN_PROJECT"] = "fay3.9.1_github"
 
 # 加载配置
 cfg.load_config()

@@ -266,6 +266,18 @@ class StreamManager:
 
         # 第三步：清除音频队列（Queue线程安全，不需要锁）
         self._clear_audio_queue(username)
+
+        # reset think state for username on force stop
+        try:
+            uid_tmp = member_db.new_instance().find_user(username)
+            if uid_tmp is not None:
+                fei = fay_booter.feiFei
+                if fei is not None:
+                    fei.think_mode_users[uid_tmp] = False
+                    if uid_tmp in getattr(fei, 'think_time_users', {}):
+                        del fei.think_time_users[uid_tmp]
+        except Exception:
+            pass
         
         # 第四步：清除文本流（独立操作）
         with self.stream_lock:

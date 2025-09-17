@@ -210,6 +210,8 @@ class Recorder:
                         if wsa_server.get_instance().is_connected(self.username):
                             content = {'Topic': 'human', 'Data': {'Key': 'log', 'Value': "[!] 待唤醒！"}, 'Username' : self.username, 'robot': f'{cfg.fay_url}/robot/Normal.jpg'}
                             wsa_server.get_instance().add_cmd(content)
+                        # 未命中前置唤醒词时需要释放处理状态，避免麦克风阻塞
+                        self.__processing = False
 
             #非唤醒模式
             else:

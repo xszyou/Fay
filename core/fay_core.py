@@ -165,27 +165,6 @@ class FeiFei:
                 username = interact.data.get("user", "User")
                 uid = member_db.new_instance().find_user(username)
                 
-                try:
-                    from utils.stream_state_manager import get_state_manager
-                    if get_state_manager().is_session_active(username):
-                        stream_manager.new_instance().clear_Stream_with_audio(username)
-                except Exception:
-                    pass
-
-                # 切换到新会话，令上一会话的流式输出/音频尽快结束
-                util.printInfo(1, username, "重置中断标志，开始新的对话处理") 
-                try:
-                    sm = stream_manager.new_instance()
-                    import uuid
-                    conv_id = "conv_" + str(uuid.uuid4())
-                    sm.set_current_conversation(username, conv_id)
-                    # 将当前会话ID附加到交互数据
-                    interact.data["conversation_id"] = conv_id
-                    # 允许新的生成
-                    sm.set_stop_generation(username, stop=False)
-                except Exception:
-                    pass
-                 
                 if index == 1: #语音、文字交互
                     
                     #记录用户问题,方便obs等调用
@@ -270,13 +249,25 @@ class FeiFei:
     #触发交互
     def on_interact(self, interact: Interact):
         #创建用户
+        username = interact.data.get("user", "User")
+        if member_db.new_instance().is_username_exist(username)  == "notexists":
+            member_db.new_instance().add_user(username)
+        try:
+            from utils.stream_state_manager import get_state_manager
+            import uuid
+            if get_state_manager().is_session_active(username):
+                stream_manager.new_instance().clear_Stream_with_audio(username)
+            conv_id = "conv_" + str(uuid.uuid4())
+            stream_manager.new_instance().set_current_conversation(username, conv_id)
+            # 将当前会话ID附加到交互数据
+            interact.data["conversation_id"] = conv_id
+            # 允许新的生成
+            stream_manager.new_instance().set_stop_generation(username, stop=False)
+        except Exception:
+            util.log(3, "开启新会话失败")
+
         if interact.interact_type == 1:
-            username = interact.data.get("user", "User")
-            if member_db.new_instance().is_username_exist(username)  == "notexists":
-                member_db.new_instance().add_user(username)
-            # 判断调用来源，如果是非stream调用则同步处理
             MyThread(target=self.__process_interact, args=[interact]).start()
-    
         else:
             return self.__process_interact(interact)
 
@@ -313,6 +304,14 @@ class FeiFei:
             # 流式文本拼接存库
             content_id = 0
             if is_first == True:
+                # reset any leftover think-mode at the start of a new reply
+                try:
+                    if uid is not None:
+                        self.think_mode_users[uid] = False
+                        if uid in self.think_time_users:
+                            del self.think_time_users[uid]
+                except Exception:
+                    pass
                 conv = interact.data.get("conversation_id") or ("conv_" + str(uuid.uuid4()))
                 conv_no = 0
                 # 创建第一条数据库记录，获得content_id

@@ -408,19 +408,23 @@ def gpt_stream_response(last_content, username):
     sm = stream_manager.new_instance()
     _, nlp_Stream = sm.get_Stream(username)
     def generate():
+        conversation_id = sm.get_conversation_id(username)
         while True:
             sentence = nlp_Stream.read()
             if sentence is None:
                 gsleep(0.01)
                 continue
             
-            # 解析并移除隐藏会话ID标签
+            # 跳过非当前会话
             try:
                 m = re.search(r"__<cid=([^>]+)>__", sentence)
+                producer_cid = m.group(1)
+                if producer_cid != conversation_id:
+                    continue
                 if m:
                     sentence = sentence.replace(m.group(0), "")
-            except Exception:
-                pass
+            except Exception as e:
+                print(e)
             is_first = "_<isfirst>" in sentence
             is_end = "_<isend>" in sentence
             content = sentence.replace("_<isfirst>", "").replace("_<isend>", "").replace("_<isqa>", "")
@@ -460,19 +464,23 @@ def non_streaming_response(last_content, username):
     sm = stream_manager.new_instance()
     _, nlp_Stream = sm.get_Stream(username)
     text = ""
+    conversation_id = sm.get_conversation_id(username)
     while True:
         sentence = nlp_Stream.read()
         if sentence is None:
             gsleep(0.01)
             continue
         
-        # 处理特殊标记
+        # 跳过非当前会话
         try:
             m = re.search(r"__<cid=([^>]+)>__", sentence)
+            producer_cid = m.group(1)
+            if producer_cid != conversation_id:
+                continue
             if m:
                 sentence = sentence.replace(m.group(0), "")
-        except Exception:
-            pass
+        except Exception as e:
+            print(e)
         is_first = "_<isfirst>" in sentence
         is_end = "_<isend>" in sentence
         text += sentence.replace("_<isfirst>", "").replace("_<isend>", "").replace("_<isqa>", "")
