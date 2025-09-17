@@ -822,15 +822,24 @@ def question(content, username, observation=None):
     # 1. 获取mcp工具
     mcp_tools = get_mcp_tools()
     # 2. 存在mcp工具，走react agent
+    is_first_excute = False
     if mcp_tools:
 
         is_agent_think_start = False#记录是否已经写入start标签
         #2.1 构建react agent
         tools = [_build_tool(t) for t in mcp_tools] if mcp_tools else []
         react_agent = create_react_agent(llm, tools)
-        
 
-        
+        # 对齐并启动本次会话的流式状态，避免重复的 _<isfirst>
+        state_mgr = None
+        try:
+            from utils.stream_state_manager import get_state_manager as _get_state_manager
+            state_mgr = _get_state_manager()
+            if not state_mgr.is_session_active(username, conversation_id=conversation_id):
+                state_mgr.start_new_session(username, "react_agent", conversation_id=conversation_id)
+        except Exception:
+            state_mgr = None
+
         #2.2 react agent调用
         current_tool_name = None# 跟踪当前工具调用状态
         for chunk in react_agent.stream(
@@ -853,42 +862,85 @@ def question(content, username, observation=None):
                         if not is_agent_think_start:
                             react_response_text = "<think>" + react_response_text
                             is_agent_think_start = True
-                        if is_first_sentence:
-                            content_temp = react_response_text + "_<isfirst>"
-                            is_first_sentence = False
-                        else:
-                            content_temp = react_response_text
 
-                        stream_manager.new_instance().write_sentence(username, content_temp, conversation_id=conversation_id)
+                        # 使用状态管理器统一发送，标记为首句
+                        if state_mgr is not None:
+                            if not is_first_excute:
+                                force_first = True
+                                is_first_excute = True
+                            else:
+                                force_first = False
+
+                            marked_text, _, _ = state_mgr.prepare_sentence(
+                                username,
+                                react_response_text,
+                                force_first=force_first,
+                                conversation_id=conversation_id,
+                            )
+                            stream_manager.new_instance().write_sentence(
+                                username, marked_text, conversation_id=conversation_id
+                            )
+                        else:
+                            stream_manager.new_instance().write_sentence(
+                                username, react_response_text, conversation_id=conversation_id
+                            )
+                        # 标记本轮已发送首句，避免后续误加 _<isfirst>
+                        is_first_sentence = False
                 except (KeyError, IndexError, AttributeError) as e:
                     # 如果提取失败，使用通用提示
                     react_response_text = f"正在调用MCP工具。\n"
-                    stream_manager.new_instance().write_sentence(username, react_response_text, conversation_id=conversation_id)
+                    if state_mgr is not None:
+                        marked_text, _, _ = state_mgr.prepare_sentence(
+                            username,
+                            react_response_text,
+                            conversation_id=conversation_id,
+                        )
+                        stream_manager.new_instance().write_sentence(
+                            username, marked_text, conversation_id=conversation_id
+                        )
+                    else:
+                        stream_manager.new_instance().write_sentence(
+                            username, react_response_text, conversation_id=conversation_id
+                        )
+                    # 也视为首句已发送
+                    is_first_sentence = False
             
             # 消息类型2：检测工具执行结果
             elif "tools" in chunk and current_tool_name:
                 react_response_text = f"{current_tool_name}工具已经执行成功。\n"
-                stream_manager.new_instance().write_sentence(username, react_response_text, conversation_id=conversation_id)
+                if state_mgr is not None:
+                    marked_text, _, _ = state_mgr.prepare_sentence(
+                        username,
+                        react_response_text,
+                        conversation_id=conversation_id,
+                    )
+                    stream_manager.new_instance().write_sentence(
+                        username, marked_text, conversation_id=conversation_id
+                    )
+                else:
+                    stream_manager.new_instance().write_sentence(
+                        username, react_response_text, conversation_id=conversation_id
+                    )
             
             # 消息类型3：检测最终回复
             else:
                 try:
+                    from utils.stream_text_processor import get_processor
+                    from utils.stream_state_manager import get_state_manager
+
+                    processor = get_processor()
+                    state_manager = get_state_manager()
                     react_response_text = chunk["agent"]["messages"][0].content
                     if react_response_text and react_response_text.strip():
                         if is_agent_think_start:
-                            react_response_text = "</think>" + react_response_text 
+                            react_response_text = "</think>" + react_response_text
+                        elif not is_first_excute:#没有工具执行，补一下_<isfirst>
+                            marked_text, _, _ = state_manager.prepare_sentence(username, "", force_first=True, conversation_id=conversation_id)
+                            stream_manager.new_instance().write_sentence(username, marked_text, conversation_id=conversation_id)
                         # 对React Agent的最终回复也进行分句处理
                         accumulated_text += react_response_text
                         # 使用安全的流式文本处理器和状态管理器
-                        from utils.stream_text_processor import get_processor
-                        from utils.stream_state_manager import get_state_manager
-
-                        processor = get_processor()
-                        state_manager = get_state_manager()
-
-                        # 确保有活跃会话
-                        if not state_manager.is_session_active(username):
-                            state_manager.start_new_session(username, "react_agent")
+                        
 
                         # 如果累积文本达到一定长度，进行处理
                         if len(accumulated_text) >= 20:  # 设置一个合理的阈值

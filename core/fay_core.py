@@ -305,10 +305,13 @@ class FeiFei:
                     return None
             except Exception:
                 pass
-                
-            # 初始化content_id变量
-            content_id = 0
             
+            #无效流式文本提前结束
+            if not is_first and not is_end and (text is None or text.strip() == ""):
+                return None
+                
+            # 流式文本拼接存库
+            content_id = 0
             if is_first == True:
                 conv = interact.data.get("conversation_id") or ("conv_" + str(uuid.uuid4()))
                 conv_no = 0
@@ -338,9 +341,8 @@ class FeiFei:
                         accumulated_text = existing_content[3] + text
                         content_db.new_instance().update_content(content_id, accumulated_text)
 
-            if not is_first and not is_end and (text is None or text.strip() == ""):
-                return None
-            # 仅在会话有效时才发送面板消息
+            
+            # 推送给前端和数字人
             try:
                 user_for_stop = interact.data.get("user", "User")
                 conv_id_for_stop = interact.data.get("conversation_id")
@@ -350,7 +352,6 @@ class FeiFei:
                 self.__process_text_output(text, interact.data.get('user'), uid, content_id, type)
             
             # 处理think标签
-            is_start_think = False
             # 第一步：处理结束标记</think>
             if "</think>" in text:
                 # 设置用户退出思考模式
@@ -364,16 +365,14 @@ class FeiFei:
                 # 如果提取出的文本为空，则不需要继续处理
                 if text == "":
                     return None
-            
             # 第二步：处理开始标记<think>
             # 注意：这里要检查经过上面处理后的text
             if "<think>" in text:
-                is_start_think = True
                 self.think_mode_users[uid] = True
                 self.think_time_users[uid] = time.time()
-            
-            if self.think_mode_users.get(uid, False) and is_start_think:
-                # 会话有效时才提示“思考中...”
+   
+            #”思考中“的输出
+            if self.think_mode_users.get(uid, False):
                 try:
                     user_for_stop = interact.data.get("user", "User")
                     conv_id_for_stop = interact.data.get("conversation_id")
@@ -386,12 +385,11 @@ class FeiFei:
                     if wsa_server.get_instance().is_connected(interact.data.get("user")):
                         content = {'Topic': 'human', 'Data': {'Key': 'log', 'Value': "思考中..."}, 'Username' : interact.data.get('user'), 'robot': f'{cfg.fay_url}/robot/Thinking.jpg'}
                         wsa_server.get_instance().add_cmd(content)
+
+            #”请稍等“的输出
             if self.think_mode_users.get(uid, False) == True and time.time() - self.think_time_users[uid] >= 5:
                 self.think_time_users[uid] = time.time()
                 text = "请稍等..."
-            
-            # 流式输出think中的内容
-                
             elif self.think_mode_users.get(uid, False) == True and "</think>" not in text:
                 return None
             
@@ -681,13 +679,13 @@ class FeiFei:
         if not wsa_server.get_web_instance().is_connected(username):
             return
             
-        # 发送基本消息
+        # gui日志区消息
         wsa_server.get_web_instance().add_cmd({
             "panelMsg": text,
             "Username": username
         })
         
-        # 如果有content_id，发送回复消息
+        # 聊天窗消息
         if content_id is not None:
             wsa_server.get_web_instance().add_cmd({
                 "panelReply": {
