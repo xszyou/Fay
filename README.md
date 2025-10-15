@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/xszyou-fay-badge.png)](https://mseep.ai/app/xszyou-fay)
+
 
 <div align="center">
     <br>
