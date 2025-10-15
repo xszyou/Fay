@@ -50,13 +50,6 @@ pip install mcp flask flask-cors
 
 ## MCP工具说明
 
-### parse_natural_schedule
-解析自然语言日程指令
-
-**示例输入**：
-- "明天上午提醒我开会" → 标题："开会"，时间："明天 09:00"
-- "10分钟后提醒我休息" → 标题："休息"，时间："当前时间+10分钟"
-
 ### add_schedule
 添加日程任务
 

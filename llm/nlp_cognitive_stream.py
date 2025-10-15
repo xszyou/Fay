@@ -6,11 +6,13 @@ import threading
 import requests
 import datetime
 import schedule
+import textwrap
+from dataclasses import dataclass
+from typing import Any, Callable, Dict, List, Literal, Optional, TypedDict, Tuple
+from collections.abc import Mapping, Sequence
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
-from pydantic import create_model
-from langchain.tools import StructuredTool
-from langgraph.prebuilt import create_react_agent
+from langgraph.graph import END, START, StateGraph
 
 # 新增：本地知识库相关导入
 import re
@@ -40,11 +42,13 @@ from genagents.genagents import GenerativeAgent
 from genagents.modules.memory_stream import ConceptNode
 from urllib3.exceptions import InsecureRequestWarning
 from scheduler.thread_manager import MyThread
+from core import content_db
 from core import stream_manager
-os.environ["LANGCHAIN_TRACING_V2"] = "true"
-os.environ["LANGCHAIN_ENDPOINT"] = "https://api.smith.langchain.com"
-os.environ["LANGCHAIN_API_KEY"] = "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"
-os.environ["LANGCHAIN_PROJECT"] = "fay3.9.1_github"
+from faymcp import tool_registry as mcp_tool_registry
+# os.environ["LANGCHAIN_TRACING_V2"] = "true"
+# os.environ["LANGCHAIN_ENDPOINT"] = "https://api.smith.langchain.com"
+# os.environ["LANGCHAIN_API_KEY"] = "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"
+# os.environ["LANGCHAIN_PROJECT"] = "fay3.9.1_github"
 
 # 加载配置
 cfg.load_config()
@@ -69,6 +73,515 @@ llm = ChatOpenAI(
         api_key=cfg.key_gpt_api_key,
         streaming=True
     )
+
+
+@dataclass
+class WorkflowToolSpec:
+    name: str
+    description: str
+    schema: Dict[str, Any]
+    executor: Callable[[Dict[str, Any], int], Tuple[bool, Optional[str], Optional[str]]]
+    example_args: Dict[str, Any]
+
+
+class ToolCall(TypedDict):
+    name: str
+    args: Dict[str, Any]
+
+
+class ToolResult(TypedDict, total=False):
+    call: ToolCall
+    success: bool
+    output: Optional[str]
+    error: Optional[str]
+    attempt: int
+
+
+class ConversationMessage(TypedDict):
+    role: Literal["user", "assistant"]
+    content: str
+
+
+class AgentState(TypedDict, total=False):
+    request: str
+    messages: List[ConversationMessage]
+    tool_results: List[ToolResult]
+    next_action: Optional[ToolCall]
+    status: Literal["planning", "needs_tool", "completed", "failed"]
+    final_response: Optional[str]
+    final_messages: Optional[List[SystemMessage | HumanMessage]]
+    planner_preview: Optional[str]
+    audit_log: List[str]
+    context: Dict[str, Any]
+    error: Optional[str]
+    max_steps: int
+
+
+def _truncate_text(text: Any, limit: int = 400) -> str:
+    text_str = "" if text is None else str(text)
+    if len(text_str) <= limit:
+        return text_str
+    return text_str[:limit] + "..."
+
+
+def _extract_text_from_result(value: Any, *, depth: int = 0) -> List[str]:
+    """Try to pull human-readable text snippets from tool results."""
+    if value is None:
+        return []
+    if depth > 6:
+        return []
+    if isinstance(value, (str, int, float, bool)):
+        text = str(value).strip()
+        return [text] if text else []
+    if isinstance(value, Mapping):
+        # Prefer explicit text/content fields
+        if "text" in value and not isinstance(value["text"], (dict, list, tuple)):
+            text = str(value["text"]).strip()
+            return [text] if text else []
+        if "content" in value:
+            segments: List[str] = []
+            for item in value.get("content", []):
+                segments.extend(_extract_text_from_result(item, depth=depth + 1))
+            if segments:
+                return segments
+        segments = []
+        for key, item in value.items():
+            if key in {"meta", "annotations", "uid", "id", "messageId"}:
+                continue
+            segments.extend(_extract_text_from_result(item, depth=depth + 1))
+        return segments
+    if isinstance(value, Sequence) and not isinstance(value, (bytes, bytearray)):
+        segments: List[str] = []
+        for item in value:
+            segments.extend(_extract_text_from_result(item, depth=depth + 1))
+        return segments
+    if hasattr(value, "text") and not callable(getattr(value, "text")):
+        text = str(getattr(value, "text", "")).strip()
+        return [text] if text else []
+    if hasattr(value, "__dict__"):
+        return _extract_text_from_result(vars(value), depth=depth + 1)
+    text = str(value).strip()
+    return [text] if text else []
+
+
+def _normalize_tool_output(result: Any) -> str:
+    """Convert structured tool output to a concise human-readable string."""
+    if result is None:
+        return ""
+    segments = _extract_text_from_result(result)
+    if segments:
+        cleaned = [segment for segment in segments if segment]
+        if cleaned:
+            return "\n".join(dict.fromkeys(cleaned))
+    try:
+        return json.dumps(result, ensure_ascii=False, default=lambda o: getattr(o, "__dict__", str(o)))
+    except TypeError:
+        return str(result)
+
+
+def _truncate_history(history: List[ToolResult], limit: int = 6) -> str:
+    if not history:
+        return "（暂无）"
+    lines: List[str] = []
+    for item in history[-limit:]:
+        call = item.get("call", {})
+        name = call.get("name", "未知工具")
+        attempt = item.get("attempt", 0)
+        success = item.get("success", False)
+        status = "成功" if success else "失败"
+        lines.append(f"- {name} 第 {attempt} 次 → {status}")
+        if item.get("output"):
+            lines.append("  输出：" + _truncate_text(item["output"], 200))
+        if item.get("error"):
+            lines.append("  错误：" + _truncate_text(item["error"], 200))
+    return "\n".join(lines)
+
+
+def _format_schema_parameters(schema: Dict[str, Any]) -> List[str]:
+    if not schema:
+        return ["  - 无参数"]
+    props = schema.get("properties") or {}
+    if not props:
+        return ["  - 无参数"]
+    required = set(schema.get("required") or [])
+    lines: List[str] = []
+    for field, meta in props.items():
+        meta = meta or {}
+        field_type = meta.get("type", "string")
+        desc = (meta.get("description") or "").strip()
+        req_label = "必填" if field in required else "可选"
+        line = f"  - {field} ({field_type}，{req_label})"
+        if desc:
+            line += f"：{desc}"
+        lines.append(line)
+    return lines or ["  - 无参数"]
+
+
+def _generate_example_args(schema: Dict[str, Any]) -> Dict[str, Any]:
+    example: Dict[str, Any] = {}
+    if not schema:
+        return example
+    props = schema.get("properties") or {}
+    for field, meta in props.items():
+        meta = meta or {}
+        if "default" in meta:
+            example[field] = meta["default"]
+            continue
+        enum_values = meta.get("enum") or []
+        if enum_values:
+            example[field] = enum_values[0]
+            continue
+        field_type = meta.get("type", "string")
+        if field_type in ("number", "integer"):
+            example[field] = 0
+        elif field_type == "boolean":
+            example[field] = True
+        elif field_type == "array":
+            example[field] = []
+        elif field_type == "object":
+            example[field] = {}
+        else:
+            description_hint = meta.get("description") or ""
+            example[field] = description_hint or ""
+    return example
+
+
+def _format_tool_block(spec: WorkflowToolSpec) -> str:
+    param_lines = _format_schema_parameters(spec.schema)
+    example = json.dumps(spec.example_args, ensure_ascii=False) if spec.example_args else "{}"
+    lines = [
+        f"- 工具名：{spec.name}",
+        f"  功能：{spec.description or '暂无描述'}",
+        "  参数：",
+        *param_lines,
+        f"  示例：{example}",
+    ]
+    return "\n".join(lines)
+
+
+def _build_workflow_tool_spec(tool_def: Dict[str, Any]) -> Optional[WorkflowToolSpec]:
+    if not tool_def:
+        return None
+    name = tool_def.get("name")
+    if not name:
+        return None
+    description = tool_def.get("description") or tool_def.get("summary") or ""
+    schema = tool_def.get("inputSchema") or {}
+    example_args = _generate_example_args(schema)
+
+    def _executor(args: Dict[str, Any], attempt: int) -> Tuple[bool, Optional[str], Optional[str]]:
+        try:
+            resp = requests.post(
+                f"http://127.0.0.1:5010/api/mcp/tools/{name}",
+                json=args,
+                timeout=120,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception as exc:
+            util.log(1, f"调用工具 {name} 异常: {exc}")
+            return False, None, str(exc)
+
+        if data.get("success"):
+            result = data.get("result")
+            output = _normalize_tool_output(result)
+            return True, output, None
+
+        error_msg = data.get("error") or "未知错误"
+        util.log(1, f"调用工具 {name} 失败: {error_msg}")
+        return False, None, error_msg
+
+    return WorkflowToolSpec(
+        name=name,
+        description=description,
+        schema=schema,
+        executor=_executor,
+        example_args=example_args,
+    )
+
+
+def _format_tools_for_prompt(tool_specs: Dict[str, WorkflowToolSpec]) -> str:
+    if not tool_specs:
+        return "（暂无可用工具）"
+    return "\n".join(_format_tool_block(spec) for spec in tool_specs.values())
+
+
+def _build_planner_messages(state: AgentState) -> List[SystemMessage | HumanMessage]:
+    context = state.get("context", {}) or {}
+    system_prompt = context.get("system_prompt", "")
+    request = state.get("request", "")
+    tool_specs = context.get("tool_registry", {}) or {}
+    planner_preview = state.get("planner_preview")
+    conversation = state.get("messages", []) or []
+    history = state.get("tool_results", []) or []
+    memory_context = context.get("memory_context", "")
+    knowledge_context = context.get("knowledge_context", "")
+    observation = context.get("observation", "")
+
+    convo_text = "\n".join(f"{msg['role']}: {msg['content']}" for msg in conversation) or "（暂无对话）"
+    history_text = _truncate_history(history)
+    tools_text = _format_tools_for_prompt(tool_specs)
+    preview_section = f"\n（规划器预览：{planner_preview}）" if planner_preview else ""
+
+    user_block = textwrap.dedent(
+        f"""
+你是一名助理，请根据请求决定是否需要调用工具。
+
+当前请求：
+{request}
+
+系统设定：
+{system_prompt}
+
+额外观察：
+{observation or '（无补充）'}
+
+相关记忆：
+{memory_context or '（无相关记忆）'}
+
+相关知识：
+{knowledge_context or '（无相关知识）'}
+
+对话及工具记录：
+{convo_text}
+
+可用工具：
+{tools_text}
+
+历史工具执行：
+{history_text}{preview_section}
+
+请返回 JSON，格式如下：
+- 若需要调用工具：
+    {{"action": "tool", "tool": "工具名", "args": {{...}}}}
+- 若直接回复：
+    {{"action": "finish_text"}}
+        """
+    ).strip()
+
+    return [
+        SystemMessage(content="你负责规划下一步行动，请严格输出合法 JSON。"),
+        HumanMessage(content=user_block),
+    ]
+
+
+def _build_final_messages(state: AgentState) -> List[SystemMessage | HumanMessage]:
+    context = state.get("context", {}) or {}
+    system_prompt = context.get("system_prompt", "")
+    knowledge_context = context.get("knowledge_context", "")
+    memory_context = context.get("memory_context", "")
+    observation = context.get("observation", "")
+    conversation = state.get("messages", []) or []
+    planner_preview = state.get("planner_preview")
+    conversation_block = "\n".join(f"{msg['role']}: {msg['content']}" for msg in conversation) or "（暂无对话）"
+    history_text = _truncate_history(state.get("tool_results", []))
+    preview_section = f"\n（规划器建议：{planner_preview}）" if planner_preview else ""
+
+    user_block = textwrap.dedent(
+        f"""
+系统设定：
+{system_prompt}
+
+相关记忆：
+{memory_context or '（无相关记忆）'}
+
+相关知识：
+{knowledge_context or '（无相关知识）'}
+
+其他观察：
+{observation or '（无补充）'}
+
+对话及工具记录：
+{conversation_block}
+
+工具执行摘要：
+{history_text}{preview_section}
+
+请结合以上信息，为用户生成自然语言答复，保持人设与语气一致。
+        """
+    ).strip()
+
+    return [
+        SystemMessage(content="你是最终回复的口播助手，请用中文自然表达。"),
+        HumanMessage(content=user_block),
+    ]
+
+
+def _call_planner_llm(state: AgentState) -> Dict[str, Any]:
+    response = llm.invoke(_build_planner_messages(state))
+    content = getattr(response, "content", None)
+    if not isinstance(content, str):
+        raise RuntimeError("规划器返回内容异常，未获得字符串。")
+    trimmed = content.strip()
+    try:
+        decision = json.loads(trimmed)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"规划器返回的 JSON 无法解析: {trimmed}") from exc
+    decision.setdefault("_raw", trimmed)
+    return decision
+
+
+def _plan_next_action(state: AgentState) -> AgentState:
+    context = state.get("context", {}) or {}
+    audit_log = list(state.get("audit_log", []))
+    history = state.get("tool_results", []) or []
+    max_steps = state.get("max_steps", 12)
+    if len(history) >= max_steps:
+        audit_log.append("规划器：超过最大步数，终止流程。")
+        return {
+            "status": "failed",
+            "audit_log": audit_log,
+            "error": "工具调用步数超限",
+            "context": context,
+        }
+
+    decision = _call_planner_llm(state)
+    audit_log.append(f"规划器：决策 -> {decision.get('_raw', decision)}")
+
+    action = decision.get("action")
+    if action == "tool":
+        tool_name = decision.get("tool")
+        tool_registry: Dict[str, WorkflowToolSpec] = context.get("tool_registry", {})
+        if tool_name not in tool_registry:
+            audit_log.append(f"规划器：未知工具 {tool_name}")
+            return {
+                "status": "failed",
+                "audit_log": audit_log,
+                "error": f"未知工具 {tool_name}",
+                "context": context,
+            }
+        args = decision.get("args") or {}
+
+        if history:
+            last_entry = history[-1]
+            last_call = last_entry.get("call", {}) or {}
+            if (
+                last_entry.get("success")
+                and last_call.get("name") == tool_name
+                and (last_call.get("args") or {}) == args
+                and last_entry.get("output")
+            ):
+                recent_attempts = sum(
+                    1
+                    for item in reversed(history)
+                    if item.get("call", {}).get("name") == tool_name
+                )
+                if recent_attempts >= 1:
+                    audit_log.append(
+                        "规划器：检测到工具重复调用，使用最新结果产出最终回复。"
+                    )
+                    final_messages = _build_final_messages(state)
+                    preview = last_entry.get("output")
+                    return {
+                        "status": "completed",
+                        "planner_preview": preview,
+                        "final_response": None,
+                        "final_messages": final_messages,
+                        "audit_log": audit_log,
+                        "context": context,
+                    }
+        return {
+            "next_action": {"name": tool_name, "args": args},
+            "status": "needs_tool",
+            "audit_log": audit_log,
+            "context": context,
+        }
+
+    if action in {"finish", "finish_text"}:
+        preview = decision.get("message")
+        final_messages = _build_final_messages(state)
+        audit_log.append("规划器：任务完成，准备输出最终回复。")
+        return {
+            "status": "completed",
+            "planner_preview": preview,
+            "final_response": preview if action == "finish" else None,
+            "final_messages": final_messages,
+            "audit_log": audit_log,
+            "context": context,
+        }
+
+    raise RuntimeError(f"未知的规划器决策: {decision}")
+
+
+def _execute_tool(state: AgentState) -> AgentState:
+    context = dict(state.get("context", {}) or {})
+    action = state.get("next_action")
+    if not action:
+        return {
+            "status": "failed",
+            "error": "缺少要执行的工具指令",
+            "context": context,
+        }
+
+    history = list(state.get("tool_results", []) or [])
+    audit_log = list(state.get("audit_log", []) or [])
+    conversation = list(state.get("messages", []) or [])
+
+    name = action.get("name")
+    args = action.get("args", {})
+    tool_registry: Dict[str, WorkflowToolSpec] = context.get("tool_registry", {})
+    spec = tool_registry.get(name)
+    if not spec:
+        return {
+            "status": "failed",
+            "error": f"未知工具 {name}",
+            "context": context,
+        }
+
+    attempts = sum(1 for item in history if item.get("call", {}).get("name") == name)
+    success, output, error = spec.executor(args, attempts)
+    result: ToolResult = {
+        "call": {"name": name, "args": args},
+        "success": success,
+        "output": output,
+        "error": error,
+        "attempt": attempts + 1,
+    }
+    history.append(result)
+    audit_log.append(f"执行器：{name} 第 {result['attempt']} 次 -> {'成功' if success else '失败'}")
+
+    message_lines = [
+        f"[TOOL] {name} {'成功' if success else '失败'}。",
+    ]
+    if output:
+        message_lines.append(f"[TOOL] 输出：{_truncate_text(output, 200)}")
+    if error:
+        message_lines.append(f"[TOOL] 错误：{_truncate_text(error, 200)}")
+    conversation.append({"role": "assistant", "content": "\n".join(message_lines)})
+
+    return {
+        "tool_results": history,
+        "messages": conversation,
+        "next_action": None,
+        "audit_log": audit_log,
+        "status": "planning",
+        "error": error if not success else None,
+        "context": context,
+    }
+
+
+def _route_decision(state: AgentState) -> str:
+    return "call_tool" if state.get("status") == "needs_tool" else "end"
+
+
+def _build_workflow_app() -> StateGraph:
+    graph = StateGraph(AgentState)
+    graph.add_node("plan_next", _plan_next_action)
+    graph.add_node("call_tool", _execute_tool)
+    graph.add_edge(START, "plan_next")
+    graph.add_conditional_edges(
+        "plan_next",
+        _route_decision,
+        {
+            "call_tool": "call_tool",
+            "end": END,
+        },
+    )
+    graph.add_edge("call_tool", "plan_next")
+    return graph.compile()
+
+
+_WORKFLOW_APP = _build_workflow_app()
 
 def get_user_memory_dir(username=None):
     """根据配置决定是否按用户名隔离记忆目录"""
@@ -704,35 +1217,20 @@ def remember_conversation_thread(username, content, response_text):
         util.log(1, f"记忆对话内容出错: {str(e)}")
 
 def question(content, username, observation=None):
-    """
-    处理用户问题并返回回答
-    
-    参数:
-        content: 用户问题内容
-        username: 用户名
-        observation: 额外的观察信息，默认为空
-        
-    返回:
-        response_text: 回答内容
-    """
-    global agents
-    
-    global current_username
-    current_username = username  # 记录当前会话用户名
+    """处理用户提问并返回回复。"""
+    global agents, current_username
+    current_username = username
     full_response_text = ""
     accumulated_text = ""
-    punctuation_marks = [",", "，","。", "！", "？", ".", "!", "?", "\n"]  
+    default_punctuations = [",", ".", "!", "?", "\n", "\uFF0C", "\u3002", "\uFF01", "\uFF1F"]
     is_first_sentence = True
-    
-    # 记录当前会话版本，用于精准中断
+
     from core import stream_manager
     sm = stream_manager.new_instance()
     conversation_id = sm.get_conversation_id(username)
 
-    # 创建代理
     agent = create_agent(username)
-    
-    # 构建代理描述
+
     agent_desc = {
         "first_name": agent.scratch.get("first_name", "Fay"),
         "last_name": agent.scratch.get("last_name", ""),
@@ -747,322 +1245,400 @@ def question(content, username, observation=None):
         "voice": agent.scratch.get("voice", ""),
         "goal": agent.scratch.get("goal", ""),
         "occupation": agent.scratch.get("occupation", "助手"),
-        "current_time": agent.scratch.get("current_time", datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        "current_time": agent.scratch.get(
+            "current_time", datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        ),
     }
-    
-    # 获取相关记忆作为上下文
-    context = ""
+
+    memory_context = ""
     if agent.memory_stream and len(agent.memory_stream.seq_nodes) > 0:
-        # 获取当前时间步
         current_time_step = get_current_time_step(username)
-        # 使用retrieve方法获取相关记忆
         try:
+            query = f"{'主人' if username == 'User' else username}提出了问题：{content}"
             related_memories = agent.memory_stream.retrieve(
-                [f"""{"主人" if username == "User" else username}提出了问题：{content}"""],  # 查询句子列表
-                current_time_step,  # 当前时间步
-                n_count=100,  # 获取100条相关记忆
-                curr_filter="all",  # 获取所有类型的记忆
-                hp=[0.8, 0.5, 0.5],  # 权重：[时间近度权重recency_w, 相关性权重relevance_w, 重要性权重importance_w]
-                stateless=False
+                [query],
+                current_time_step,
+                n_count=30,
+                curr_filter="all",
+                hp=[0.8, 0.5, 0.5],
+                stateless=False,
             )
+            if related_memories and query in related_memories:
+                memory_nodes = related_memories[query]
+                memory_context = "\n".join(f"- {node.content}" for node in memory_nodes)
+        except Exception as exc:
+            util.log(1, f"获取相关记忆时出错: {exc}")
 
-            if related_memories and len(related_memories) > 0:
-                # 获取查询内容对应的记忆节点列表
-                query = f"""{'主人' if username == 'User' else username}提出了问题：{content}"""
-                if query in related_memories and related_memories[query]:
-                    memory_nodes = related_memories[query]
-                    context = ""
-                    for node in memory_nodes:
-                        context += f"- {node.content}\n"
-
-        except Exception as e:
-            util.log(1, f"获取相关记忆时出错: {str(e)}")
-    
-    # 新增：搜索本地知识库
     knowledge_context = ""
     try:
         knowledge_base = get_knowledge_base()
         if knowledge_base:
             knowledge_results = search_knowledge_base(content, knowledge_base, max_results=3)
             if knowledge_results:
-                knowledge_context = "**本地知识库相关信息**：\n"
+                parts = ["**本地知识库相关信息**："]
                 for result in knowledge_results:
-                    knowledge_context += f"来源文件：{result['file_name']}\n"
-                    knowledge_context += f"{result['content']}\n\n"
+                    parts.append(f"来源文件：{result['file_name']}")
+                    parts.append(result["content"])
+                    parts.append("")
+                knowledge_context = "\n".join(parts).strip()
                 util.log(1, f"找到 {len(knowledge_results)} 条相关知识库信息")
-    except Exception as e:
-        util.log(1, f"搜索知识库时出错: {str(e)}")
+    except Exception as exc:
+        util.log(1, f"搜索知识库时出错: {exc}")
 
-    # 使用文件开头定义的llm对象进行流式请求
-    observation = "**还观察的情况**：" + observation + "\n"  if observation else "" 
-    
-    # 构建系统提示
-    system_prompt = f"""你是一名实时交互的数字人助理，具备以下人物设定：
-- 名字：{agent_desc['first_name']}
-- 性别：{agent_desc['sex']}
-- 年龄：{agent_desc['age']}
-- 职业：{agent_desc['occupation']}
-- 出生地：{agent_desc['birthplace']}
-- 星座：{agent_desc['constellation']}
-- 生肖：{agent_desc['zodiac']}
-- 联系方式：{agent_desc['contact']}
-- 定位：{agent_desc['position']}  
-- 目标：{agent_desc['goal']}  
-- 补充信息：{agent_desc['additional']}
+    system_prompt = (
+        f"你是一名实时交互的数字人助理，具备以下人物设定：\n"
+        f"- 名字：{agent_desc['first_name']}\n"
+        f"- 性别：{agent_desc['sex']}\n"
+        f"- 年龄：{agent_desc['age']}\n"
+        f"- 职业：{agent_desc['occupation']}\n"
+        f"- 出生地：{agent_desc['birthplace']}\n"
+        f"- 星座：{agent_desc['constellation']}\n"
+        f"- 生肖：{agent_desc['zodiac']}\n"
+        f"- 联系方式：{agent_desc['contact']}\n"
+        f"- 定位：{agent_desc['position']}\n"
+        f"- 目标：{agent_desc['goal']}\n"
+        f"- 补充信息：{agent_desc['additional']}\n\n"
+        "你将参与日常问答、任务执行、工具调用以及角色扮演等多轮对话。"
+        "请始终以符合以上人设的身份和语气与用户交流。\n\n"
+    )
+    if knowledge_context:
+        system_prompt = f"{system_prompt}\n{knowledge_context}"
 
-你将参与日常问答、任务执行、工具调用以及角色扮演等多轮对话。请始终以符合以上人设的身份和语气与用户交流。
+    try:
+        history_records = content_db.new_instance().get_recent_messages_by_user(username=username, limit=30)
+    except Exception as exc:
+        util.log(1, f"加载历史消息失败: {exc}")
+        history_records = []
 
-**相关的记忆**：
-{context}
-{observation}
-"""
-    # 构建消息列表
+    messages_buffer: List[ConversationMessage] = []
+
+    def append_to_buffer(role: str, text_value: str) -> None:
+        if not text_value:
+            return
+        messages_buffer.append({"role": role, "content": text_value})
+        if len(messages_buffer) > 60:
+            del messages_buffer[:-60]
+
+    for msg_type, msg_text in history_records:
+        role = 'assistant'
+        if msg_type and msg_type.lower() in ('member', 'user'):
+            role = 'user'
+        append_to_buffer(role, msg_text)
+
+    if (
+        not messages_buffer
+        or messages_buffer[-1]['role'] != 'user'
+        or messages_buffer[-1]['content'] != content
+    ):
+        append_to_buffer('user', content)
+
     messages = [SystemMessage(content=system_prompt), HumanMessage(content=content)]
+    
+    tool_registry: Dict[str, WorkflowToolSpec] = {}
+    try:
+        mcp_tools = get_mcp_tools()
+    except Exception as exc:
+        util.log(1, f"获取工具列表失败: {exc}")
+        mcp_tools = []
+    for tool_def in mcp_tools:
+        spec = _build_workflow_tool_spec(tool_def)
+        if spec:
+            tool_registry[spec.name] = spec
 
-    # 1. 获取mcp工具
-    mcp_tools = get_mcp_tools()
-    # 2. 存在mcp工具，走react agent
-    is_first_excute = False
-    if mcp_tools:
+    try:
+        from utils.stream_state_manager import get_state_manager as _get_state_manager
 
-        is_agent_think_start = False#记录是否已经写入start标签
-        #2.1 构建react agent
-        tools = [_build_tool(t) for t in mcp_tools] if mcp_tools else []
-        react_agent = create_react_agent(llm, tools)
-
-        # 对齐并启动本次会话的流式状态，避免重复的 _<isfirst>
+        state_mgr = _get_state_manager()
+        session_label = "workflow_agent" if tool_registry else "llm_stream"
+        if not state_mgr.is_session_active(username, conversation_id=conversation_id):
+            state_mgr.start_new_session(username, session_label, conversation_id=conversation_id)
+    except Exception:
         state_mgr = None
-        try:
-            from utils.stream_state_manager import get_state_manager as _get_state_manager
-            state_mgr = _get_state_manager()
-            if not state_mgr.is_session_active(username, conversation_id=conversation_id):
-                state_mgr.start_new_session(username, "react_agent", conversation_id=conversation_id)
-        except Exception:
-            state_mgr = None
 
-        #2.2 react agent调用
-        current_tool_name = None# 跟踪当前工具调用状态
-        for chunk in react_agent.stream(
-                    {"messages": messages}, {"configurable": {"thread_id": "tid{}".format(username)}}
-                ):
-            # 检查是否需要停止生成
+    try:
+        from utils.stream_text_processor import get_processor
+
+        processor = get_processor()
+        punctuation_list = getattr(processor, "punctuation_marks", default_punctuations)
+    except Exception:
+        processor = None
+        punctuation_list = default_punctuations
+    def write_sentence(text: str, *, force_first: bool = False, force_end: bool = False) -> None:
+        if text is None:
+            text = ""
+        if not isinstance(text, str):
+            text = str(text)
+        if not text and not force_end and not force_first:
+            return
+        marked_text = None
+        if state_mgr is not None:
+            try:
+                marked_text, _, _ = state_mgr.prepare_sentence(
+                    username,
+                    text,
+                    force_first=force_first,
+                    force_end=force_end,
+                    conversation_id=conversation_id,
+                )
+            except Exception:
+                marked_text = None
+        if marked_text is None:
+            prefix = "_<isfirst>" if force_first else ""
+            suffix = "_<isend>" if force_end else ""
+            marked_text = f"{prefix}{text}{suffix}"
+        stream_manager.new_instance().write_sentence(username, marked_text, conversation_id=conversation_id)
+
+    def stream_response_chunks(chunks, prepend_text: str = "") -> None:
+        nonlocal accumulated_text, full_response_text, is_first_sentence
+        if prepend_text:
+            accumulated_text += prepend_text
+            full_response_text += prepend_text
+        for chunk in chunks:
             if sm.should_stop_generation(username, conversation_id=conversation_id):
-                util.log(1, f"检测到停止标志，中断React Agent文本生成: {username}")
+                util.log(1, f"检测到停止标志，中断文本生成: {username}")
                 break
-                
-            react_response_text = ""           
-            # 消息类型1：检测工具调用开始
-            if "agent" in chunk and "tool_calls" in str(chunk):
-                try:
-                    tool_calls_data = chunk["agent"]["messages"][0].tool_calls
-                    if tool_calls_data and len(tool_calls_data) > 0:
-                        tool_name = tool_calls_data[0]["name"]
-                        current_tool_name = tool_name
-                        react_response_text = f"现在开始调用{tool_name}工具。\n"
-                        if not is_agent_think_start:
-                            react_response_text = "<think>" + react_response_text
-                            is_agent_think_start = True
-
-                        # 使用状态管理器统一发送，标记为首句
-                        if state_mgr is not None:
-                            if not is_first_excute:
-                                force_first = True
-                                is_first_excute = True
-                            else:
-                                force_first = False
-
-                            marked_text, _, _ = state_mgr.prepare_sentence(
-                                username,
-                                react_response_text,
-                                force_first=force_first,
-                                conversation_id=conversation_id,
-                            )
-                            stream_manager.new_instance().write_sentence(
-                                username, marked_text, conversation_id=conversation_id
-                            )
-                        else:
-                            stream_manager.new_instance().write_sentence(
-                                username, react_response_text, conversation_id=conversation_id
-                            )
-                        # 标记本轮已发送首句，避免后续误加 _<isfirst>
-                        is_first_sentence = False
-                except (KeyError, IndexError, AttributeError) as e:
-                    # 如果提取失败，使用通用提示
-                    react_response_text = f"正在调用MCP工具。\n"
-                    if state_mgr is not None:
-                        marked_text, _, _ = state_mgr.prepare_sentence(
-                            username,
-                            react_response_text,
-                            conversation_id=conversation_id,
-                        )
-                        stream_manager.new_instance().write_sentence(
-                            username, marked_text, conversation_id=conversation_id
-                        )
-                    else:
-                        stream_manager.new_instance().write_sentence(
-                            username, react_response_text, conversation_id=conversation_id
-                        )
-                    # 也视为首句已发送
-                    is_first_sentence = False
-            
-            # 消息类型2：检测工具执行结果
-            elif "tools" in chunk and current_tool_name:
-                react_response_text = f"{current_tool_name}工具已经执行成功。\n"
-                if state_mgr is not None:
-                    marked_text, _, _ = state_mgr.prepare_sentence(
-                        username,
-                        react_response_text,
-                        conversation_id=conversation_id,
-                    )
-                    stream_manager.new_instance().write_sentence(
-                        username, marked_text, conversation_id=conversation_id
-                    )
-                else:
-                    stream_manager.new_instance().write_sentence(
-                        username, react_response_text, conversation_id=conversation_id
-                    )
-            
-            # 消息类型3：检测最终回复
+            if isinstance(chunk, str):
+                flush_text = chunk
+            elif isinstance(chunk, dict):
+                flush_text = chunk.get("content")
             else:
-                try:
-                    from utils.stream_text_processor import get_processor
-                    from utils.stream_state_manager import get_state_manager
-
-                    processor = get_processor()
-                    state_manager = get_state_manager()
-                    react_response_text = chunk["agent"]["messages"][0].content
-                    if react_response_text and react_response_text.strip():
-                        if is_agent_think_start:
-                            react_response_text = "</think>" + react_response_text
-                        elif not is_first_excute:#没有工具执行，补一下_<isfirst>
-                            marked_text, _, _ = state_manager.prepare_sentence(username, "", force_first=True, conversation_id=conversation_id)
-                            stream_manager.new_instance().write_sentence(username, marked_text, conversation_id=conversation_id)
-                        # 对React Agent的最终回复也进行分句处理
-                        accumulated_text += react_response_text
-                        # 使用安全的流式文本处理器和状态管理器
-                        
-
-                        # 如果累积文本达到一定长度，进行处理
-                        if len(accumulated_text) >= 20:  # 设置一个合理的阈值
-                            # 找到最后一个标点符号的位置
-                            last_punct_pos = -1
-                            for punct in processor.punctuation_marks:
-                                pos = accumulated_text.rfind(punct)
-                                if pos > last_punct_pos:
-                                    last_punct_pos = pos
-
-                            if last_punct_pos > 10:  # 确保有足够的内容发送
-                                sentence_text = accumulated_text[:last_punct_pos + 1]
-                                # 使用状态管理器准备句子
-                                marked_text, _, _ = state_manager.prepare_sentence(username, sentence_text, conversation_id=conversation_id)
-                                stream_manager.new_instance().write_sentence(username, marked_text, conversation_id=conversation_id)
-                                accumulated_text = accumulated_text[last_punct_pos + 1:].lstrip()
-                        
-                except (KeyError, IndexError, AttributeError):
-                    react_response_text = f"抱歉，我现在太忙了，休息一会，请稍后再试。"
-                    if is_first_sentence:
-                        react_response_text = "_<isfirst>" + react_response_text
-                        is_first_sentence = False
-                    stream_manager.new_instance().write_sentence(username, react_response_text, conversation_id=conversation_id)
-            
-            full_response_text += react_response_text
-        
-        # 确保React Agent最后一段文本也被发送，并标记为结束（若会话未被取消）
-        from utils.stream_state_manager import get_state_manager
-        state_manager = get_state_manager()
-
-        if not sm.should_stop_generation(username, conversation_id=conversation_id):
-            if accumulated_text:
-                # 使用状态管理器准备最后的文本，强制标记为结束
-                marked_text, _, _ = state_manager.prepare_sentence(username, accumulated_text, force_end=True, conversation_id=conversation_id)
-                stream_manager.new_instance().write_sentence(username, marked_text, conversation_id=conversation_id)
-            else:
-                # 如果没有剩余文本，检查是否需要发送结束标记
-                session_info = state_manager.get_session_info(username, conversation_id=conversation_id)
-                if session_info and not session_info.get('is_end_sent', False):
-                    # 发送一个空的结束标记
-                    marked_text, _, _ = state_manager.prepare_sentence(username, "", force_end=True, conversation_id=conversation_id)
-                    stream_manager.new_instance().write_sentence(username, marked_text, conversation_id=conversation_id)
-                     
-                     
-    else:
-        try:
-            # 2.2 使用全局定义的llm对象进行流式请求
-            for chunk in llm.stream(messages):
-                # 检查是否需要停止生成
-                if sm.should_stop_generation(username, conversation_id=conversation_id):
-                    util.log(1, f"检测到停止标志，中断LLM文本生成: {username}")
-                    break
-                    
-                flush_text = chunk.content
-                if not flush_text:
-                    continue
-                accumulated_text += flush_text
-                # 使用安全的流式处理逻辑和状态管理器
-                from utils.stream_text_processor import get_processor
-                from utils.stream_state_manager import get_state_manager
-
-                processor = get_processor()
-                state_manager = get_state_manager()
-
-                # 确保有活跃会话
-                if not state_manager.is_session_active(username):
-                    state_manager.start_new_session(username, "llm_stream")
-
-                # 如果累积文本达到一定长度，进行处理
-                if len(accumulated_text) >= 20:  # 设置一个合理的阈值
-                    # 找到最后一个标点符号的位置
+                flush_text = getattr(chunk, "content", None)
+            if isinstance(flush_text, list):
+                flush_text = "".join(part if isinstance(part, str) else "" for part in flush_text)
+            if not flush_text:
+                continue
+            flush_text = str(flush_text)
+            accumulated_text += flush_text
+            full_response_text += flush_text
+            if len(accumulated_text) >= 20:
+                while True:
                     last_punct_pos = -1
-                    for punct in processor.punctuation_marks:
+                    for punct in punctuation_list:
                         pos = accumulated_text.rfind(punct)
                         if pos > last_punct_pos:
                             last_punct_pos = pos
+                    if last_punct_pos > 10:
+                        sentence_text = accumulated_text[: last_punct_pos + 1]
+                        write_sentence(sentence_text, force_first=is_first_sentence)
+                        is_first_sentence = False
+                        accumulated_text = accumulated_text[last_punct_pos + 1 :].lstrip()
+                    else:
+                        break
 
-                    if last_punct_pos > 10:  # 确保有足够的内容发送
-                        sentence_text = accumulated_text[:last_punct_pos + 1]
-                        # 使用状态管理器准备句子
-                        marked_text, _, _ = state_manager.prepare_sentence(username, sentence_text, conversation_id=conversation_id)
-                        stream_manager.new_instance().write_sentence(username, marked_text, conversation_id=conversation_id)
-                        accumulated_text = accumulated_text[last_punct_pos + 1:].lstrip()
-                        
-                full_response_text += flush_text
-            # 确保最后一段文本及结束标记也被发送（若会话未被取消）
-            from utils.stream_state_manager import get_state_manager
-            state_manager = get_state_manager()
+    def finalize_stream(force_end: bool = False) -> None:
+        nonlocal accumulated_text, is_first_sentence
+        if accumulated_text:
+            write_sentence(accumulated_text, force_first=is_first_sentence, force_end=force_end)
+            is_first_sentence = False
+            accumulated_text = ""
+        elif force_end:
+            if state_mgr is not None:
+                try:
+                    session_info = state_mgr.get_session_info(username, conversation_id=conversation_id)
+                except Exception:
+                    session_info = None
+                if not session_info or not session_info.get("is_end_sent", False):
+                    write_sentence("", force_end=True)
+            else:
+                write_sentence("", force_end=True)
 
-            if not sm.should_stop_generation(username, conversation_id=conversation_id):
-                if accumulated_text:
-                    # 使用状态管理器准备最后的文本，强制标记为结束
-                    marked_text, _, _ = state_manager.prepare_sentence(username, accumulated_text, force_end=True, conversation_id=conversation_id)
-                    stream_manager.new_instance().write_sentence(username, marked_text, conversation_id=conversation_id)
-                else:
-                    # 如果没有剩余文本，检查是否需要发送结束标记
-                    session_info = state_manager.get_session_info(username, conversation_id=conversation_id)
-                    if session_info and not session_info.get('is_end_sent', False):
-                        # 发送一个空的结束标记
-                        marked_text, _, _ = state_manager.prepare_sentence(username, "", force_end=True, conversation_id=conversation_id)
-                        stream_manager.new_instance().write_sentence(username, marked_text, conversation_id=conversation_id)
+    def run_workflow(tool_registry: Dict[str, WorkflowToolSpec]) -> bool:
+        nonlocal accumulated_text, full_response_text, is_first_sentence, messages_buffer
 
-
-        except requests.exceptions.RequestException as e:
-            util.log(1, f"请求失败: {e}")
-            error_message = "抱歉，我现在太忙了，休息一会，请稍后再试。"
-            # 会话未被取消时才发送错误提示
-            if not sm.should_stop_generation(username, conversation_id=conversation_id):
-                stream_manager.new_instance().write_sentence(username, "_<isfirst>" + error_message + "_<isend>", conversation_id=conversation_id)
-            full_response_text = error_message
-
-    # 结束会话（不再需要发送额外的结束标记）
-    from utils.stream_state_manager import get_state_manager
-    state_manager = get_state_manager()
-    state_manager.end_session(username, conversation_id=conversation_id)
-
-    # 在单独线程中记忆对话内容
-    MyThread(target=remember_conversation_thread, args=(username, content, full_response_text.split("</think>")[-1])).start()
-    
-    return full_response_text.split("</think>")[-1]
-
+        initial_state: AgentState = {
+            "request": content,
+            "messages": messages_buffer,
+            "tool_results": [],
+            "audit_log": [],
+            "status": "planning",
+            "max_steps": 30,
+            "context": {
+                "system_prompt": system_prompt,
+                "knowledge_context": knowledge_context,
+                "observation": observation,
+                "memory_context": memory_context,
+                "tool_registry": tool_registry,
+            },
+        }
         
+        config = {"configurable": {"thread_id": f"workflow-{username}-{conversation_id}"}}
+        workflow_app = _WORKFLOW_APP
+        is_agent_think_start = False
+        final_state: Optional[AgentState] = None
+        final_stream_done = False
+
+        try:
+            for event in workflow_app.stream(initial_state, config=config, stream_mode="updates"):
+                if sm.should_stop_generation(username, conversation_id=conversation_id):
+                    util.log(1, f"检测到停止标志，中断工作流生成: {username}")
+                    break
+                step, state = next(iter(event.items()))
+                final_state = state
+                status = state.get("status")
+
+                state_messages = state.get("messages") or []
+                if state_messages and len(state_messages) > len(messages_buffer):
+                    messages_buffer.extend(state_messages[len(messages_buffer):])
+                    if len(messages_buffer) > 60:
+                        del messages_buffer[:-60]
+
+                if step == "plan_next":
+                    if status == "needs_tool":
+                        next_action = state.get("next_action") or {}
+                        tool_name = next_action.get("name") or "unknown_tool"
+                        tool_args = next_action.get("args") or {}
+                        audit_log = state.get("audit_log") or []
+                        decision_note = audit_log[-1] if audit_log else ""
+                        if "->" in decision_note:
+                            decision_note = decision_note.split("->", 1)[1].strip()
+                        args_text = json.dumps(tool_args, ensure_ascii=False)
+                        message_lines = [
+                            "[PLAN] Planner preparing to call a tool.",
+                            f"[PLAN] Decision: {decision_note}" if decision_note else "[PLAN] Decision: (missing)",
+                            f"[PLAN] Tool: {tool_name}",
+                            f"[PLAN] Args: {args_text}",
+                        ]
+                        message = "\n".join(message_lines) + "\n"
+                        if not is_agent_think_start:
+                            message = "<think>" + message
+                            is_agent_think_start = True
+                        write_sentence(message, force_first=is_first_sentence)
+                        is_first_sentence = False
+                        full_response_text += message
+                        append_to_buffer('assistant', message.strip())
+                    elif status == "completed" and not final_stream_done:
+                        closing = "</think>" if is_agent_think_start else ""
+                        final_messages = state.get("final_messages")
+                        final_response = state.get("final_response")
+                        success = False
+                        if final_messages:
+                            try:
+                                stream_response_chunks(llm.stream(final_messages), prepend_text=closing)
+                                success = True
+                            except requests.exceptions.RequestException as stream_exc:
+                                util.log(1, f"最终回复流式输出失败: {stream_exc}")
+                        elif final_response:
+                            stream_response_chunks([closing + final_response])
+                            success = True
+                        elif closing:
+                            accumulated_text += closing
+                            full_response_text += closing
+                        final_stream_done = success
+                        is_agent_think_start = False
+                elif step == "call_tool":
+                    history = state.get("tool_results") or []
+                    if history:
+                        last = history[-1]
+                        call_info = last.get("call", {}) or {}
+                        tool_name = call_info.get("name") or "unknown_tool"
+                        success = last.get("success", False)
+                        status_text = "SUCCESS" if success else "FAILED"
+                        args_text = json.dumps(call_info.get("args") or {}, ensure_ascii=False)
+                        message_lines = [
+                            f"[TOOL] {tool_name} execution {status_text}.",
+                            f"[TOOL] Args: {args_text}",
+                        ]
+                        if last.get("output"):
+                            message_lines.append(f"[TOOL] Output: {_truncate_text(last['output'], 120)}")
+                        if last.get("error"):
+                            message_lines.append(f"[TOOL] Error: {last['error']}")
+                        message = "\n".join(message_lines) + "\n"
+                        write_sentence(message, force_first=is_first_sentence)
+                        is_first_sentence = False
+                        full_response_text += message
+                        append_to_buffer('assistant', message.strip())
+                elif step == "__end__":
+                    break
+        except Exception as exc:
+            util.log(1, f"执行工具工作流时出错: {exc}")
+            if is_agent_think_start:
+                closing = "</think>"
+                accumulated_text += closing
+                full_response_text += closing
+            return False
+
+        if final_state is None:
+            if is_agent_think_start:
+                closing = "</think>"
+                accumulated_text += closing
+                full_response_text += closing
+            return False
+
+        if not final_stream_done and is_agent_think_start:
+            closing = "</think>"
+            accumulated_text += closing
+            full_response_text += closing
+            util.log(1, f"工具工作流未能完成，状态: {final_state.get('status')}")
+
+        final_state_messages = final_state.get("messages") if final_state else None
+        if final_state_messages and len(final_state_messages) > len(messages_buffer):
+            messages_buffer.extend(final_state_messages[len(messages_buffer):])
+            if len(messages_buffer) > 60:
+                del messages_buffer[:-60]
+
+        return final_stream_done
+
+    def run_direct_llm() -> bool:
+        nonlocal full_response_text, accumulated_text, is_first_sentence, messages_buffer
+        try:
+            if tool_registry:
+                stream_response_chunks(llm.stream(messages))
+            else:
+                summary_state: AgentState = {
+                    "request": content,
+                    "messages": messages_buffer,
+                    "tool_results": [],
+                    "planner_preview": None,
+                    "context": {
+                        "system_prompt": system_prompt,
+                        "knowledge_context": knowledge_context,
+                        "observation": observation,
+                        "memory_context": memory_context,
+                    },
+                }
+                
+                final_messages = _build_final_messages(summary_state)
+                stream_response_chunks(llm.stream(final_messages))
+            return True
+        except requests.exceptions.RequestException as exc:
+            util.log(1, f"请求失败: {exc}")
+            error_message = "抱歉，我现在太忙了，休息一会，请稍后再试。"
+            write_sentence(error_message, force_first=is_first_sentence)
+            is_first_sentence = False
+            full_response_text = error_message
+            accumulated_text = ""
+            return False
+
+    workflow_success = False
+    if tool_registry:
+        workflow_success = run_workflow(tool_registry)
+
+    if (not tool_registry or not workflow_success) and not sm.should_stop_generation(username, conversation_id=conversation_id):
+        run_direct_llm()
+
+    if not sm.should_stop_generation(username, conversation_id=conversation_id):
+        finalize_stream(force_end=True)
+
+    if state_mgr is not None:
+        try:
+            state_mgr.end_session(username, conversation_id=conversation_id)
+        except Exception:
+            pass
+    else:
+        try:
+            from utils.stream_state_manager import get_state_manager
+
+            get_state_manager().end_session(username, conversation_id=conversation_id)
+        except Exception:
+            pass
+
+    final_text = full_response_text.split("</think>")[-1] if full_response_text else ""
+    try:
+        MyThread(target=remember_conversation_thread, args=(username, content, final_text)).start()
+    except Exception as exc:
+        util.log(1, f"记忆线程启动失败: {exc}")
+
+    return final_text
 def set_memory_cleared_flag(flag=True):
     """
     设置记忆清除标记
@@ -1290,74 +1866,23 @@ def save_agent_memory():
     except Exception as e:
         util.log(1, f"保存代理记忆失败: {str(e)}")
 
-def get_mcp_tools():
+def get_mcp_tools() -> List[Dict[str, Any]]:
     """
-    从API获取所有在线MCP服务器的工具列表
+    从共享缓存获取所有可用且已启用的MCP工具列表。
     """
     try:
-        url = 'http://127.0.0.1:5010/api/mcp/servers/online/tools'
-        response = requests.get(url)
-        
-        if response.status_code == 200:
-            data = response.json()
-            if data.get('success'):
-                return data.get('tools', [])
-        
-        util.log(1, f"获取工具列表失败，状态码：{response.status_code}")
-        return []
+        tools = mcp_tool_registry.get_enabled_tools()
+        return tools or []
     except Exception as e:
         util.log(1, f"获取工具列表出错：{e}")
         return []
 
 
-def _schema_to_args_schema(tool_name: str, schema: dict):
-    """将 JSON Schema 转成 Pydantic 参数模型，供 StructuredTool 使用"""
-    if not schema:
-        return create_model(f"{tool_name.capitalize()}Args")
-    props = schema.get("properties", {})
-    required_fields = set(schema.get("required", []))
-    fields = {}
-    for field, meta in props.items():
-        meta_type = meta.get("type", "string")
-        py_type = float if meta_type in ("number", "integer") else str
-        default = ... if field in required_fields else None
-        fields[field] = (py_type, default)
-    return create_model(f"{tool_name.capitalize()}Args", **fields)
-
-
-def _build_tool(tool_def: dict) -> StructuredTool:
-    """根据从服务器获取的工具定义，动态生成 LangChain StructuredTool"""
-    name = tool_def.get("name", "")
-    description = tool_def.get("description", "")
-    input_schema = tool_def.get("inputSchema", {"type": "object", "properties": {}})
-
-    ArgsSchema = _schema_to_args_schema(name, input_schema)
-
-    def _caller(**kwargs):
-        """实际的工具调用包装函数"""
-        try:
-            resp = requests.post(f"http://127.0.0.1:5010/api/mcp/tools/{name}", json=kwargs, timeout=120)
-            data = resp.json()
-            if data.get("success"):
-                return data.get("result", "无返回值")
-            return f"调用失败: {data.get('error', '未知错误')}"
-        except Exception as e:
-            return f"调用异常: {str(e)}"
-
-    _caller.__name__ = name  # 保证 tool.name 与函数名一致
-    return StructuredTool.from_function(
-        func=_caller,
-        name=name,
-        description=description,
-        args_schema=ArgsSchema
-    )
-
-
 if __name__ == "__main__":
     init_memory_scheduler()
     for _ in range(3):
-        query = "Fay是什么"
-        response = question(query)
+        query = "Who is Fay?"
+        response = question(query, "User")
         print(f"Q: {query}")
         print(f"A: {response}")
         time.sleep(1)

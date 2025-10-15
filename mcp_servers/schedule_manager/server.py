@@ -1090,25 +1090,6 @@ async def handle_list_tools() -> List[Tool]:
             }
         ),
         Tool(
-            name="parse_natural_schedule",
-            description="解析自然语言日程指令，如'明天上午提醒我开会'、'10分钟后提醒我休息'等",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "text": {
-                        "type": "string",
-                        "description": "用户的自然语言指令，如'明天上午提醒我开会'"
-                    },
-                    "uid": {
-                        "type": "integer",
-                        "description": "用户ID",
-                        "default": 0
-                    }
-                },
-                "required": ["text"]
-            }
-        ),
-        Tool(
             name="send_message_to_fay",
             description="直接发送消息给Fay",
             inputSchema={
@@ -1164,13 +1145,6 @@ async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[TextCon
     elif name == "delete_schedule":
         result = schedule_manager.delete_schedule(arguments["schedule_id"])
         return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False))]
-    
-    elif name == "parse_natural_schedule":
-        result = schedule_manager.parse_natural_language_schedule(
-            text=arguments["text"],
-            uid=arguments.get("uid", 0)
-        )
-        return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False, indent=2))]
     
     elif name == "send_message_to_fay":
         schedule_manager.send_to_fay(

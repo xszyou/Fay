@@ -153,6 +153,26 @@ class Content_Db:
     
 
     @synchronized
+    def get_recent_messages_by_user(self, username='User', limit=30):
+        conn = sqlite3.connect("memory/fay.db")
+        conn.text_factory = str
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT type, content
+            FROM T_Msg
+            WHERE username = ?
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (username, limit),
+        )
+        rows = cur.fetchall()
+        conn.close()
+        rows.reverse()
+        return rows
+
+    @synchronized
     def get_previous_user_message(self, msg_id):
         conn = sqlite3.connect("memory/fay.db")
         cur = conn.cursor()

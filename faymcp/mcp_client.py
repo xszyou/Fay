@@ -3,15 +3,17 @@
 
 import asyncio
 import logging
-import time
 import os
 import sys
 import threading
+import inspect
+import time
 from contextlib import AsyncExitStack
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple, List, Callable
+
 from mcp import ClientSession
 from mcp.client.sse import sse_client
-from utils import util
+from faymcp import tool_registry
 
 # 尝试导入本地 stdio 传输
 try:
@@ -22,250 +24,433 @@ except Exception:
     StdioServerParameters = None
     HAS_STDIO = False
 
-# 设置日志记录
-logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
+
+
+def _is_awaitable(obj: Any) -> bool:
+    try:
+        return inspect.isawaitable(obj)
+    except Exception:
+        return False
+
+
+async def _await_or_value(obj, timeout: Optional[float] = None):
+    """如果是 awaitable 则等待（带超时），否则直接返回。"""
+    if _is_awaitable(obj):
+        if timeout is not None:
+            return await asyncio.wait_for(obj, timeout=timeout)
+        return await obj
+    return obj
+
 
 class McpClient:
     """
-    MCP客户端类，用于连接MCP服务器并调用其工具
-    支持两种传输:
-    - SSE: 远程HTTP(S) SSE服务器
-    - STDIO: 本地进程通过stdin/stdout通信
+    兼容多版本 mcp 的 MCP 客户端，支持 SSE 与 STDIO。
+    修复：部分版本的 list_tools 返回同步 list，如果对其 await 会报
+    "object list can't be used in 'await' expression"。
     """
+
     def __init__(self, server_url: Optional[str] = None, api_key: Optional[str] = None,
-                 transport: str = "sse", stdio_config: Optional[Dict[str, Any]] = None):
-        """
-        初始化MCP客户端
-        :param server_url: MCP服务器URL（SSE模式必填）
-        :param api_key: MCP服务器API密钥（可选，仅SSE）
-        :param transport: 传输类型: 'sse' 或 'stdio'
-        :param stdio_config: 本地stdio配置，如 {command, args, env, cwd}
-        """
+                 transport: str = "sse", stdio_config: Optional[Dict[str, Any]] = None,
+                 server_id: Optional[int] = None, tools_refresh_interval: int = 60,
+                 enabled_lookup: Optional[Callable[[str], bool]] = None):
         self.server_url = server_url
         self.api_key = api_key
         self.transport = transport or "sse"
-        # 如果未显式指定，按server_url推断
         if self.transport not in ("sse", "stdio"):
-            self.transport = "stdio" if (server_url and str(server_url).startswith("stdio:")) else "sse"
+            self.transport = "sse"
         self.stdio_config = stdio_config or {}
-        self.session = None
-        self.tools = None
+        self.server_id = server_id
+        self._enabled_lookup = enabled_lookup
+
+        self.session: Optional[ClientSession] = None
+        self.tools: Optional[List[Any]] = None
         self.connected = False
-        self.event_loop = None
         self.exit_stack: Optional[AsyncExitStack] = None
-        # 超时配置（秒）
-        self.init_timeout_seconds = 20
-        self.list_timeout_seconds = 20
-        self.call_timeout_seconds = 60
-        self._ensure_event_loop()
-        # stdio 子进程stderr日志文件句柄
-        self._stdio_errlog_file = None
-        # 后台事件循环线程
-        self._loop_thread: Optional[threading.Thread] = None
 
-    def _ensure_event_loop(self):
-        """
-        启动一个后台事件循环线程，供所有异步操作使用，避免跨线程无事件循环的问题
-        """
-        if getattr(self, "event_loop", None) and self._loop_thread and self._loop_thread.is_alive():
-            return
-        # 创建独立事件循环并在后台线程中常驻
-        loop = asyncio.new_event_loop()
-        self.event_loop = loop
+        # timeouts (seconds)
+        self.init_timeout_seconds = 30
+        self.list_timeout_seconds = 30
+        self.call_timeout_seconds = 90
 
-        def _runner():
-            asyncio.set_event_loop(loop)
-            loop.run_forever()
-
-        t = threading.Thread(target=_runner, name=f"McpClientLoop-{id(self)}", daemon=True)
+        # dedicated event loop in background thread
+        self.event_loop = asyncio.new_event_loop()
+        t = threading.Thread(target=self._loop_runner, args=(self.event_loop,), daemon=True)
         t.start()
         self._loop_thread = t
 
-    async def _connect_async(self):
-        """
-        异步连接到MCP服务器或本地进程
-        """
-        try:
-            # 创建退出栈
-            self.exit_stack = AsyncExitStack()
+        self._stdio_errlog_file = None
+        self._manager_task: Optional[asyncio.Task] = None
+        self._disconnect_event: Optional[asyncio.Event] = None
+        self._connect_ready_future: Optional[asyncio.Future] = None
+        self._last_error: Optional[str] = None
 
-            if self.transport == "stdio":
-                if not HAS_STDIO:
-                    return False, "未安装或不可用的 MCP stdio 客户端，请确认 mcp 包版本并包含 mcp.client.stdio"
-                cfg = self.stdio_config or {}
-                command = cfg.get("command")
-                if not command:
-                    return False, "本地MCP配置缺少 command"
-                args = cfg.get("args") or []
-                env = cfg.get("env") or None
-                cwd = cfg.get("cwd") or None
-                logger.info(f"正在通过 STDIO 启动本地MCP: {command} {args} (cwd={cwd})")
-                params = StdioServerParameters(
-                    command=command,
-                    args=list(args or []),
-                    env=env,
-                    cwd=cwd,
-                )
-                # 将子进程stderr写入日志文件，便于排查
+        # tool availability cache
+        self.tools_refresh_interval = max(int(tools_refresh_interval), 5)
+        self._tool_cache: List[Dict[str, Any]] = []
+        self._tool_cache_timestamp: float = 0.0
+        self._tools_lock = threading.RLock()
+        self._tools_refresh_thread: Optional[threading.Thread] = None
+        self._tools_stop_event = threading.Event()
+
+    @staticmethod
+    def _loop_runner(loop: asyncio.AbstractEventLoop):
+        asyncio.set_event_loop(loop)
+        loop.run_forever()
+
+    def set_enabled_lookup(self, lookup: Optional[Callable[[str], bool]]) -> None:
+        """Allow callers to update the enabled-state resolver at runtime."""
+        self._enabled_lookup = lookup
+
+    def _clone_tool_entry(self, entry: Dict[str, Any]) -> Dict[str, Any]:
+        clone = dict(entry)
+        if isinstance(clone.get("inputSchema"), dict):
+            clone["inputSchema"] = dict(clone["inputSchema"])
+        return clone
+
+    def _sanitize_tools(self, tools: Any) -> List[Dict[str, Any]]:
+        sanitized: List[Dict[str, Any]] = []
+        if not tools:
+            return sanitized
+
+        # Unwrap known container shapes (dict/object with .tools etc.)
+        container = tools
+        for _ in range(3):
+            if container is None:
+                break
+            if isinstance(container, dict):
+                inner = container.get("tools")
+                if inner is not None:
+                    container = inner
+                    continue
+            if hasattr(container, "tools"):
                 try:
-                    log_dir = os.path.join(os.getcwd(), 'logs')
-                    os.makedirs(log_dir, exist_ok=True)
-                    base = os.path.basename(str(command))
-                    log_path = os.path.join(log_dir, f"mcp_stdio_{base}.log")
-                    self._stdio_errlog_file = open(log_path, 'a', encoding='utf-8')
+                    inner = getattr(container, "tools")
                 except Exception:
-                    self._stdio_errlog_file = None
-                streams = await self.exit_stack.enter_async_context(
-                    stdio_client(params, errlog=self._stdio_errlog_file or sys.stderr)
-                )
-                logger.info("STDIO 连接已建立")
-            else:
-                logger.info(f"正在连接到 SSE 服务: {self.server_url}")
-                # 准备请求头，如果有API密钥则添加到请求头中
-                headers = {}
-                if self.api_key:
-                    headers['Authorization'] = f'Bearer {self.api_key}'
-                # 增加超时设置
-                streams = await self.exit_stack.enter_async_context(
-                    sse_client(url=self.server_url, timeout=60, headers=headers)  # 增加超时时间到60秒并传递请求头
-                )
-                logger.info("SSE 连接已建立")
+                    inner = None
+                if inner is not None:
+                    container = inner
+                    continue
+            break
 
-            # 创建会话
-            self.session = await self.exit_stack.enter_async_context(ClientSession(*streams))
+        # Handle responses expressed as iterable of key/value pairs
+        try:
+            iterable = list(container)
+        except TypeError:
+            iterable = [container]
+        else:
+            if iterable and all(isinstance(item, tuple) and len(item) == 2 for item in iterable):
+                for key, value in iterable:
+                    if key == "tools":
+                        return self._sanitize_tools(value)
+
+        for tool in iterable:
             try:
-                # 为 initialize 增加超时，避免服务器未握手导致阻塞
-                await asyncio.wait_for(self.session.initialize(), timeout=20)
-            except asyncio.TimeoutError:
-                logger.error("会话初始化超时 (initialize) — 请检查本地STDIO服务是否成功启动/输出")
-                return False, "会话初始化超时"
-            logger.info("会话已创建")
-
-            # 获取工具列表
-            logger.info("正在获取工具列表...")
-            try:
-                # 使用asyncio.wait_for添加超时控制
-                tools_response = await asyncio.wait_for(self.session.list_tools(), timeout=self.list_timeout_seconds)
-                logger.info(f"可用工具: {tools_response}")
-
-                # 提取工具列表
-                if hasattr(tools_response, 'tools') and tools_response.tools:
-                    self.tools = tools_response.tools
+                if hasattr(tool, "name"):
+                    name = str(getattr(tool, "name", "")).strip()
+                    if not name:
+                        continue
+                    description = str(getattr(tool, "description", "") or "")
+                    input_schema = getattr(tool, "inputSchema", {})
+                    if not isinstance(input_schema, dict):
+                        input_schema = {}
+                    sanitized.append({
+                        "name": name,
+                        "description": description,
+                        "inputSchema": dict(input_schema),
+                    })
+                elif isinstance(tool, dict) and tool.get("name"):
+                    name = str(tool.get("name", "")).strip()
+                    if not name:
+                        continue
+                    entry = {
+                        "name": name,
+                        "description": str(tool.get("description", "") or ""),
+                        "inputSchema": dict(tool.get("inputSchema") or {})
+                        if isinstance(tool.get("inputSchema"), dict) else {},
+                    }
+                    if "enabled" in tool:
+                        entry["enabled"] = bool(tool["enabled"])
+                    sanitized.append(entry)
                 else:
-                    # 如果返回的是直接的工具列表
-                    self.tools = tools_response
+                    # Skip placeholder tuples or metadata fragments
+                    if isinstance(tool, tuple) and len(tool) == 2 and isinstance(tool[0], str):
+                        continue
+                    name = str(tool).strip()
+                    if not name:
+                        continue
+                    sanitized.append({
+                        "name": name,
+                        "description": "",
+                        "inputSchema": {},
+                    })
+            except Exception as exc:
+                logger.debug(f"Failed to normalize MCP tool definition {tool!r}: {exc}")
+        return sanitized
 
+    def _apply_tool_cache_update(self, tools: List[Dict[str, Any]]) -> None:
+        with self._tools_lock:
+            cloned = [self._clone_tool_entry(entry) for entry in tools]
+            self._tool_cache = cloned
+            self._tool_cache_timestamp = time.time()
+            self.tools = [self._clone_tool_entry(entry) for entry in cloned]  # backward compatibility
+        if self.server_id is not None:
+            tool_registry.set_server_tools(self.server_id, tools, self._enabled_lookup)
+
+    def _get_tool_cache_copy(self) -> List[Dict[str, Any]]:
+        with self._tools_lock:
+            return [self._clone_tool_entry(entry) for entry in self._tool_cache]
+
+    def get_cached_tools(self) -> List[Dict[str, Any]]:
+        """Expose a copy of the cached tool metadata without refreshing remotely."""
+        return self._get_tool_cache_copy()
+
+    def _ensure_refresh_worker(self) -> None:
+        if self.tools_refresh_interval <= 0:
+            return
+        with self._tools_lock:
+            if self._tools_refresh_thread and self._tools_refresh_thread.is_alive():
+                return
+            self._tools_stop_event.clear()
+            thread = threading.Thread(
+                target=self._refresh_loop,
+                name=f"mcp-tools-refresh-{self.server_id or 'unknown'}",
+                daemon=True,
+            )
+            self._tools_refresh_thread = thread
+            thread.start()
+
+    def _stop_refresh_worker(self) -> None:
+        thread = None
+        with self._tools_lock:
+            thread = self._tools_refresh_thread
+            if not thread:
+                self._tools_stop_event.set()
+                return
+            self._tools_stop_event.set()
+        if thread.is_alive():
+            thread.join(timeout=self.tools_refresh_interval)
+        with self._tools_lock:
+            self._tools_refresh_thread = None
+            self._tools_stop_event = threading.Event()
+
+    def _refresh_loop(self) -> None:
+        while not self._tools_stop_event.wait(self.tools_refresh_interval):
+            if not self.connected:
+                continue
+            try:
+                self._refresh_tools()
+            except Exception as exc:
+                logger.debug(f"MCP tool refresh failed: {exc}")
+
+    async def _refresh_tools_async(self) -> bool:
+        if not self.session:
+            return False
+        tools_resp = await _await_or_value(self.session.list_tools(), self.list_timeout_seconds)
+        sanitized = self._sanitize_tools(tools_resp)
+        if sanitized or self._tool_cache:
+            self._apply_tool_cache_update(sanitized)
+        return True
+
+    def _refresh_tools(self) -> bool:
+        try:
+            future = asyncio.run_coroutine_threadsafe(self._refresh_tools_async(), self.event_loop)
+            return future.result(timeout=self.list_timeout_seconds + 5)
+        except Exception as exc:
+            logger.debug(f"Failed to refresh MCP tool cache: {exc}")
+            return False
+
+    def _clear_tool_cache(self) -> None:
+        with self._tools_lock:
+            self._tool_cache = []
+            self._tool_cache_timestamp = 0.0
+            self.tools = None
+        if self.server_id is not None:
+            tool_registry.mark_all_unavailable(self.server_id)
+
+    async def _connect_async(self) -> Tuple[bool, Any]:
+        if self.connected and self.session:
+            return True, self.get_cached_tools()
+
+        if self._manager_task and self._manager_task.done():
+            try:
+                await self._manager_task
+            except Exception:
+                pass
+            self._manager_task = None
+
+        if self._manager_task:
+            if self._connect_ready_future:
+                try:
+                    return await self._connect_ready_future
+                except Exception as exc:
+                    logger.error(f"Unexpected connection error during startup wait: {exc}")
+                    return False, str(exc)
+            await self._manager_task
+            if self.connected and self.session:
+                return True, self.get_cached_tools()
+            return False, self._last_error or "MCP server connection failed"
+
+        loop = asyncio.get_running_loop()
+        ready_future: asyncio.Future = loop.create_future()
+        disconnect_event = asyncio.Event()
+        self._disconnect_event = disconnect_event
+        self._connect_ready_future = ready_future
+        self._last_error = None
+        self._manager_task = loop.create_task(self._run_session(ready_future, disconnect_event))
+
+        try:
+            result = await ready_future
+        finally:
+            self._connect_ready_future = None
+        return result
+
+    async def _run_session(self, ready_future: asyncio.Future, disconnect_event: asyncio.Event) -> None:
+        stdio_errlog = None
+        stack = AsyncExitStack()
+        self.exit_stack = stack
+        try:
+            async with stack:
+                if self.transport == "stdio":
+                    if not HAS_STDIO:
+                        message = "Missing stdio-capable MCP client, run: pip install -U mcp"
+                        self._last_error = message
+                        if not ready_future.done():
+                            ready_future.set_result((False, message))
+                        return
+                    cfg = self.stdio_config or {}
+                    command = cfg.get("command") or sys.executable
+                    if str(command).lower() == "python":
+                        command = sys.executable
+                    args = list(cfg.get("args") or [])
+                    env = cfg.get("env") or None
+                    cwd = cfg.get("cwd") or None
+                    if cwd and not os.path.isabs(cwd):
+                        repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+                        cwd = os.path.abspath(os.path.join(repo_root, cwd))
+
+                    try:
+                        log_dir = os.path.join(os.getcwd(), 'logs')
+                        os.makedirs(log_dir, exist_ok=True)
+                        base = os.path.basename(str(command))
+                        log_path = os.path.join(log_dir, f"mcp_stdio_{base}.log")
+                        stdio_errlog = open(log_path, 'a', encoding='utf-8')
+                    except Exception:
+                        stdio_errlog = None
+
+                    self._stdio_errlog_file = stdio_errlog
+                    params = StdioServerParameters(command=command, args=args, env=env, cwd=cwd)
+                    read_stream, write_stream = await stack.enter_async_context(
+                        stdio_client(params, errlog=stdio_errlog or sys.stderr)
+                    )
+                else:
+                    headers = {}
+                    if self.api_key:
+                        headers['Authorization'] = f'Bearer {self.api_key}'
+                    read_stream, write_stream = await stack.enter_async_context(
+                        sse_client(self.server_url, headers=headers)
+                    )
+
+                self.session = await stack.enter_async_context(ClientSession(read_stream, write_stream))
+                try:
+                    await _await_or_value(getattr(self.session, 'initialize', lambda: None)(), self.init_timeout_seconds)
+                except Exception:
+                    pass
+
+                tools_resp = await _await_or_value(self.session.list_tools(), self.list_timeout_seconds)
+                sanitized_tools = self._sanitize_tools(tools_resp)
+                self._apply_tool_cache_update(sanitized_tools)
                 self.connected = True
-                return True, self.tools
-            except asyncio.TimeoutError:
-                logger.error("获取工具列表超时")
-                return False, "获取工具列表超时"
+                if not ready_future.done():
+                    ready_future.set_result((True, self.get_cached_tools()))
 
+                self._ensure_refresh_worker()
+
+                await disconnect_event.wait()
+
+        except asyncio.TimeoutError as e:
+            self._last_error = f"Connection or tool discovery timed out: {e}"
+            if not ready_future.done():
+                ready_future.set_result((False, self._last_error))
         except Exception as e:
-            logger.error(f"连接或调用过程中出错: {e}")
-            error_msg = str(e)
-            # 分类错误信息
-            if self.transport == "sse":
-                if "connection" in error_msg.lower() or "timeout" in error_msg.lower():
-                    logger.error("网络连接问题，请检查网络或服务器状态")
-                    return False, "网络连接问题，请检查网络或服务器状态"
-                elif "auth" in error_msg.lower() or "unauthorized" in error_msg.lower():
-                    logger.error("可能存在认证问题，请检查是否需要提供 API 密钥")
-                    return False, "认证问题，请检查是否需要提供 API 密钥"
-                elif "sse" in error_msg.lower() or "stream" in error_msg.lower():
-                    logger.error("SSE流处理错误，可能是服务器提前关闭了连接")
-                    return False, "SSE流处理错误，可能是服务器提前关闭了连接"
-            else:
-                if "command" in error_msg.lower() or "not found" in error_msg.lower():
-                    return False, "本地MCP命令启动失败，请检查 command/args/cwd 是否正确"
-            return False, f"连接错误: {error_msg}"
+            self._last_error = str(e)
+            logger.error(f"Error while handling connection lifecycle: {e}")
+            if not ready_future.done():
+                ready_future.set_result((False, self._last_error))
+        finally:
+            if stdio_errlog:
+                try:
+                    stdio_errlog.close()
+                except Exception:
+                    pass
+            if self._stdio_errlog_file and self._stdio_errlog_file is not stdio_errlog:
+                try:
+                    self._stdio_errlog_file.close()
+                except Exception:
+                    pass
+            self._stdio_errlog_file = None
+            self._stop_refresh_worker()
+            self.connected = False
+            self.session = None
+            self._clear_tool_cache()
+            if not ready_future.done():
+                ready_future.set_result((False, self._last_error or "MCP server connection failed"))
+            if self._disconnect_event is disconnect_event:
+                self._disconnect_event = None
+            self._manager_task = None
+            self.exit_stack = None
 
     def connect(self):
-        """
-        连接到MCP服务器（提交到后台事件循环）
-        :return: (是否成功, 工具列表或错误信息)
-        """
         fut = asyncio.run_coroutine_threadsafe(self._connect_async(), self.event_loop)
         return fut.result(timeout=self.init_timeout_seconds + self.list_timeout_seconds + 10)
 
-    async def _call_tool_async(self, method, params=None):
-        """
-        异步调用MCP工具
-        :param method: 方法名
-        :param params: 参数字典
-        :return: 调用结果
-        """
+    async def _call_tool_async(self, method: str, params=None):
         if not self.connected or not self.session:
             return False, "未连接到MCP服务器"
-
         try:
-            if params is None:
-                params = {}
-
-            logger.info(f"调用工具: {method}, 参数: {params}")
-            result = await asyncio.wait_for(self.session.call_tool(method, params), timeout=self.call_timeout_seconds)
-            logger.info(f"调用结果: {result}")
+            params = params or {}
+            result = await _await_or_value(self.session.call_tool(method, params), self.call_timeout_seconds)
             return True, result
         except asyncio.TimeoutError:
             return False, f"调用工具超时({self.call_timeout_seconds}s)"
         except Exception as e:
-            # 提供更可读的错误类型，并在日志中打印完整异常，便于排查
             logger.exception("调用工具失败异常堆栈")
-            msg = str(e)
-            if not msg:
-                msg = repr(e)
-            return False, f"调用工具失败: {type(e).__name__}: {msg}"
+            return False, f"调用工具失败: {type(e).__name__}: {e}"
 
     def call_tool(self, method, params=None):
-        """
-        调用MCP工具（提交到后台事件循环）
-        :param method: 方法名
-        :param params: 参数字典
-        :return: (是否成功, 结果或错误信息)
-        """
-        try:
-            future = asyncio.run_coroutine_threadsafe(self._call_tool_async(method, params), self.event_loop)
-            return future.result(timeout=self.call_timeout_seconds + 5)
-        except Exception as e:
-            util.log(1, f"调用MCP工具时出错: {str(e)}")
-            return False, f"调用工具失败: {str(e)}"
+        future = asyncio.run_coroutine_threadsafe(self._call_tool_async(method, params), self.event_loop)
+        return future.result(timeout=self.call_timeout_seconds + 5)
 
-    def list_tools(self):
-        """
-        获取可用工具列表
-        :return: 工具列表
-        """
+    def list_tools(self, refresh: bool = False):
         if not self.connected:
-            success, result = self.connect()
+            success, tools = self.connect()
             if not success:
                 return []
-        return self.tools or []
+            return tools or []
+        if refresh:
+            self._refresh_tools()
+        return self.get_cached_tools()
+
+    async def _disconnect_async(self) -> bool:
+        task = self._manager_task
+        event = self._disconnect_event
+        if event and not event.is_set():
+            event.set()
+        if task:
+            try:
+                await task
+            except Exception as e:
+                logger.error(f"Error while closing connection: {e}")
+                return False
+        return True
 
     def disconnect(self):
-        """
-        断开与MCP服务器的连接
-        """
-        if self.connected and self.exit_stack:
-            try:
-                # 在后台事件循环中关闭资源
-                try:
-                    if self.exit_stack:
-                        fut = asyncio.run_coroutine_threadsafe(self.exit_stack.aclose(), self.event_loop)
-                        fut.result(timeout=10)
-                finally:
-                    self.connected = False
-                    self.session = None
-                    # 关闭子进程stderr日志文件
-                    try:
-                        if self._stdio_errlog_file:
-                            self._stdio_errlog_file.close()
-                            self._stdio_errlog_file = None
-                    except Exception:
-                        pass
-                logger.info("已断开与MCP服务器的连接")
-                return True
-            except Exception as e:
-                logger.error(f"断开连接时出错: {e}")
-                return False
-        return True  # 如果本来就没连接，也返回成功
+        if not self._manager_task and not self._disconnect_event:
+            return True
+        try:
+            fut = asyncio.run_coroutine_threadsafe(self._disconnect_async(), self.event_loop)
+            return fut.result(timeout=10)
+        except Exception as e:
+            logger.error(f"Error while closing connection: {e}")
+            return False
+

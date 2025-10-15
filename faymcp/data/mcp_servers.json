@@ -3,7 +3,7 @@
         "id": 1,
         "name": "tools",
         "ip": "",
-        "connection_time": "2025-08-28 00:17:54",
+        "connection_time": "2025-10-15 19:50:19",
         "key": "",
         "transport": "stdio",
         "command": "python",
@@ -17,7 +17,7 @@
         "id": 2,
         "name": "Fay日程管理",
         "ip": "",
-        "connection_time": "2025-08-28 00:17:57",
+        "connection_time": "2025-10-15 19:50:23",
         "key": "",
         "transport": "stdio",
         "command": "python",
@@ -26,5 +26,21 @@
         ],
         "cwd": "mcp_servers/schedule_manager",
         "env": {}
+    },
+    {
+        "id": 3,
+        "name": "logseq",
+        "ip": "",
+        "connection_time": "2025-10-15 19:50:25",
+        "key": "",
+        "transport": "stdio",
+        "command": "python",
+        "args": [
+            "server.py"
+        ],
+        "cwd": "mcp_servers/logseq",
+        "env": {
+            "LOGSEQ_GRAPH_DIR": "E:/BaiduSyncdisk/第二大脑"
+        }
     }
 ]

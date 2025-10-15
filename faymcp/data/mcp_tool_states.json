@@ -7,10 +7,15 @@
         "ping": false
     },
     "1": {
-        "add": false,
+        "add": true,
         "upper": false,
         "echo": false,
-        "ping": false
+        "ping": false,
+        "now": true
     },
-    "2": {}
+    "2": {
+        "('meta', None)": true,
+        "('nextCursor', None)": true
+    },
+    "3": {}
 }

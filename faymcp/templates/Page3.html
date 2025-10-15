@@ -402,7 +402,7 @@
           <div class="mcp-container">
             <!-- 使用Jinja2模板循环渲染MCP服务器卡片 -->
             {% for server in mcp_servers %}
-            <div class="mcp-card tooltip" data-server-id="{{ server.id }}" data-transport="{{ server.transport or 'sse' }}" data-command="{{ server.command or '' }}" data-args="{{ (server.args | join(' ')) if server.args else '' }}" data-cwd="{{ server.cwd or '' }}">
+            <div class="mcp-card tooltip" data-server-id="{{ server.id }}" data-transport="{{ server.transport or 'sse' }}" data-command="{{ server.command or '' }}" data-args="{{ (server.args | join(' ')) if server.args else '' }}" data-cwd="{{ server.cwd or '' }}" data-key="{{ server.key or '' }}" data-env='{{ server.env | tojson }}'>
               <div class="mcp-header">
                 <div class="mcp-title">{{ server.name }}</div>
                 <div class="status-{{ server.status }}">
@@ -423,7 +423,10 @@
                 <span class="mcp-value">{{ server.connection_time }}</span>
               </div>
               <div class="mcp-actions">
-                <button class="delete-btn" onclick="deleteMcpServer('{{ server.id }}')">删除</button>
+                <div>
+                  <button class="delete-btn" onclick="deleteMcpServer('{{ server.id }}')">删除</button>
+                  <button class="mcp-btn" style="margin-left:8px;" onclick="showEditDialog('{{ server.id }}')">管理</button>
+                </div>
                 <div>
                   <button class="mcp-btn {% if server.status == 'online' %}disconnect-btn{% else %}connect-btn{% endif %}" onclick="toggleConnection('{{ server.id }}')">
                     {% if server.status == 'online' %}断开{% else %}连接{% endif %}
@@ -495,6 +498,66 @@
               </div>
             </div>
 
+            <!-- Edit MCP Dialog -->
+            <div class="mcp-dialog" id="editMcpDialog">
+              <div class="mcp-dialog-content">
+                <div class="mcp-dialog-header">
+                  <div class="mcp-dialog-title">管理MCP</div>
+                  <div class="mcp-dialog-close" onclick="hideEditDialog()">×</div>
+                </div>
+                <div class="mcp-dialog-body">
+                  <div class="mcp-form-item">
+                    <label class="mcp-label">MCP 名称:</label>
+                    <input type="text" class="mcp-input" id="editMcpName" placeholder="请输入名称">
+                  </div>
+                  <div class="mcp-form-item">
+                    <label class="mcp-label">类型:</label>
+                    <select class="mcp-input" id="editMcpTransport">
+                      <option value="sse">SSE（远程）</option>
+                      <option value="stdio">STDIO（本地）</option>
+                    </select>
+                  </div>
+                  <!-- SSE 配置 -->
+                  <div id="editSseFields">
+                    <div class="mcp-form-item">
+                      <label class="mcp-label">SSE服务器:</label>
+                      <input type="text" class="mcp-input" id="editMcpIp" placeholder="请输入SSE地址">
+                    </div>
+                    <div class="mcp-form-item">
+                      <label class="mcp-label">Key:</label>
+                      <input type="text" class="mcp-input" id="editMcpKey" placeholder="（可留空）请输入Key">
+                    </div>
+                  </div>
+                  <!-- STDIO 配置 -->
+                  <div id="editStdioFields" style="display:none;">
+                    <div class="mcp-form-item">
+                      <label class="mcp-label">命令:</label>
+                      <input type="text" class="mcp-input" id="editMcpCommand" placeholder="例如: python">
+                    </div>
+                    <div class="mcp-form-item">
+                      <label class="mcp-label">参数:</label>
+                      <input type="text" class="mcp-input" id="editMcpArgs" placeholder='例如: server.py'>
+                    </div>
+                    <div class="mcp-form-item">
+                      <label class="mcp-label">工作目录:</label>
+                      <input type="text" class="mcp-input" id="editMcpCwd" placeholder="可留空，默认当前目录">
+                    </div>
+                    <div class="mcp-form-item">
+                      <label class="mcp-label">环境变量(JSON):</label>
+                      <input type="text" class="mcp-input" id="editMcpEnv" placeholder='例如: {"MODE":"local"}'>
+                    </div>
+                  </div>
+                  <div class="mcp-form-item">
+                    <label class="mcp-label">保存后重连:</label>
+                    <input type="checkbox" id="editAutoReconnect" checked>
+                  </div>
+                </div>
+                <div class="mcp-dialog-footer">
+                  <button class="add-server-btn" onclick="saveEdit(true)">保存</button>
+                </div>
+              </div>
+            </div>
+
             
 
           </div>
@@ -537,6 +600,150 @@
       
       function hideAddDialog() {
         document.getElementById('addMcpDialog').style.display = 'none';
+      }
+
+      // 管理弹窗逻辑
+      let currentEditServerId = null;
+      function showEditDialog(serverId) {
+        currentEditServerId = serverId;
+        const dialog = document.getElementById('editMcpDialog');
+        if (!dialog) return;
+
+        const card = document.querySelector(`.mcp-card[data-server-id="${serverId}"]`);
+        if (!card) return;
+
+        // 读取现有数据
+        const nameEl = card.querySelector('.mcp-title');
+        const name = nameEl ? nameEl.textContent.trim() : '';
+        const transport = card.getAttribute('data-transport') || 'sse';
+        const ipEl = card.querySelector('.mcp-info .mcp-value');
+        const ip = ipEl ? (ipEl.getAttribute('data-full-ip') || ipEl.textContent.trim()) : '';
+        const key = card.getAttribute('data-key') || '';
+        const command = card.getAttribute('data-command') || '';
+        const args = card.getAttribute('data-args') || '';
+        const cwd = card.getAttribute('data-cwd') || '';
+        const env = card.getAttribute('data-env') || '';
+
+        // 填充表单
+        document.getElementById('editMcpName').value = name;
+        document.getElementById('editMcpTransport').value = transport;
+        document.getElementById('editMcpIp').value = ip;
+        document.getElementById('editMcpKey').value = key;
+        document.getElementById('editMcpCommand').value = command;
+        document.getElementById('editMcpArgs').value = args;
+        document.getElementById('editMcpCwd').value = cwd;
+        document.getElementById('editMcpEnv').value = env && env !== 'null' ? env : '';
+
+        // 切换显示
+        const editTransportSel = document.getElementById('editMcpTransport');
+        const editSseFields = document.getElementById('editSseFields');
+        const editStdioFields = document.getElementById('editStdioFields');
+        if (transport === 'stdio') {
+          editSseFields.style.display = 'none';
+          editStdioFields.style.display = 'block';
+        } else {
+          editSseFields.style.display = 'block';
+          editStdioFields.style.display = 'none';
+        }
+
+        dialog.style.display = 'flex';
+      }
+
+      function hideEditDialog() {
+        const dialog = document.getElementById('editMcpDialog');
+        if (dialog) dialog.style.display = 'none';
+        currentEditServerId = null;
+      }
+
+      function saveEdit() {
+        if (!currentEditServerId) return;
+        const serverId = currentEditServerId;
+        const name = document.getElementById('editMcpName').value.trim();
+        const transport = document.getElementById('editMcpTransport').value;
+        const ip = document.getElementById('editMcpIp').value.trim();
+        const key = document.getElementById('editMcpKey').value.trim();
+        const command = document.getElementById('editMcpCommand').value.trim();
+        const args = document.getElementById('editMcpArgs').value.trim();
+        const cwd = document.getElementById('editMcpCwd').value.trim();
+        const envText = document.getElementById('editMcpEnv').value.trim();
+        const autoReconnect = document.getElementById('editAutoReconnect').checked;
+
+        let payload = { name, transport, auto_reconnect: autoReconnect };
+        if (transport === 'sse') {
+          payload.ip = ip;
+          payload.key = key;
+        } else {
+          payload.command = command;
+          payload.args = args; // 后端负责拆分
+          payload.cwd = cwd;
+          if (envText) {
+            payload.env = envText; // 允许字符串，后端解析
+          } else {
+            payload.env = {};
+          }
+        }
+
+        fetch(`/api/mcp/servers/${serverId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        })
+        .then(resp => resp.json())
+        .then(data => {
+          if (!data.success) throw new Error(data.message || '更新失败');
+
+          // 更新卡片显示
+          const card = document.querySelector(`.mcp-card[data-server-id="${serverId}"]`);
+          if (card) {
+            // 标题
+            const titleEl = card.querySelector('.mcp-title');
+            if (titleEl) titleEl.textContent = name;
+
+            // 传输类型与属性
+            card.setAttribute('data-transport', transport);
+            if (transport === 'sse') {
+              const ipEl = card.querySelector('.mcp-info .mcp-value');
+              if (ipEl) {
+                ipEl.textContent = truncateText(ip);
+                ipEl.setAttribute('data-full-ip', ip);
+              }
+              card.setAttribute('data-key', key);
+              // 清空本地命令属性
+              card.setAttribute('data-command', '');
+              card.setAttribute('data-args', '');
+              card.setAttribute('data-cwd', '');
+              card.setAttribute('data-env', '');
+            } else {
+              card.setAttribute('data-command', command);
+              card.setAttribute('data-args', args);
+              card.setAttribute('data-cwd', cwd);
+              card.setAttribute('data-env', envText || '');
+            }
+
+            // 如果返回连接状态，更新状态显示
+            if (data.server && data.server.status) {
+              const statusDiv = card.querySelector('.status-online, .status-offline');
+              if (statusDiv) {
+                if (data.server.status === 'online') {
+                  statusDiv.className = 'status-online';
+                  statusDiv.innerHTML = '<div class="status-dot online-dot"></div>在线';
+                } else {
+                  statusDiv.className = 'status-offline';
+                  statusDiv.innerHTML = '<div class="status-dot offline-dot"></div>离线';
+                }
+              }
+              const latencyValue = card.querySelector('.mcp-info:nth-child(3) .mcp-value');
+              const connectionTimeValue = card.querySelector('.mcp-info:nth-child(4) .mcp-value');
+              if (latencyValue && data.server.latency) latencyValue.textContent = data.server.latency;
+              if (connectionTimeValue && data.server.connection_time) connectionTimeValue.textContent = data.server.connection_time;
+            }
+          }
+
+          hideEditDialog();
+        })
+        .catch(err => {
+          alert('保存失败: ' + err.message);
+        });
       }
 
       // 添加MCP服务器函数
@@ -644,6 +851,22 @@
             } else {
               sseFields.style.display = 'block';
               stdioFields.style.display = 'none';
+            }
+          });
+        }
+
+        // 编辑弹窗切换字段显示
+        const editTransportSel = document.getElementById('editMcpTransport');
+        const editSseFields = document.getElementById('editSseFields');
+        const editStdioFields = document.getElementById('editStdioFields');
+        if (editTransportSel) {
+          editTransportSel.addEventListener('change', function() {
+            if (this.value === 'stdio') {
+              editSseFields.style.display = 'none';
+              editStdioFields.style.display = 'block';
+            } else {
+              editSseFields.style.display = 'block';
+              editStdioFields.style.display = 'none';
             }
           });
         }
