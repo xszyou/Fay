@@ -198,6 +198,32 @@ class LogseqGraph:
                 pages.add(name)
         return {"success": True, "pages": sorted(pages)}
 
+    def read_page(self, page_name: str) -> Dict[str, Any]:
+        """读取指定页面的完整内容"""
+        self.ensure_dirs()
+        path = self.page_path(page_name)
+        if not os.path.exists(path):
+            return {
+                "success": False,
+                "message": f"页面不存在: {page_name}",
+                "path": path
+            }
+
+        try:
+            content = self._read_text(path)
+            return {
+                "success": True,
+                "page": page_name,
+                "path": path,
+                "content": content,
+                "lines": len(content.splitlines())
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "message": f"读取失败: {str(e)}",
+                "path": path
+            }
 
     def _ensure_root(self) -> str:
         if not self.root:
@@ -345,6 +371,18 @@ async def list_tools() -> List[Tool]:
             }
         ),
         Tool(
+            name="read_page",
+            description="读取指定页面的完整内容",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "page": {"type": "string", "description": "页面名（不含扩展名），例如：Fay"},
+                    "graph_dir": {"type": "string", "description": "可选，覆盖 LOGSEQ_GRAPH_DIR"}
+                },
+                "required": ["page"]
+            }
+        ),
+        Tool(
             name="append_todo_to_page",
             description="在指定 page 末尾追加一个 TODO 列表项",
             inputSchema={
@@ -447,6 +485,10 @@ async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[TextCon
 
         elif name == "get_pages_by_tag":
             res = g.get_pages_by_tag(arguments["tag"])
+            return [TextContent(type="text", text=json.dumps(res, ensure_ascii=False))]
+
+        elif name == "read_page":
+            res = g.read_page(arguments["page"])
             return [TextContent(type="text", text=json.dumps(res, ensure_ascii=False))]
 
         elif name == "append_todo_to_page":

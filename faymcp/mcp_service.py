@@ -561,6 +561,118 @@ def connect_server(server_id):
                 }), 500
     return jsonify({"error": "服务器未找到"}), 404
 
+# API路由 - 更新MCP服务器配置
+@app.route('/api/mcp/servers/<int:server_id>', methods=['PUT'])
+def update_mcp_server(server_id):
+    """更新MCP服务器配置"""
+    global mcp_servers, mcp_clients
+    data = request.json
+    auto_reconnect = data.get('auto_reconnect', False)
+
+    # 查找服务器
+    server = None
+    server_index = None
+    for i, s in enumerate(mcp_servers):
+        if s['id'] == server_id:
+            server = s
+            server_index = i
+            break
+
+    if not server:
+        return jsonify({"success": False, "message": "服务器未找到"}), 404
+
+    # 更新基本信息
+    server['name'] = data.get('name', server['name'])
+    transport = data.get('transport', server.get('transport', 'sse'))
+    server['transport'] = transport
+
+    # 根据传输类型更新配置
+    if transport == 'stdio':
+        server['command'] = data.get('command', '')
+        args_input = data.get('args', [])
+        # 如果args是字符串，拆分为列表
+        if isinstance(args_input, str):
+            # 简单按空格拆分，支持引号
+            import shlex
+            try:
+                server['args'] = shlex.split(args_input)
+            except:
+                # 如果shlex失败，简单按空格拆分
+                server['args'] = args_input.split() if args_input else []
+        else:
+            server['args'] = args_input
+
+        server['cwd'] = data.get('cwd', '')
+
+        # 处理环境变量
+        env_input = data.get('env', {})
+        if isinstance(env_input, str):
+            try:
+                server['env'] = json.loads(env_input)
+            except:
+                util.log(1, f"环境变量JSON解析失败: {env_input}")
+                server['env'] = {}
+        else:
+            server['env'] = env_input
+
+        # 清空SSE相关字段
+        server['ip'] = ''
+        server['key'] = ''
+    else:
+        # SSE模式
+        server['ip'] = data.get('ip', '')
+        server['key'] = data.get('key', '')
+        # 清空本地命令字段
+        server['command'] = ''
+        server['args'] = []
+        server['cwd'] = ''
+        server['env'] = {}
+
+    # 保存配置
+    save_mcp_servers(mcp_servers)
+
+    # 如果需要自动重连
+    if auto_reconnect:
+        # 先断开
+        if server_id in mcp_clients:
+            try:
+                del mcp_clients[server_id]
+                tool_registry.mark_all_unavailable(server_id)
+            except Exception as e:
+                util.log(1, f"断开连接失败: {e}")
+
+        # 重新连接
+        try:
+            success, updated_server, tools = connect_to_real_mcp(server)
+            if success:
+                # 更新服务器信息
+                mcp_servers[server_index] = updated_server
+                save_mcp_servers(mcp_servers)
+                return jsonify({
+                    "success": True,
+                    "message": "配置已更新并重新连接",
+                    "server": updated_server
+                })
+            else:
+                return jsonify({
+                    "success": True,
+                    "message": "配置已更新，但重新连接失败",
+                    "server": server
+                })
+        except Exception as e:
+            util.log(1, f"重新连接失败: {e}")
+            return jsonify({
+                "success": True,
+                "message": f"配置已更新，但重新连接失败: {str(e)}",
+                "server": server
+            })
+
+    return jsonify({
+        "success": True,
+        "message": "配置已更新",
+        "server": server
+    })
+
 # API路由 - 删除MCP服务器
 @app.route('/api/mcp/servers/<int:server_id>', methods=['DELETE'])
 def delete_server(server_id):
