@@ -1,9 +1,6 @@
-##  语音服务介绍
+1、安装ffmpeg
 
-该服务以modelscope funasr语音识别为基础
-
-
-## Install
+2、安装以下包
 pip install torch
 pip install modelscope
 pip install testresources
@@ -11,11 +8,11 @@ pip install websockets
 pip install torchaudio
 pip install FunASR
 
-## Start server
 
-2、python -u ASR_server.py --host "0.0.0.0" --port 10197 --ngpu 0 
+3、启动asr服务
+python -u ASR_server.py --host "0.0.0.0" --port 10197 --ngpu 0 
 
-## Fay connect
+4、Fay connect
 更改fay/system.conf配置项，并重新启动fay.
 
 https://www.bilibili.com/video/BV1qs4y1g74e/?share_source=copy_web&vd_source=64cd9062f5046acba398177b62bea9ad
