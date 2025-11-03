@@ -397,7 +397,7 @@ class FeiFei:
             if audio_url is not None:#透传音频下载
                 file_name = 'sample-' + str(int(time.time() * 1000)) + audio_url[-4:]
                 result = self.download_wav(audio_url, './samples/', file_name)
-            elif config_util.config["interact"]["playSound"] or wsa_server.get_instance().is_connected(interact.data.get("user")) or self.__is_send_remote_device_audio(interact):#tts
+            elif config_util.config["interact"]["playSound"] or wsa_server.get_instance().get_client_output(interact.data.get("user")) or self.__is_send_remote_device_audio(interact):#tts
                 if text != None and text.replace("*", "").strip() != "":
                     # 检查是否需要停止TTS处理（按会话）
                     if stream_manager.new_instance().should_stop_generation(
@@ -593,7 +593,7 @@ class FeiFei:
                 MyThread(target=self.__send_remote_device_audio, args=[file_url, interact]).start()       
 
             #发送音频给数字人接口
-            if file_url is not None and wsa_server.get_instance().is_connected(interact.data.get("user")):
+            if file_url is not None and wsa_server.get_instance().get_client_output(interact.data.get("user")):
                 content = {'Topic': 'human', 'Data': {'Key': 'audio', 'Value': os.path.abspath(file_url), 'HttpValue': f'{cfg.fay_url}/audio/' + os.path.basename(file_url),  'Text': text, 'Time': audio_length, 'Type': interact.interleaver, 'IsFirst': 1 if interact.data.get("isfirst", False) else 0,  'IsEnd': 1 if interact.data.get("isend", False) else 0, 'CONV_ID' : self.user_conv_map[interact.data.get("user", "User")]["conversation_id"], 'CONV_MSG_NO' : self.user_conv_map[interact.data.get("user", "User")]["conversation_msg_no"]  }, 'Username' : interact.data.get('user'), 'robot': f'{cfg.fay_url}/robot/Speaking.jpg'}
                 #计算lips
                 if platform.system() == "Windows":

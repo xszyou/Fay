@@ -37,15 +37,15 @@ class MyServer:
                     output_setting = data.get("Output")
                 except json.JSONDecodeError:
                     pass  # Ignore invalid JSON messages
-                if username or output_setting:
+                if username is not None or output_setting is not None:
                     remote_address = websocket.remote_address
                     unique_id = f"{remote_address[0]}:{remote_address[1]}"
                     async with self.lock:
                         for i in range(len(self.__clients)):
                             if self.__clients[i]["id"] == unique_id:
-                                if username:
+                                if username is not None:
                                     self.__clients[i]["username"] = username
-                                if output_setting:
+                                if output_setting is not None:
                                     self.__clients[i]["output"] = output_setting   
                 await self.__consumer(message)
         except websockets.exceptions.ConnectionClosedError as e:
@@ -58,9 +58,20 @@ class MyServer:
         if not clients_with_username:
             return False
         for client in clients_with_username:
-            output = client.get("output", 1)
-            if output != 0 and output != '0':
-                return True 
+            # 获取output设置，支持布尔值、字符串布尔值、数字等多种格式
+            output = client.get("output", True)  # 默认为True，表示需要音频
+
+            # 处理不同类型的输入
+            if isinstance(output, bool):
+                if output:  # 如果是True
+                    return True
+            elif isinstance(output, str):
+                if output.lower() == 'true':  # 字符串"true"
+                    return True
+            elif isinstance(output, (int, float)):
+                if output != 0 and output != '0':  # 0以外的数字
+                    return True
+
         return False
 
     # 发送处理        
