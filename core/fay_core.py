@@ -346,9 +346,9 @@ class FeiFei:
                 user_for_stop = interact.data.get("user", "User")
                 conv_id_for_stop = interact.data.get("conversation_id")
                 if is_end or not stream_manager.new_instance().should_stop_generation(user_for_stop, conversation_id=conv_id_for_stop):
-                    self.__process_text_output(text, interact.data.get('user'), uid, content_id, type)
+                    self.__process_text_output(text, interact.data.get('user'), uid, content_id, type, is_first, is_end)
             except Exception:
-                self.__process_text_output(text, interact.data.get('user'), uid, content_id, type)
+                self.__process_text_output(text, interact.data.get('user'), uid, content_id, type, is_first, is_end)
             
             # 处理think标签
             # 第一步：处理结束标记</think>
@@ -698,11 +698,13 @@ class FeiFei:
                 "Username": username
             })
 
-    def __send_digital_human_message(self, text, username):
+    def __send_digital_human_message(self, text, username, is_first=False, is_end=False):
         """
         发送消息到数字人（语音应该在say方法驱动数字人输出）
         :param text: 消息文本
         :param username: 用户名
+        :param is_first: 是否是第一段文本
+        :param is_end: 是否是最后一段文本
         """
         full_text = self.__remove_emojis(text.replace("*", ""))
         if wsa_server.get_instance().is_connected(username):
@@ -710,13 +712,15 @@ class FeiFei:
                 'Topic': 'human',
                 'Data': {
                     'Key': 'text',
-                    'Value': full_text
+                    'Value': full_text,
+                    'IsFirst': 1 if is_first else 0,
+                    'IsEnd': 1 if is_end else 0
                 },
                 'Username': username
             }
             wsa_server.get_instance().add_cmd(content)
 
-    def __process_text_output(self, text, username, uid, content_id, type):
+    def __process_text_output(self, text, username, uid, content_id, type, is_first=False, is_end=False):
         """
         完整文本输出到各个终端
         :param text: 主要回复文本
@@ -724,6 +728,8 @@ class FeiFei:
         :param username: 用户名
         :param uid: 用户ID
         :param type: 消息类型
+        :param is_first: 是否是第一段文本
+        :param is_end: 是否是最后一段文本
         """
         if text:
             text = text.strip()
@@ -733,7 +739,7 @@ class FeiFei:
         
         # 发送主回复到面板和数字人
         self.__send_panel_message(text, username, uid, content_id, type)
-        self.__send_digital_human_message(text, username)
+        self.__send_digital_human_message(text, username, is_first, is_end)
         
         # 打印日志
         util.printInfo(1, username, '({}) {}'.format("llm", text))
