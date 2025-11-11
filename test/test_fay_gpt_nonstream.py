@@ -2,15 +2,15 @@ import requests
 import json
 
 def test_gpt_nonstream(prompt):
-    url = 'http://127.0.0.1:5000/v1/chat/completions'  # 替换为您的接口地址
+    url = 'http://127.0.0.1:8000/v1/chat/completions'  # 替换为您的接口地址
     headers = {
         'Content-Type': 'application/json',
         'Authorization': f'Bearer YOUR_API_KEY',  # 如果您的接口需要身份验证
     }
     data = {
-        'model': 'fay',
+        'model': 'moonshotai/Kimi-K2-Instruct-0905',
         'messages': [
-            {'role': '小敏', 'content': prompt}
+            {'role': 'system', 'content': prompt}
         ],
         'stream': False  # 禁用流式传输，使用非流式响应
     }

@@ -577,7 +577,6 @@ class ScheduleManager:
     
     def send_to_fay(self, message: str, uid: int = 0):
         """发送消息给Fay - 使用v1/chat/completions接口"""
-        print("***********************************************************************")
         logger.info(f"[DEBUG] send_to_fay 被调用，消息: {message}, uid: {uid}")
         
         # 防止消息重复发送

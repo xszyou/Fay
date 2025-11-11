@@ -178,6 +178,7 @@ new Vue({
             automatic_player_url: "",
             host_url: window.location.protocol + '//' + window.location.hostname + ':' + window.location.port,
             memory_isolate_by_user: false,
+            use_bionic_memory: false,
         };
     },
     created() {
@@ -254,6 +255,7 @@ new Vue({
             }
             if (config.memory) {
                 this.memory_isolate_by_user = config.memory.isolate_by_user || false;
+                this.use_bionic_memory = config.memory.use_bionic_memory || false;
             }
         },
         saveConfig() {
@@ -299,7 +301,8 @@ new Vue({
                         "maxInteractTime": this.interact_maxInteractTime
                     },
                     "memory": {
-                        "isolate_by_user": this.memory_isolate_by_user
+                        "isolate_by_user": this.memory_isolate_by_user,
+                        "use_bionic_memory": this.use_bionic_memory
                     },
                     "items": []
                 }
@@ -378,6 +381,16 @@ new Vue({
             });
         },
         clonePersonality() {
+            // 检查是否启用了仿生记忆
+            if (this.use_bionic_memory) {
+                this.$notify({
+                    title: '提示',
+                    message: '仿生记忆模式下不支持人格克隆功能，请在设置中关闭仿生记忆后重试',
+                    type: 'warning'
+                });
+                return;
+            }
+
             if (this.liveState === 1) {
                 this.$prompt('请输入克隆要求', '克隆人格', {
                     confirmButtonText: '确定',
@@ -480,6 +493,26 @@ new Vue({
             this.mcpCheckTimer = setInterval(() => {
                 this.checkMcpStatus();
             }, 30000);
+        },
+
+        // 仿生记忆开关变化事件处理
+        onBionicMemoryChange(value) {
+            if (value) {
+                this.$confirm('开启仿生记忆后将使用不同的记忆系统，人格克隆功能和认知隔离功能将不可用。确认开启吗?', '提示', {
+                    confirmButtonText: '确定',
+                    cancelButtonText: '取消',
+                    type: 'warning'
+                }).then(() => {
+                    // 用户确认，保存配置
+                    this.saveConfig();
+                }).catch(() => {
+                    // 用户取消，恢复开关状态
+                    this.use_bionic_memory = false;
+                });
+            } else {
+                // 关闭仿生记忆，直接保存配置
+                this.saveConfig();
+            }
         },
     },
 });

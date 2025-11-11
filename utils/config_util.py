@@ -53,6 +53,12 @@ start_mode = None
 fay_url = None
 system_conf_path = None
 config_json_path = None
+use_bionic_memory = None
+
+# Embedding API 配置全局变量
+embedding_api_model = None
+embedding_api_base_url = None
+embedding_api_key = None
 
 # config server中心配置，system.conf与config.json存在时不会使用配置中心
 CONFIG_SERVER = {
@@ -176,6 +182,10 @@ def load_config():
     global volcano_tts_voice_type
     global start_mode
     global fay_url
+    global use_bionic_memory
+    global embedding_api_model
+    global embedding_api_base_url
+    global embedding_api_key
 
     global CONFIG_SERVER
     global system_conf_path
@@ -239,6 +249,11 @@ def load_config():
     volcano_tts_cluster = system_config.get('key', 'volcano_tts_cluster', fallback=None)
     volcano_tts_voice_type = system_config.get('key', 'volcano_tts_voice_type', fallback=None)
 
+    # 读取 Embedding API 配置（复用 LLM 的 url 和 key）
+    embedding_api_model = system_config.get('key', 'embedding_api_model', fallback='BAAI/bge-large-zh-v1.5')
+    embedding_api_base_url = gpt_base_url  # 复用 LLM base_url
+    embedding_api_key = key_gpt_api_key  # 复用 LLM api_key
+
     start_mode = system_config.get('key', 'start_mode', fallback=None)
     fay_url = system_config.get('key', 'fay_url', fallback=None)
     # 如果fay_url为空或None，则动态获取本机IP地址
@@ -254,7 +269,10 @@ def load_config():
     # 读取用户配置
     with codecs.open(config_json_path, encoding='utf-8') as f:
         config = json.load(f)
-    
+
+    # 读取仿生记忆配置
+    use_bionic_memory = config.get('memory', {}).get('use_bionic_memory', False)
+
     # 构建配置字典
     config_dict = {
         'system_config': system_config,
@@ -287,6 +305,13 @@ def load_config():
 
         'start_mode': start_mode,
         'fay_url': fay_url,
+        'use_bionic_memory': use_bionic_memory,
+
+        # Embedding API 配置
+        'embedding_api_model': embedding_api_model,
+        'embedding_api_base_url': embedding_api_base_url,
+        'embedding_api_key': embedding_api_key,
+
         'source': 'local'  # 标记配置来源
     }
     

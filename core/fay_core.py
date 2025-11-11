@@ -24,7 +24,6 @@ from core import qa_service
 from utils import config_util as cfg
 from core import content_db
 from ai_module import nlp_cemotion
-from llm import nlp_cognitive_stream
 from core import stream_manager
 
 from core import member_db
@@ -191,7 +190,14 @@ class FeiFei:
                         if wsa_server.get_instance().is_connected(username):
                             content = {'Topic': 'human', 'Data': {'Key': 'log', 'Value': "思考中..."}, 'Username' : username, 'robot': f'{cfg.fay_url}/robot/Thinking.jpg'}
                             wsa_server.get_instance().add_cmd(content)
-                        text = nlp_cognitive_stream.question(interact.data["msg"], username, interact.data.get("observation", None))
+
+                        # 根据配置动态调用不同的NLP模块
+                        if cfg.config["memory"].get("use_bionic_memory", False):
+                            from llm import nlp_bionicmemory_stream
+                            text = nlp_bionicmemory_stream.question(interact.data["msg"], username, interact.data.get("observation", None))
+                        else:
+                            from llm import nlp_cognitive_stream
+                            text = nlp_cognitive_stream.question(interact.data["msg"], username, interact.data.get("observation", None))
 
                     else: 
                         text = answer

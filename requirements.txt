@@ -31,3 +31,5 @@ schedule
 mcp
 python-docx
 python-pptx
+chromadb
+sentence_transformers

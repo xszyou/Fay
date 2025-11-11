@@ -116,8 +116,12 @@
               <li style="display: flex;"> <span class="font_name" style="line-height: 36px;">&nbsp;敏&nbsp;感&nbsp;度&nbsp;:</span>
                 <el-slider  style="width: 230px;" v-model="interact_perception_follow" :disabled="!configEditable"></el-slider></li>           
               <li> <span class="font_name">认知隔离:</span>
-                <el-switch v-model="memory_isolate_by_user" active-color="#13ce66" inactive-color="#ff4949" @change=saveConfig()></el-switch>
+                <el-switch v-model="memory_isolate_by_user" :disabled="use_bionic_memory" active-color="#13ce66" inactive-color="#ff4949" @change=saveConfig()></el-switch>
                 <span style="font-size: 12px; color: #666; margin-left: 10px;">开启后每个用户将拥有独立记忆</span>
+              </li>
+              <li> <span class="font_name">仿生记忆:</span>
+                <el-switch v-model="use_bionic_memory" active-color="#13ce66" inactive-color="#ff4949" @change="onBionicMemoryChange"></el-switch>
+                <span style="font-size: 12px; color: #666; margin-left: 10px;">开启后使用仿生记忆系统（人格克隆不可用）</span>
               </li>
             </ul>
           </div>
@@ -157,7 +161,7 @@
             <a href="javascript:void(0)" @click="clearMemory" style="color: #007aff; font-size: 14px; text-decoration: none;">清除记忆</a>
           </div>
           <div style="display: inline-block; position: absolute; left: 70%; transform: translateX(-50%);">
-            <a href="javascript:void(0)" @click="clonePersonality" style="color: #007aff; font-size: 14px; text-decoration: none;">克隆（赋予）人格</a>
+            <a href="javascript:void(0)" @click="clonePersonality" :style="{color: use_bionic_memory ? '#ccc' : '#007aff', fontSize: '14px', textDecoration: 'none', cursor: use_bionic_memory ? 'not-allowed' : 'pointer'}">克隆（赋予）人格</a>
           </div>
         </div>
         <div style="height: 60px;"></div> <!-- 添加空间以避免内容被覆盖 -->

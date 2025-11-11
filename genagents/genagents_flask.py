@@ -60,56 +60,86 @@ def shutdown_server():
 @app.route('/api/clear-memory', methods=['POST'])
 def api_clear_memory():
     try:
-        # 获取memory目录路径
-        memory_dir = os.path.join(os.getcwd(), "memory")
-        
-        # 检查目录是否存在
-        if not os.path.exists(memory_dir):
-            return jsonify({'success': False, 'message': '记忆目录不存在'}), 400
-        
-        # 清空memory目录下的所有文件（保留目录结构）
-        for root, dirs, files in os.walk(memory_dir):
-            for file in files:
-                file_path = os.path.join(root, file)
-                try:
-                    if os.path.isfile(file_path):
-                        os.remove(file_path)
-                        util.log(1, f"已删除文件: {file_path}")
-                except Exception as e:
-                    util.log(1, f"删除文件时出错: {file_path}, 错误: {str(e)}")
-        
-        # 删除memory_dir下的所有子目录
-        import shutil
-        for item in os.listdir(memory_dir):
-            item_path = os.path.join(memory_dir, item)
-            if os.path.isdir(item_path):
-                try:
-                    shutil.rmtree(item_path)
-                    util.log(1, f"已删除目录: {item_path}")
-                except Exception as e:
-                    util.log(1, f"删除目录时出错: {item_path}, 错误: {str(e)}")
-        
-        # 创建一个标记文件，表示记忆已被清除，防止退出时重新保存
-        with open(os.path.join(memory_dir, ".memory_cleared"), "w") as f:
-            f.write("Memory has been cleared. Do not save on exit.")
-        
-        # 设置记忆清除标记
+        # 检查是否使用仿生记忆
+        import sys
+        sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+        from utils import config_util
+        config_util.load_config()
+
+        success_messages = []
+        error_messages = []
+
+        # 1. 清除仿生记忆
         try:
-            # 导入并修改nlp_cognitive_stream模块中的保存函数
-            from llm.nlp_cognitive_stream import set_memory_cleared_flag, clear_agent_memory
-            
-            # 设置记忆清除标记
-            set_memory_cleared_flag(True)
-            
-            # 清除内存中已加载的记忆
-            clear_agent_memory()
-            
-            util.log(1, "已同时清除文件存储和内存中的记忆")
+            from llm.nlp_bionicmemory_stream import clear_agent_memory as clear_bionic
+            if clear_bionic():
+                success_messages.append("仿生记忆")
+                util.log(1, "仿生记忆已清除")
+            else:
+                error_messages.append("清除仿生记忆失败")
         except Exception as e:
-            util.log(1, f"清除内存中记忆时出错: {str(e)}")
-        
-        util.log(1, "记忆已清除，需要重启应用才能生效")
-        return jsonify({'success': True, 'message': '记忆已清除，请重启应用使更改生效'}), 200
+            error_messages.append(f"清除仿生记忆时出错: {str(e)}")
+            util.log(1, f"清除仿生记忆时出错: {str(e)}")
+
+        # 2. 清除认知记忆（文件系统）
+        try:
+            memory_dir = os.path.join(os.getcwd(), "memory")
+
+            if os.path.exists(memory_dir):
+                # 清空memory目录下的所有文件
+                for root, dirs, files in os.walk(memory_dir):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        try:
+                            if os.path.isfile(file_path):
+                                os.remove(file_path)
+                                util.log(1, f"已删除文件: {file_path}")
+                        except Exception as e:
+                            util.log(1, f"删除文件时出错: {file_path}, 错误: {str(e)}")
+
+                # 删除memory_dir下的所有子目录
+                import shutil
+                for item in os.listdir(memory_dir):
+                    item_path = os.path.join(memory_dir, item)
+                    if os.path.isdir(item_path):
+                        try:
+                            shutil.rmtree(item_path)
+                            util.log(1, f"已删除目录: {item_path}")
+                        except Exception as e:
+                            util.log(1, f"删除目录时出错: {item_path}, 错误: {str(e)}")
+
+                # 创建标记文件
+                with open(os.path.join(memory_dir, ".memory_cleared"), "w") as f:
+                    f.write("Memory has been cleared. Do not save on exit.")
+
+                # 清除内存中的认知记忆
+                try:
+                    from llm.nlp_cognitive_stream import set_memory_cleared_flag, clear_agent_memory as clear_cognitive
+                    set_memory_cleared_flag(True)
+                    clear_cognitive()
+                    util.log(1, "已同时清除文件存储和内存中的认知记忆")
+                except Exception as e:
+                    util.log(1, f"清除内存中认知记忆时出错: {str(e)}")
+
+                success_messages.append("认知记忆")
+                util.log(1, "认知记忆已清除")
+            else:
+                error_messages.append("记忆目录不存在")
+        except Exception as e:
+            error_messages.append(f"清除认知记忆时出错: {str(e)}")
+            util.log(1, f"清除认知记忆时出错: {str(e)}")
+
+        # 返回结果
+        if success_messages:
+            message = "已清除：" + "、".join(success_messages)
+            if error_messages:
+                message += "；部分失败：" + "、".join(error_messages)
+            message += "，请重启应用使更改生效"
+            return jsonify({'success': True, 'message': message}), 200
+        else:
+            message = "清除失败：" + "、".join(error_messages)
+            return jsonify({'success': False, 'message': message}), 500
+
     except Exception as e:
         util.log(1, f"清除记忆时出错: {str(e)}")
         return jsonify({'success': False, 'message': f'清除记忆时出错: {str(e)}'}), 500
