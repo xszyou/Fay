@@ -29,7 +29,8 @@
     },
     "items": [],
     "memory": {
-        "isolate_by_user": true
+        "isolate_by_user": true,
+        "use_bionic_memory": false
     },
     "source": {
         "automatic_player_status": false,
