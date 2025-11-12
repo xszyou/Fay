@@ -39,6 +39,8 @@ gpt_api_key=
 gpt_base_url=
 #gpt model engine 如：glm4、deepseek、qwen3-4b等
 gpt_model_engine=
+# Embedding API 配置（复用 LLM 的 url 和 key）
+embedding_api_model=
 #gpt(fastgpt)代理(可为空，填写例子：127.0.0.1:7890)
 proxy_config=
 
