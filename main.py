@@ -17,6 +17,7 @@ from core import content_db
 import fay_booter
 from scheduler.thread_manager import MyThread
 from core.interact import Interact
+from bionicmemory.core.chroma_service import ChromaService
 
 # import sys, io, traceback
 # class StdoutInterceptor(io.TextIOBase):
@@ -128,6 +129,14 @@ def __create_memory():
     if not os.path.exists("./memory"):
         os.mkdir("./memory")
 
+def __check_and_clear_chroma_db():
+    """检查并清除ChromaDB数据库（如果存在清除标记）"""
+    try:
+        if ChromaService.check_and_clear_database_on_startup():
+            util.log(1, "检测到记忆清除标记，已清除ChromaDB数据库")
+    except Exception as e:
+        util.log(1, f"清理ChromaDB时出错: {e}")
+
 def kill_process_by_port(port):
     for conn in psutil.net_connections(kind='inet'):
         if conn.laddr.port == port and conn.pid:
@@ -197,6 +206,7 @@ def console_listener():
 if __name__ == '__main__':
     __clear_samples()
     __create_memory()
+    __check_and_clear_chroma_db()  # 在创建memory目录后立即检查清理
     __clear_logs()
 
     #init_db

@@ -2,7 +2,7 @@ import requests
 import json
 
 def test_gpt(prompt):
-    url = 'http://127.0.0.1:8000/v1/chat/completions'  # 替换为您的接口地址
+    url = 'http://127.0.0.1:5000/v1/chat/completions'  # 替换为您的接口地址
     headers = {
         'Content-Type': 'application/json',
         'Authorization': f'Bearer YOUR_API_KEY',  # 如果您的接口需要身份验证
@@ -46,7 +46,7 @@ def test_gpt(prompt):
                 print(f"\n收到未知格式的数据：{line}")
 
 if __name__ == "__main__":
-    user_input = "7"
+    user_input = "你好"
     print("GPT 的回复:")
     test_gpt(user_input)
     print("\n请求完成")

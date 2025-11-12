@@ -663,18 +663,7 @@ def api_clear_memory():
                         except Exception as e:
                             util.log(1, f"删除文件时出错: {file_path}, 错误: {str(e)}")
 
-                # 删除memory_dir下的所有子目录
-                import shutil
-                for item in os.listdir(memory_dir):
-                    item_path = os.path.join(memory_dir, item)
-                    if os.path.isdir(item_path):
-                        try:
-                            shutil.rmtree(item_path)
-                            util.log(1, f"已删除目录: {item_path}")
-                        except Exception as e:
-                            util.log(1, f"删除目录时出错: {item_path}, 错误: {str(e)}")
-
-                # 创建标记文件
+                # 创建标记文件，延迟到启动时删除chroma_db（避免文件锁定问题）
                 with open(os.path.join(memory_dir, ".memory_cleared"), "w") as f:
                     f.write("Memory has been cleared. Do not save on exit.")
 
@@ -688,9 +677,10 @@ def api_clear_memory():
                     util.log(1, f"清除内存中认知记忆时出错: {str(e)}")
 
                 success_messages.append("认知记忆")
-                util.log(1, "认知记忆已清除")
+                util.log(1, "认知记忆已清除，ChromaDB数据库将在下次启动时清除")
             else:
                 error_messages.append("记忆目录不存在")
+
         except Exception as e:
             error_messages.append(f"清除认知记忆时出错: {str(e)}")
             util.log(1, f"清除认知记忆时出错: {str(e)}")

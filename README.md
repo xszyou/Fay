@@ -34,7 +34,8 @@
 - 基于日程式数字人主动对话
 - 支持后台静默启动
 - 支持deepseek等thinking llm
-- 设计独特的认知模型
+- 自我认知提高
+- 仿生记忆
 - 支持MCP工具管理（sse、studio）
 - 提供配置管理中心
 - 全链路交互互通
@@ -123,3 +124,12 @@ aibote(windows cpu克隆人)：https://qqk9ntwbcit.feishu.cn/wiki/ULaywzVRti0HXW
 **交流群及资料教程**关注公众号 **fay数字人**（**请先star本仓库**）
 
 ![](readme/gzh.jpg)
+
+
+## **致谢**
+
+感谢以下开源项目为 Fay 提供的技术支持：
+
+- [BionicMemory](https://github.com/caoyc/BionicMemory) - 提供仿生记忆能力
+- [OpenAI Codex](https://github.com/openai/codex) - 提供稳定的工具调用能力
+- [FunASR](https://github.com/modelscope/FunASR) - 提供语音识别（ASR）能力

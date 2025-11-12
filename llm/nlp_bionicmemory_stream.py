@@ -48,11 +48,6 @@ from faymcp import tool_registry as mcp_tool_registry
 from bionicmemory.core.chroma_service import ChromaService
 from bionicmemory.core.memory_system import LongShortTermMemorySystem, SourceType
 
-os.environ["LANGCHAIN_TRACING_V2"] = "true"
-os.environ["LANGCHAIN_ENDPOINT"] = "https://api.smith.langchain.com"
-os.environ["LANGCHAIN_API_KEY"] = "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"
-os.environ["LANGCHAIN_PROJECT"] = "fay3.11.1_github"
-
 # 加载配置
 cfg.load_config()
 
@@ -86,6 +81,10 @@ def init_memory_system():
 
     try:
         util.log(1, "正在初始化记忆系统...")
+
+        # 启动时检查并清除数据库（如果存在清除标记）
+        if ChromaService.check_and_clear_database_on_startup():
+            util.log(1, "检测到记忆清除标记，已清除ChromaDB数据库")
 
         # 初始化ChromaDB服务
         chroma_service = ChromaService()
@@ -372,7 +371,7 @@ def _build_planner_messages(state: AgentState) -> List[SystemMessage | HumanMess
 **额外观察**
 {observation or '（无补充）'}
 
-**相关知识**
+**关联知识**
 {knowledge_context or '（无相关知识）'}
 
 **可用工具**
@@ -381,15 +380,14 @@ def _build_planner_messages(state: AgentState) -> List[SystemMessage | HumanMess
 **历史工具执行**
 {history_text}{preview_section}
 
+**对话及工具记录**
+{convo_text}
+
 请返回 JSON，格式如下：
 - 若需要调用工具：
     {{"action": "tool", "tool": "工具名", "args": {{...}}}}
 - 若直接回复：
-    {{"action": "finish_text"}}
-
-对话及工具记录：
-{convo_text}
-        """
+    {{"action": "finish_text"}}"""
     ).strip()
 
     return [
@@ -417,7 +415,7 @@ def _build_final_messages(state: AgentState) -> List[SystemMessage | HumanMessag
 
 {system_prompt}
 
-**相关知识**
+**关联知识**
 {knowledge_context or '（无相关知识）'}
 
 **其他观察**
@@ -427,8 +425,7 @@ def _build_final_messages(state: AgentState) -> List[SystemMessage | HumanMessag
 {history_text}{preview_section}
 
 **对话及工具记录**
-{conversation_block}
-        """
+{conversation_block}"""
     ).strip()
 
     return [

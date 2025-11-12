@@ -22,7 +22,55 @@ class ChromaService:
     """
     ChromaDB向量数据库操作服务
     """
-    
+
+    @staticmethod
+    def check_and_clear_database_on_startup() -> bool:
+        """
+        启动时检查并清除ChromaDB数据库
+        如果存在.memory_cleared标记文件，则删除chroma_db目录
+
+        Returns:
+            bool: 是否执行了清除操作
+        """
+        import shutil
+
+        try:
+            # 标记文件路径
+            marker_file = os.path.abspath("./memory/.memory_cleared")
+
+            # 检查标记文件是否存在
+            if not os.path.exists(marker_file):
+                return False
+
+            logger.info("检测到记忆清除标记文件，准备删除ChromaDB数据库...")
+
+            # ChromaDB数据库路径
+            chroma_db_path = os.path.abspath("./memory/chroma_db")
+
+            # 删除chroma_db目录
+            if os.path.exists(chroma_db_path):
+                try:
+                    shutil.rmtree(chroma_db_path)
+                    logger.info(f"成功删除ChromaDB数据库目录: {chroma_db_path}")
+                except Exception as e:
+                    logger.error(f"删除ChromaDB数据库目录失败: {e}")
+                    # 即使删除失败，也继续尝试删除标记文件
+            else:
+                logger.info(f"ChromaDB数据库目录不存在，跳过删除: {chroma_db_path}")
+
+            # 删除标记文件
+            try:
+                os.remove(marker_file)
+                logger.info(f"成功删除记忆清除标记文件: {marker_file}")
+            except Exception as e:
+                logger.error(f"删除标记文件失败: {e}")
+
+            return True
+
+        except Exception as e:
+            logger.error(f"启动时清除数据库失败: {e}")
+            return False
+
     def __init__(self, 
                  client_type: str = None,
                  path: Optional[str] = None,

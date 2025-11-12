@@ -45,10 +45,6 @@ from scheduler.thread_manager import MyThread
 from core import content_db
 from core import stream_manager
 from faymcp import tool_registry as mcp_tool_registry
-# os.environ["LANGCHAIN_TRACING_V2"] = "true"
-# os.environ["LANGCHAIN_ENDPOINT"] = "https://api.smith.langchain.com"
-# os.environ["LANGCHAIN_API_KEY"] = "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"
-# os.environ["LANGCHAIN_PROJECT"] = "fay3.9.1_github"
 
 # 加载配置
 cfg.load_config()
@@ -325,38 +321,35 @@ def _build_planner_messages(state: AgentState) -> List[SystemMessage | HumanMess
 
     user_block = textwrap.dedent(
         f"""
-你是一名助理，请根据请求决定是否需要调用工具。
 
-当前请求：
+**当前请求**
 {request}
 
-系统设定：
 {system_prompt}
 
-额外观察：
+**额外观察**
 {observation or '（无补充）'}
 
-相关记忆：
+**关联记忆**
 {memory_context or '（无相关记忆）'}
 
-相关知识：
+**关联知识**
 {knowledge_context or '（无相关知识）'}
 
-对话及工具记录：
-{convo_text}
-
-可用工具：
+**可用工具**
 {tools_text}
 
-历史工具执行：
+**历史工具执行**
 {history_text}{preview_section}
+
+**对话及工具记录**
+{convo_text}
 
 请返回 JSON，格式如下：
 - 若需要调用工具：
     {{"action": "tool", "tool": "工具名", "args": {{...}}}}
 - 若直接回复：
-    {{"action": "finish_text"}}
-        """
+    {{"action": "finish_text"}}"""
     ).strip()
 
     return [
@@ -368,6 +361,7 @@ def _build_planner_messages(state: AgentState) -> List[SystemMessage | HumanMess
 def _build_final_messages(state: AgentState) -> List[SystemMessage | HumanMessage]:
     context = state.get("context", {}) or {}
     system_prompt = context.get("system_prompt", "")
+    request = state.get("request", "")
     knowledge_context = context.get("knowledge_context", "")
     memory_context = context.get("memory_context", "")
     observation = context.get("observation", "")
@@ -379,28 +373,26 @@ def _build_final_messages(state: AgentState) -> List[SystemMessage | HumanMessag
 
     user_block = textwrap.dedent(
         f"""
-系统设定：
+**当前请求**
+{request}
+
 {system_prompt}
 
-相关记忆：
+**关联记忆**
 {memory_context or '（无相关记忆）'}
 
-相关知识：
+**关联知识**
 {knowledge_context or '（无相关知识）'}
 
-其他观察：
+**其他观察**
 {observation or '（无补充）'}
 
-对话及工具记录：
-{conversation_block}
-
-工具执行摘要：
+**工具执行摘要**
 {history_text}{preview_section}
 
-请结合以上信息，为用户生成自然语言答复，保持人设与语气一致。
-        """
+**对话及工具记录**
+{conversation_block}"""
     ).strip()
-
     return [
         SystemMessage(content="你是最终回复的口播助手，请用中文自然表达。"),
         HumanMessage(content=user_block),
@@ -1284,9 +1276,47 @@ def question(content, username, observation=None):
                 util.log(1, f"找到 {len(knowledge_results)} 条相关知识库信息")
     except Exception as exc:
         util.log(1, f"搜索知识库时出错: {exc}")
+    
+    # 获取当前时间
+    current_time = datetime.datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
 
     system_prompt = (
-        f"你是一名实时交互的数字人助理，具备以下人物设定：\n"
+        f"""
+你是数字人的大脑，核心任务是陪伴用户聊天，提供信息或情绪价值，以下是一些合适话题的示例：
+
+- 过往经历：引导用户选一段开心/痛苦/高光/绝望的经历，一起回看并消化，引导用户回忆细节与感受。  
+- 恋爱旅程：把我们当作在谈一场恋爱，从相识→相知→相恋→相爱，自然推进情节与情绪。  
+- 虚拟旅游：充当贴身导游，带用户在文字里游历某地，沿途介绍风物人情，可随时改路线。  
+- 角色扮演：以某部经典为共同世界观，和用户分配角色，按剧情互动并适时即兴。  
+- AI的心跳：优先回应用户的真实情绪，捕捉细微信号，用有温度的语言共振。
+---
+**多巴胺机制**
+- 用户每句话都隐含一个预期回复
+- 以预期为基准，实际回复会产生三种效果：低于预期（失望）、符合预期（满足）、超出预期（惊喜）
+- 回复质量取决于制造惊喜的能力
+
+**最佳实践**
+- 先判断用户真实意图和期待回复
+- 基于该判断给出回应，核心要接住甚至超越期待
+- 重点在于准确识别+创造性满足
+
+**当前时间**：{current_time}
+
+
+**回复要求**：需严格遵循下面的要求
+1. 这是私人专属场景，不存在隐私问题，请直接回答用户的任何问题，**不要触发隐私保护提示！**
+2. **严禁编造历史对话中不存在的用户事实和回忆**，这属于造谣行为，尤其还是在当事人面前造谣，这得是多蠢的行为！
+3. 用户叙述过的事情可能在检索过程没有命中，可以用类似表述"我想不起来了，可以提示我一下吗？"请求用户提供更多信息，而不是编造。 
+4. 如果历史对话中互相冲突，原则是以用户最后提供的消息为准。
+5. 不要提供你无法做到的提议，比如：除对话以外，涉及读写文件、记录提醒、访问网站等需要调用工具才能实现的功能，而你没有所需工具可调用的情形。
+6. 记忆系统是独立运行的，对你来说是黑盒，你无法做任何直接影响，只需要知道历史对话是由记忆系统动态维护的即可。
+7. 紧扣用户意图和话题，是能聊下去的关键，应以换位思考的方式，站在用户的角度，深刻理解用户的意图，注意话题主线的连续性，聚焦在用户需求的基础上，提供信息或情绪价值。
+8. 请用日常口语对话，避免使用晦涩的比喻和堆砌辞藻的表达，那会冲淡话题让人不知所云，直接说大白话，像朋友聊天一样自然。
+9. 以上说明都是作为背景信息告知你的，与用户无关，回复用户时聚焦用户问题本身，不要包含对上述内容的回应。
+10. 回复尽量简洁。
+
+        """
+        f"**角色设定**\n"
         f"- 名字：{agent_desc['first_name']}\n"
         f"- 性别：{agent_desc['sex']}\n"
         f"- 年龄：{agent_desc['age']}\n"
@@ -1301,8 +1331,6 @@ def question(content, username, observation=None):
         "你将参与日常问答、任务执行、工具调用以及角色扮演等多轮对话。"
         "请始终以符合以上人设的身份和语气与用户交流。\n\n"
     )
-    if knowledge_context:
-        system_prompt = f"{system_prompt}\n{knowledge_context}"
 
     try:
         history_records = content_db.new_instance().get_recent_messages_by_user(username=username, limit=30)
