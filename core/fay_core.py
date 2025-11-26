@@ -39,6 +39,8 @@ elif cfg.tts_module == 'gptsovits_v3':
     from tts.gptsovits_v3 import Speech    
 elif cfg.tts_module == 'volcano':
     from tts.volcano_tts import Speech
+elif cfg.tts_module == 'zcb':
+    from tts.zcb_tts import Speech
 else:
     from tts.ms_tts_sdk import Speech
 

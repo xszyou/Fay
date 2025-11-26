@@ -51,6 +51,9 @@ volcano_tts_cluster = None
 volcano_tts_voice_type = None
 start_mode = None
 fay_url = None
+zcb_api_token = None
+zcb_model_id = None
+zcb_video_url = None
 system_conf_path = None
 config_json_path = None
 use_bionic_memory = None
@@ -183,6 +186,9 @@ def load_config():
     global start_mode
     global fay_url
     global use_bionic_memory
+    global zcb_api_token
+    global zcb_model_id
+    global zcb_video_url
     global embedding_api_model
     global embedding_api_base_url
     global embedding_api_key
@@ -249,6 +255,11 @@ def load_config():
     volcano_tts_cluster = system_config.get('key', 'volcano_tts_cluster', fallback=None)
     volcano_tts_voice_type = system_config.get('key', 'volcano_tts_voice_type', fallback=None)
 
+    # 读取智创宝数字人配置
+    zcb_api_token = system_config.get('key', 'zcb_api_token', fallback=None)
+    zcb_model_id = system_config.get('key', 'zcb_model_id', fallback=None)
+    zcb_video_url = system_config.get('key', 'zcb_video_url', fallback=None)
+
     # 读取 Embedding API 配置（复用 LLM 的 url 和 key）
     embedding_api_model = system_config.get('key', 'embedding_api_model', fallback='BAAI/bge-large-zh-v1.5')
     embedding_api_base_url = gpt_base_url  # 复用 LLM base_url
@@ -302,6 +313,10 @@ def load_config():
         'volcano_tts_access_token': volcano_tts_access_token,
         'volcano_tts_cluster': volcano_tts_cluster,
         'volcano_tts_voice_type': volcano_tts_voice_type,
+
+        'zcb_api_token': zcb_api_token,
+        'zcb_model_id': zcb_model_id,
+        'zcb_video_url': zcb_video_url,
 
         'start_mode': start_mode,
         'fay_url': fay_url,
