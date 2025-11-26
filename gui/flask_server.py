@@ -296,11 +296,12 @@ def api_get_Msg():
         else:
             data = json.loads(data)
         uid = member_db.new_instance().find_user(data["username"])
+        limit = data.get("limit", 1000)  # 可选的条数限制参数，默认1000
         contentdb = content_db.new_instance()
         if uid == 0:
             return json.dumps({'list': []})
         else:
-            list = contentdb.get_list('all', 'desc', 1000, uid)
+            list = contentdb.get_list('all', 'desc', limit, uid)
         relist = []
         i = len(list) - 1
         while i >= 0:
@@ -586,7 +587,7 @@ def to_stop_talking():
         data = request.get_json()
         username = data.get('username', 'User')
         stream_manager.new_instance().clear_Stream_with_audio(username)
-        
+
         result = "interrupted"  # 简单的结果标识
         return jsonify({
             'status': 'success',
@@ -599,6 +600,40 @@ def to_stop_talking():
         return jsonify({
             'status': 'error',
             'msg': str(e)
+        }), 500
+
+#麦克风开关
+@__app.route('/api/toggle-microphone', methods=['POST'])
+def api_toggle_microphone():
+    try:
+        data = request.get_json()
+        if data and 'enabled' in data:
+            enabled = data['enabled']
+        else:
+            # 如果未提供enabled参数，则切换当前状态
+            config_util.load_config()
+            enabled = not config_util.config.get('source', {}).get('record', {}).get('enabled', True)
+
+        # 加载并更新配置
+        config_util.load_config()
+        if 'source' not in config_util.config:
+            config_util.config['source'] = {}
+        if 'record' not in config_util.config['source']:
+            config_util.config['source']['record'] = {}
+
+        config_util.config['source']['record']['enabled'] = enabled
+        config_util.save_config(config_util.config)
+        config_util.load_config()
+
+        return jsonify({
+            'status': 'success',
+            'enabled': enabled,
+            'msg': f'麦克风已{"开启" if enabled else "关闭"}'
+        }), 200
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'msg': f'麦克风开关操作失败: {str(e)}'
         }), 500
 
 

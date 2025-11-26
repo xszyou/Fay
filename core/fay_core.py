@@ -391,7 +391,7 @@ class FeiFei:
                         content = {'Topic': 'human', 'Data': {'Key': 'log', 'Value': "思考中..."}, 'Username' : interact.data.get('user'), 'robot': f'{cfg.fay_url}/robot/Thinking.jpg'}
                         wsa_server.get_instance().add_cmd(content)
 
-            #”请稍等“的输出
+            #”请稍等“的音频输出（不影响文本输出）
             if self.think_mode_users.get(uid, False) == True and time.time() - self.think_time_users[uid] >= 5:
                 self.think_time_users[uid] = time.time()
                 text = "请稍等..."
