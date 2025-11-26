@@ -14,8 +14,13 @@ ali_nls_app_key=
 
 
 
-#tts类型（切换请重新选择所需要的声音）azure、ali、gptsovits、volcano、gptsovits_v3
+#tts类型（切换请重新选择所需要的声音）azure、ali、gptsovits、volcano、gptsovits_v3、zcb
 tts_module=ali
+
+# 智创宝数字人 服务密钥
+zcb_api_token=b5ecc673399a4a4b8faaf668013dc669
+zcb_model_id=
+zcb_video_url=
 
 # 微软 文字转语音 服务密钥（非必须，使用可产生不同情绪的音频）https://azure.microsoft.com/zh-cn/services/cognitive-services/text-to-speech/
 ms_tts_key=
