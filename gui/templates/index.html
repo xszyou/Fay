@@ -44,7 +44,15 @@
               <div class="message receiver-message" v-if="item.type == 'fay'">
                 <img class="avatar" src="{{ url_for('static',filename='images/Fay_send.png') }}" alt="接收者头像">
                 <div class="message-content">
-                  <div class="message-bubble">[[item.content]]</div>
+                  <div class="message-bubble">
+                    <div v-if="parseThinkContent(item.content).thinkContent || item.thinkLoading" class="think-toggle" @click="toggleThink(index)">
+                      <span class="think-arrow" :class="{'expanded': item.thinkExpanded}">▶</span>
+                      <span class="think-label">思考过程</span>
+                      <span v-if="item.thinkLoading" class="think-spinner"></span>
+                    </div>
+<div v-if="(parseThinkContent(item.content).thinkContent || item.thinkLoading) && item.thinkExpanded" class="think-content-inline">[[parseThinkContent(item.content).thinkContent]]</div>
+                    <div class="message-text">[[parseThinkContent(item.content).mainContent]]</div>
+                  </div>
                   <div class="message-time">
                     <span class="what-time">[[item.timetext]]</span>
                     <div v-if="item.is_adopted == 0" class="adopt-button" @click="adoptText(item.id)">
@@ -55,7 +63,7 @@
                     </div>
                   </div>
                 </div>
-              </div>     
+              </div>
               <div class="message sender-message" v-else>
                 <div class="message-content">
                   <div class="sender-message message-bubble">[[item.content]]</div>

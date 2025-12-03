@@ -471,3 +471,75 @@ html {
   height: 40px;
   overflow: hidden;
 }
+
+/* 消息内 think 折叠样式 */
+.think-toggle {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  padding: 4px 8px;
+  margin-bottom: 6px;
+  background-color: #f0f4ff;
+  border-radius: 4px;
+  border: 1px solid #d0d8e8;
+  user-select: none;
+}
+
+.think-toggle:hover {
+  background-color: #e0e8ff;
+}
+
+.think-arrow {
+  display: inline-block;
+  font-size: 10px;
+  margin-right: 6px;
+  color: #617bab;
+  transition: transform 0.2s ease;
+}
+
+.think-arrow.expanded {
+  transform: rotate(90deg);
+}
+
+.think-label {
+  font-size: 12px;
+  color: #617bab;
+  font-weight: 500;
+}
+
+.think-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-left: 6px;
+  border: 2px solid #d0d8e8;
+  border-top-color: #617bab;
+  border-radius: 50%;
+  animation: think-spin 0.8s linear infinite;
+}
+
+@keyframes think-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.think-content-inline {
+  background-color: #f5f7fa;
+  border: 1px dashed #ccc;
+  border-radius: 4px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: #666;
+  white-space: pre-line;
+  word-wrap: break-word;
+  max-height: 300px;
+  overflow-y: auto;
+  line-height: 1.5;
+}
+
+.message-text {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
