@@ -120,6 +120,46 @@ class Content_Db:
         conn.close()
         return True
 
+    # 取消采纳：删除采纳记录并返回相同clean_content的所有消息ID
+    @synchronized
+    def unadopt_message(self, msg_id, clean_content):
+        """
+        取消采纳消息
+        :param msg_id: 消息ID
+        :param clean_content: 过滤掉think标签后的干净内容，用于匹配QA文件
+        :return: (success, same_content_ids)
+        """
+        import re
+        conn = sqlite3.connect('memory/fay.db')
+        conn.text_factory = str
+        cur = conn.cursor()
+
+        # 获取所有fay类型的消息，检查过滤think后的内容是否匹配
+        cur.execute("SELECT id, content FROM T_Msg WHERE type = 'fay'")
+        all_fay_msgs = cur.fetchall()
+
+        # 规范化目标内容：去掉换行符和首尾空格
+        clean_content_normalized = clean_content.replace('\n', '').replace('\r', '').strip()
+
+        same_content_ids = []
+        for row in all_fay_msgs:
+            row_id, row_content = row
+            # 过滤掉think标签内容后比较
+            row_clean = re.sub(r'<think>[\s\S]*?</think>', '', row_content, flags=re.IGNORECASE).strip()
+            # 规范化后比较
+            row_clean_normalized = row_clean.replace('\n', '').replace('\r', '').strip()
+            if row_clean_normalized == clean_content_normalized:
+                same_content_ids.append(row_id)
+
+        # 删除这些消息的采纳记录
+        if same_content_ids:
+            placeholders = ','.join('?' * len(same_content_ids))
+            cur.execute(f"DELETE FROM T_Adopted WHERE msg_id IN ({placeholders})", same_content_ids)
+            conn.commit()
+
+        conn.close()
+        return True, same_content_ids
+
     # 获取对话内容
     @synchronized
     def get_list(self, way, order, limit, uid=0):

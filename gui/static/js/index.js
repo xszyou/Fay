@@ -555,7 +555,7 @@ this.fayService.fetchData(`${this.base_url}/api/adopt-msg`, {
       message: response.msg,  // 显示成功消息
       type: 'success',
     });
-    
+
     this.loadMessageHistory(this.selectedUser[1], 'adopt');
   } else {
     // 处理失败的响应
@@ -574,6 +574,48 @@ this.fayService.fetchData(`${this.base_url}/api/adopt-msg`, {
     type: 'error',
   });
 });
+},
+
+// 取消采纳
+unadoptText(id) {
+  this.fayService.fetchData(`${this.base_url}/api/unadopt-msg`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ id })
+  })
+  .then((response) => {
+    if (response && response.status === 'success') {
+      this.$notify({
+        title: '成功',
+        message: response.msg,
+        type: 'success',
+      });
+
+      // 更新本地消息列表中所有相关消息的采纳状态
+      if (response.unadopted_ids && response.unadopted_ids.length > 0) {
+        this.messages.forEach(msg => {
+          if (response.unadopted_ids.includes(msg.id)) {
+            msg.is_adopted = 0;
+          }
+        });
+      }
+    } else {
+      this.$notify({
+        title: '失败',
+        message: response ? response.msg : '请求失败',
+        type: 'error',
+      });
+    }
+  })
+  .catch((error) => {
+    this.$notify({
+      title: '错误',
+      message: error.message || '请求失败',
+      type: 'error',
+    });
+  });
 }
 ,
   minimizeThinkPanel() {

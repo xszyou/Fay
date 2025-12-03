@@ -58,8 +58,8 @@
                     <div v-if="item.is_adopted == 0" class="adopt-button" @click="adoptText(item.id)">
                       <img src="{{ url_for('static',filename='images/adopt.png') }}" alt="采纳图标" class="adopt-img" />
                     </div>
-                    <div v-else class="adopt-button">
-                      <img src="{{ url_for('static',filename='images/adopted.png') }}" alt="采纳图标" class="adopt-img" />
+                    <div v-else class="adopt-button" @click="unadoptText(item.id)">
+                      <img src="{{ url_for('static',filename='images/adopted.png') }}" alt="已采纳图标" class="adopt-img" />
                     </div>
                   </div>
                 </div>

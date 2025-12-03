@@ -119,7 +119,7 @@ class StreamTextProcessor:
                         username, marked_text, conversation_id=conversation_id
                     )
                     if success:
-                        accumulated_text = accumulated_text[punct_index + 1:].lstrip()
+                        accumulated_text = accumulated_text[punct_index + 1:]
                         first_sentence_sent = True  # 标记已发送第一个句子
                         sent_successfully = True
                         break

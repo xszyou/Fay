@@ -392,6 +392,8 @@ def adopt_msg():
         info = content_db.new_instance().get_content_by_id(id)
         content = info[3] if info else ''
         if info is not None:
+            # 过滤掉 think 标签及其内容
+            content = re.sub(r'<think>[\s\S]*?</think>', '', content, flags=re.IGNORECASE).strip()
             previous_info = content_db.new_instance().get_previous_user_message(id)
             previous_content = previous_info[3] if previous_info else ''
             result = content_db.new_instance().adopted_message(id)
@@ -404,6 +406,43 @@ def adopt_msg():
             return jsonify({'status':'error', 'msg': '消息未找到'}), 404
     except Exception as e:
         return jsonify({'status':'error', 'msg': f'采纳消息时出错: {e}'}), 500
+
+@__app.route('/api/unadopt-msg', methods=['POST'])
+def unadopt_msg():
+    # 取消采纳消息
+    data = request.get_json()
+    if not data:
+        return jsonify({'status':'error', 'msg': '未提供数据'})
+
+    id = data.get('id')
+
+    if not id:
+        return jsonify({'status':'error', 'msg': 'id不能为空'})
+
+    try:
+        info = content_db.new_instance().get_content_by_id(id)
+        if info is None:
+            return jsonify({'status':'error', 'msg': '消息未找到'}), 404
+
+        content = info[3]
+        # 过滤掉 think 标签及其内容，用于匹配 QA 文件中的答案
+        clean_content = re.sub(r'<think>[\s\S]*?</think>', '', content, flags=re.IGNORECASE).strip()
+
+        # 从数据库中删除采纳记录，并获取所有相同内容的消息ID
+        success, same_content_ids = content_db.new_instance().unadopt_message(id, clean_content)
+
+        if success:
+            # 从 QA 文件中删除对应记录
+            qa_service.QAService().remove_qapair(clean_content)
+            return jsonify({
+                'status': 'success',
+                'msg': '取消采纳成功',
+                'unadopted_ids': same_content_ids
+            })
+        else:
+            return jsonify({'status':'error', 'msg': '取消采纳失败'}), 500
+    except Exception as e:
+        return jsonify({'status':'error', 'msg': f'取消采纳时出错: {e}'}), 500
 
 def gpt_stream_response(last_content, username):
     sm = stream_manager.new_instance()
