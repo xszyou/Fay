@@ -216,6 +216,7 @@
         padding: 10px 20px 20px;
         display: flex;
         justify-content: center;
+        gap: 12px;
       }
       .add-server-btn {
         padding: 8px 20px;
@@ -355,6 +356,48 @@
       }
       .tool-btn.enabled .tool-status-dot {
         background-color: #67c23a;
+      }
+      .tool-btn.prestart {
+        border-color: #f56c6c !important;
+        background-color: #f56c6c !important;
+        color: #fff !important;
+      }
+      .tool-btn.prestart .tool-status-dot {
+        background-color: #fff !important;
+      }
+      .tool-btn.prestart:hover {
+        background-color: #e64545 !important;
+        border-color: #e64545 !important;
+      }
+      .prestart-tag {
+        margin-left: auto;
+        padding: 2px 8px;
+        border-radius: 12px;
+        background-color: #f56c6c !important;
+        color: #fff !important;
+        font-size: 12px;
+        line-height: 1.2;
+        cursor: pointer;
+      }
+      .prestart-tag.inactive {
+        background-color: #e4e7ed;
+        color: #606266;
+      }
+      .mcp-textarea {
+        width: 100%;
+        min-height: 120px;
+        padding: 10px;
+        border: 1px solid #dcdfe6;
+        border-radius: 4px;
+        font-family: Consolas, Monaco, monospace;
+        resize: vertical;
+        box-sizing: border-box;
+      }
+      .prestart-hint {
+        font-size: 12px;
+        color: #909399;
+        margin: 0 0 8px 0;
+        text-align: left;
       }
       .mcp-info-label {
         font-weight: bold;
@@ -562,6 +605,32 @@
 
           </div>
         </div>
+
+            <!-- Prestart Dialog -->
+            <div class="mcp-dialog" id="prestartDialog">
+              <div class="mcp-dialog-content">
+                <div class="mcp-dialog-header">
+                  <div class="mcp-dialog-title">预启动配置</div>
+                  <div class="mcp-dialog-close" onclick="hidePrestartDialog()">×</div>
+                </div>
+                <div class="mcp-dialog-body">
+                  <div class="mcp-form-item">
+                    <label class="mcp-label">服务器:</label>
+                    <div class="mcp-info-value" id="prestartServerLabel">--</div>
+                  </div>
+                  <div class="mcp-form-item">
+                    <label class="mcp-label">工具:</label>
+                    <div class="mcp-info-value" id="prestartToolLabel">--</div>
+                  </div>
+                  <div class="prestart-hint">调用参数支持使用 {{question}} 占位符替换为用户问题。</div>
+                  <textarea class="mcp-textarea" id="prestartParamsInput" placeholder='例如: {"query": "{{question}}"}'></textarea>
+                </div>
+                <div class="mcp-dialog-footer">
+                  <button class="add-server-btn" onclick="savePrestartConfig(true)">保存预启动</button>
+                  <button class="delete-btn" onclick="savePrestartConfig(false)">取消预启动</button>
+                </div>
+              </div>
+            </div>
           <!-- 信息面板 -->
           <div class="mcp-info-panel">
             <div class="mcp-info-content">
@@ -1334,19 +1403,24 @@
             if (toolsContainer) {
               toolsContainer.innerHTML = '';
               const tools = data.tools || [];
+              const serverName = server.name || (nameNode ? nameNode.textContent : '');
               
               if (tools.length > 0) {
                 tools.forEach(tool => {
                   console.log('工具对象:', tool); // 调试信息
                   let toolName = '';
                   let toolEnabled = true; // 默认启用
+                  let prestart = false;
+                  let prestartParams = {};
                   
                   if (typeof tool === 'object' && tool !== null) {
                     toolName = tool.name || '未知工具';
-                    // 如果后端返回了启用状态，使用它
                     if (typeof tool.enabled !== 'undefined') {
                       toolEnabled = tool.enabled;
-                      console.log(`工具 ${toolName} 状态:`, toolEnabled); // 调试信息
+                    }
+                    prestart = !!tool.prestart;
+                    if (tool.prestart_params && typeof tool.prestart_params === 'object') {
+                      prestartParams = tool.prestart_params;
                     }
                   } else if (typeof tool === 'string') {
                     toolName = tool;
@@ -1356,21 +1430,36 @@
                   
                   // 创建工具按钮
                   const toolBtn = document.createElement('div');
-                  toolBtn.className = `tool-btn ${toolEnabled ? 'enabled' : ''}`;
-                  toolBtn.innerHTML = `
-                    <span class="tool-status-dot"></span>
-                    <span>${toolName}</span>
-                  `;
+                  toolBtn.className = `tool-btn ${toolEnabled ? 'enabled' : ''} ${prestart ? 'prestart' : ''}`;
                   toolBtn.title = `点击${toolEnabled ? '禁用' : '启用'}工具: ${toolName}`;
                   toolBtn.dataset.toolName = toolName;
                   toolBtn.dataset.serverId = serverId;
                   toolBtn.dataset.enabled = toolEnabled;
+                  toolBtn.dataset.prestartParams = JSON.stringify(prestartParams || {});
+
+                  const statusDot = document.createElement('span');
+                  statusDot.className = 'tool-status-dot';
+                  
+                  const nameSpan = document.createElement('span');
+                  nameSpan.textContent = toolName;
+
+                  const prestartTag = document.createElement('span');
+                  prestartTag.className = `prestart-tag ${prestart ? '' : 'inactive'}`;
+                  prestartTag.textContent = prestart ? '预启动' : '预启动?';
+                  prestartTag.title = '配置预启动参数（支持 {{question}} 占位符）';
+                  prestartTag.addEventListener('click', function(event) {
+                    event.stopPropagation();
+                    showPrestartDialog(serverId, serverName, toolName, prestartParams);
+                  });
                   
                   // 添加点击事件
                   toolBtn.addEventListener('click', function() {
                     toggleTool(this, serverId, toolName);
                   });
-                  
+
+                  toolBtn.appendChild(statusDot);
+                  toolBtn.appendChild(nameSpan);
+                  toolBtn.appendChild(prestartTag);
                   toolsContainer.appendChild(toolBtn);
                 });
               } else {
@@ -1385,6 +1474,118 @@
               toolsContainer.innerHTML = '<span style="color: #f56c6c;">获取工具列表失败</span>';
             }
           });
+      }
+
+
+      let prestartContext = { serverId: null, serverName: '', toolName: '', params: {} };
+
+      function showPrestartDialog(serverId, serverName, toolName, params) {
+        prestartContext = {
+          serverId,
+          serverName: serverName || '',
+          toolName,
+          params: params || {}
+        };
+        const dialog = document.getElementById('prestartDialog');
+        if (!dialog) return;
+        const serverLabel = document.getElementById('prestartServerLabel');
+        const toolLabel = document.getElementById('prestartToolLabel');
+        const input = document.getElementById('prestartParamsInput');
+        if (serverLabel) {
+          serverLabel.textContent = serverName || serverId;
+        }
+        if (toolLabel) {
+          toolLabel.textContent = toolName || '--';
+        }
+        if (input) {
+          try {
+            if (params && Object.keys(params).length > 0) {
+              input.value = JSON.stringify(params, null, 2);
+            } else {
+              input.value = '';
+            }
+          } catch (e) {
+            input.value = '';
+          }
+        }
+        dialog.style.display = 'flex';
+      }
+
+      function hidePrestartDialog() {
+        const dialog = document.getElementById('prestartDialog');
+        if (dialog) {
+          dialog.style.display = 'none';
+        }
+      }
+
+      function findToolButton(serverId, toolName) {
+        try {
+          const escaped = (window.CSS && CSS.escape) ? CSS.escape(toolName) : toolName;
+          return document.querySelector(`.tool-btn[data-server-id="${serverId}"][data-tool-name="${escaped}"]`);
+        } catch (e) {
+          return document.querySelector(`.tool-btn[data-server-id="${serverId}"]`);
+        }
+      }
+
+      function savePrestartConfig(enable) {
+        if (!prestartContext.serverId || !prestartContext.toolName) {
+          hidePrestartDialog();
+          return;
+        }
+        const input = document.getElementById('prestartParamsInput');
+        let params = {};
+        const raw = input ? input.value.trim() : '';
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+              params = parsed;
+            } else {
+              throw new Error('参数需要对象');
+            }
+          } catch (err) {
+            alert('参数格式错误，请输入有效的JSON对象');
+            return;
+          }
+        }
+
+        fetch(`/api/mcp/servers/${prestartContext.serverId}/tools/${encodeURIComponent(prestartContext.toolName)}/prestart`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(enable ? { enabled: true, params } : { enabled: false })
+        })
+        .then(resp => resp.json())
+        .then(data => {
+          if (!data.success) {
+            alert(data.message || '更新预启动配置失败');
+            return;
+          }
+          hidePrestartDialog();
+          const btn = findToolButton(prestartContext.serverId, prestartContext.toolName);
+          if (btn) {
+            btn.dataset.prestartParams = JSON.stringify(params || {});
+            const tag = btn.querySelector('.prestart-tag');
+            if (enable) {
+              btn.classList.add('prestart');
+              if (tag) {
+                tag.textContent = '预启动';
+                tag.classList.remove('inactive');
+              }
+            } else {
+              btn.classList.remove('prestart');
+              if (tag) {
+                tag.textContent = '预启动?';
+                tag.classList.add('inactive');
+              }
+            }
+          }
+        })
+        .catch(err => {
+          console.error('更新预启动配置失败:', err);
+          alert('更新预启动配置失败');
+        });
       }
 
       // 更新信息面板

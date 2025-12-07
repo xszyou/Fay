@@ -175,6 +175,69 @@ def _normalize_tool_output(result: Any) -> str:
         return str(result)
 
 
+def _apply_question_placeholder(value: Any, question: str) -> Any:
+    """Recursively replace question placeholder inside params."""
+    if isinstance(value, str):
+        return value.replace("{{question}}", question)
+    if isinstance(value, Mapping):
+        return {k: _apply_question_placeholder(v, question) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_apply_question_placeholder(item, question) for item in value]
+    return value
+
+
+def _run_prestart_tools(user_question: str) -> str:
+    """Call configured prestart MCP tools and return a summary string."""
+    try:
+        resp = requests.get(
+            "http://127.0.0.1:5010/api/mcp/prestart/runnable",
+            timeout=10,
+        )
+        resp.raise_for_status()
+        payload = resp.json()
+    except Exception as exc:
+        util.log(1, f"获取预启动工具列表失败: {exc}")
+        return ""
+
+    tools = payload.get("prestart_tools") or []
+    if not tools:
+        return ""
+
+    outputs: List[str] = []
+    for item in tools:
+        server_id = item.get("server_id")
+        tool_name = item.get("tool")
+        if not server_id or not tool_name:
+            continue
+        params = item.get("params") or {}
+        try:
+            filled_params = _apply_question_placeholder(params, user_question)
+        except Exception:
+            filled_params = params or {}
+
+        try:
+            resp = requests.post(
+                f"http://127.0.0.1:5010/api/mcp/servers/{server_id}/call",
+                json={"method": tool_name, "params": filled_params},
+                timeout=120,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception as exc:
+            util.log(1, f"预启动工具 {tool_name} 调用异常: {exc}")
+            outputs.append(f"- {item.get('server_name', server_id)}/{tool_name}: 调用异常 {exc}")
+            continue
+
+        if data.get("success"):
+            output = _normalize_tool_output(data.get("result"))
+            outputs.append(f"- {item.get('server_name', server_id)}/{tool_name}: {output or '（无输出）'}")
+        else:
+            error_msg = data.get("error") or "未知错误"
+            outputs.append(f"- {item.get('server_name', server_id)}/{tool_name}: 执行失败 {error_msg}")
+
+    return "\n".join(outputs)
+
+
 def _truncate_history(history: List[ToolResult], limit: int = 6) -> str:
     if not history:
         return "（暂无）"
@@ -313,6 +376,7 @@ def _build_planner_messages(state: AgentState) -> List[SystemMessage | HumanMess
     memory_context = context.get("memory_context", "")
     knowledge_context = context.get("knowledge_context", "")
     observation = context.get("observation", "")
+    prestart_context = context.get("prestart_context", "")
 
     convo_text = "\n".join(f"{msg['role']}: {msg['content']}" for msg in conversation) or "（暂无对话）"
     history_text = _truncate_history(history)
@@ -335,6 +399,9 @@ def _build_planner_messages(state: AgentState) -> List[SystemMessage | HumanMess
 
 **关联知识**
 {knowledge_context or '（无相关知识）'}
+
+**预启动工具结果**
+{prestart_context or '（无预启动输出）'}
 
 **可用工具**
 {tools_text}
@@ -365,6 +432,7 @@ def _build_final_messages(state: AgentState) -> List[SystemMessage | HumanMessag
     knowledge_context = context.get("knowledge_context", "")
     memory_context = context.get("memory_context", "")
     observation = context.get("observation", "")
+    prestart_context = context.get("prestart_context", "")
     conversation = state.get("messages", []) or []
     planner_preview = state.get("planner_preview")
     conversation_block = "\n".join(f"{msg['role']}: {msg['content']}" for msg in conversation) or "（暂无对话）"
@@ -383,6 +451,9 @@ def _build_final_messages(state: AgentState) -> List[SystemMessage | HumanMessag
 
 **关联知识**
 {knowledge_context or '（无相关知识）'}
+
+**预启动工具结果**
+{prestart_context or '（无预启动输出）'}
 
 **其他观察**
 {observation or '（无补充）'}
@@ -1277,6 +1348,15 @@ def question(content, username, observation=None):
     except Exception as exc:
         util.log(1, f"搜索知识库时出错: {exc}")
     
+    prestart_context = ""
+    try:
+        prestart_context = _run_prestart_tools(content)
+        if prestart_context:
+            util.log(1, f"预启动工具输出 {len(prestart_context.splitlines())} 行")
+    except Exception as exc:
+        util.log(1, f"预启动工具执行失败: {exc}")
+        prestart_context = ""
+    
     # 获取当前时间
     current_time = datetime.datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
 
@@ -1485,6 +1565,7 @@ def question(content, username, observation=None):
                 "knowledge_context": knowledge_context,
                 "observation": observation,
                 "memory_context": memory_context,
+                "prestart_context": prestart_context,
                 "tool_registry": tool_registry,
             },
         }

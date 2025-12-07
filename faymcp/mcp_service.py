@@ -13,7 +13,7 @@ from datetime import datetime
 from typing import Any, Dict, List
 from flask_cors import CORS
 from faymcp.mcp_client import McpClient
-from faymcp import tool_registry
+from faymcp import tool_registry, prestart_registry
 from utils import util
 
 
@@ -153,6 +153,22 @@ def set_tool_state(server_id, tool_name, enabled):
     mcp_tool_states[server_id][tool_name] = enabled
     # 立即保存到文件
     save_mcp_tool_states()
+
+
+def _attach_prestart_metadata(server_id: int, tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """为工具列表补充预启动标记和参数副本。"""
+    pre_map = prestart_registry.get_server_map(server_id)
+    enriched: List[Dict[str, Any]] = []
+    for tool in tools or []:
+        if not isinstance(tool, dict):
+            continue
+        item = dict(tool)
+        name = item.get("name")
+        cfg = pre_map.get(name, {}) if name else {}
+        item["prestart"] = bool(cfg)
+        item["prestart_params"] = dict(cfg.get("params", {})) if isinstance(cfg, dict) else {}
+        enriched.append(item)
+    return enriched
 
 # 连接真实MCP服务器
 def connect_to_real_mcp(server):
@@ -466,6 +482,9 @@ def add_mcp_server():
     # 添加到服务器列表
     mcp_servers.append(new_server)
     save_mcp_servers(mcp_servers)
+
+    # 补充预启动标记，便于前端立即渲染
+    tools_list = _attach_prestart_metadata(new_server["id"], tools_list)
     
     # 返回新服务器信息
     return jsonify({
@@ -538,6 +557,7 @@ def connect_server(server_id):
                         include_disabled=True,
                         include_unavailable=False,
                     )
+                    tools_list = _attach_prestart_metadata(server_id, tools_list)
                     util.log(1, f"MCP服务器连接成功: {updated_server['name']}，获取到 {len(tools_list)} 个工具")
 
                     return jsonify({
@@ -778,6 +798,7 @@ def get_server_tools(server_id):
                         "tools": []
                     })
 
+            tools_list = _attach_prestart_metadata(server_id, tools_list)
             return jsonify({
                 "success": True,
                 "message": "获取工具列表成功",
@@ -791,6 +812,7 @@ def get_server_tools(server_id):
     }), 404
 
 # API路由 - 获取所有在线服务器的工具列表
+# API?? - ??????????????
 @app.route('/api/mcp/servers/online/tools', methods=['GET'])
 def get_all_online_server_tools():
     global mcp_servers
@@ -806,6 +828,7 @@ def get_all_online_server_tools():
             include_disabled=True,
             include_unavailable=False,
         )
+        tools = _attach_prestart_metadata(server_id, tools)
         if not tools:
             client = get_mcp_client(server_id)
             if client:
@@ -816,8 +839,9 @@ def get_all_online_server_tools():
                         include_disabled=True,
                         include_unavailable=False,
                     )
+                    tools = _attach_prestart_metadata(server_id, tools)
                 except Exception as e:
-                    util.log(1, f"获取服务器 {server['name']} 工具列表失败: {e}")
+                    util.log(1, f"?????{server['name']} ??????: {e}")
                     tools = []
         for tool in tools:
             name = tool.get('name')
@@ -831,11 +855,10 @@ def get_all_online_server_tools():
     
     return jsonify({
         "success": True,
-        "message": "获取所有在线服务器工具列表成功",
+        "message": "???????????????",
         "tools": unique_tools
     })
 
-# API路由 - 直接调用MCP工具（无需指定服务器ID）
 @app.route('/api/mcp/tools/<string:tool_name>', methods=['POST'])
 def call_mcp_tool_direct(tool_name):
     """
@@ -1069,6 +1092,91 @@ def toggle_tool_state(server_id, tool_name):
         return jsonify({
             "success": False,
             "message": f"切换工具状态失败: {str(e)}"
+        }), 500
+
+# API路由 - 配置预启动工具
+@app.route('/api/mcp/servers/<int:server_id>/tools/<string:tool_name>/prestart', methods=['POST'])
+def set_prestart_tool(server_id, tool_name):
+    try:
+        data = request.json or {}
+        enabled = bool(data.get("enabled", False))
+        params = data.get("params", {}) or {}
+        if params and not isinstance(params, dict):
+            return jsonify({
+                "success": False,
+                "message": "参数必须是JSON对象"
+            }), 400
+
+        if enabled:
+            prestart_registry.set_prestart(server_id, tool_name, params if isinstance(params, dict) else {})
+            action = "启用"
+        else:
+            prestart_registry.remove_prestart(server_id, tool_name)
+            action = "取消"
+
+        tools = tool_registry.get_server_tools(
+            server_id,
+            include_disabled=True,
+            include_unavailable=False,
+        )
+        tools = _attach_prestart_metadata(server_id, tools)
+        util.log(1, f"工具 {tool_name} 在服务器 {server_id} 已{action}预启动")
+
+        return jsonify({
+            "success": True,
+            "message": f"工具 {tool_name} 已{action}预启动",
+            "prestart": enabled,
+            "prestart_params": params if isinstance(params, dict) else {},
+            "tools": tools
+        })
+    except Exception as e:
+        util.log(1, f"配置预启动工具失败: {e}")
+        return jsonify({
+            "success": False,
+            "message": f"配置预启动工具失败: {str(e)}"
+        }), 500
+
+# API路由 - 获取可运行的预启动工具（仅在线且已启用的工具）
+@app.route('/api/mcp/prestart/runnable', methods=['GET'])
+def list_runnable_prestart_tools():
+    global mcp_servers
+    try:
+        configs = prestart_registry.get_all()
+        runnable: List[Dict[str, Any]] = []
+        for server in mcp_servers:
+            if server.get("status") != "online":
+                continue
+            server_id = server.get("id")
+            tool_map = configs.get(server_id, {})
+            if not tool_map:
+                continue
+            snapshot = tool_registry.get_server_tools(
+                server_id,
+                include_disabled=True,
+                include_unavailable=False,
+            )
+            available = {t.get("name"): t for t in snapshot or []}
+            for tool_name, cfg in tool_map.items():
+                entry = available.get(tool_name)
+                if not entry or not entry.get("enabled", True):
+                    continue
+                params = cfg.get("params", {}) if isinstance(cfg, dict) else {}
+                runnable.append({
+                    "server_id": server_id,
+                    "server_name": server.get("name", f"Server {server_id}"),
+                    "tool": tool_name,
+                    "params": params if isinstance(params, dict) else {},
+                })
+        return jsonify({
+            "success": True,
+            "prestart_tools": runnable
+        })
+    except Exception as e:
+        util.log(1, f"获取预启动工具列表失败: {e}")
+        return jsonify({
+            "success": False,
+            "message": f"获取预启动工具列表失败: {str(e)}",
+            "prestart_tools": []
         }), 500
 
 # 启动连接检查
