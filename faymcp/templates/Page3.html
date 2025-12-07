@@ -399,6 +399,13 @@
         margin: 0 0 8px 0;
         text-align: left;
       }
+      .prestart-required {
+        font-size: 12px;
+        color: #606266;
+        margin: 4px 0 12px 0;
+        text-align: left;
+        width: 90%;
+      }
       .mcp-info-label {
         font-weight: bold;
         width: 100px;
@@ -623,7 +630,10 @@
                     <div class="mcp-info-value" id="prestartToolLabel">--</div>
                   </div>
                   <div class="prestart-hint">调用参数支持使用 {{question}} 占位符替换为用户问题。</div>
-                  <textarea class="mcp-textarea" id="prestartParamsInput" placeholder='例如: {"query": "{{question}}"}'></textarea>
+                  <div class="prestart-required" id="prestartRequired"></div>
+                  <div id="prestartParamsWrapper">
+                    <textarea class="mcp-textarea" id="prestartParamsInput" placeholder='例如: {"query": "{{question}}"}'></textarea>
+                  </div>
                 </div>
                 <div class="mcp-dialog-footer">
                   <button class="add-server-btn" onclick="savePrestartConfig(true)">保存预启动</button>
@@ -1449,7 +1459,7 @@
                   prestartTag.title = '配置预启动参数（支持 {{question}} 占位符）';
                   prestartTag.addEventListener('click', function(event) {
                     event.stopPropagation();
-                    showPrestartDialog(serverId, serverName, toolName, prestartParams);
+                    showPrestartDialog(serverId, serverName, toolName, prestartParams, tool.inputSchema || {});
                   });
                   
                   // 添加点击事件
@@ -1479,28 +1489,77 @@
 
       let prestartContext = { serverId: null, serverName: '', toolName: '', params: {} };
 
-      function showPrestartDialog(serverId, serverName, toolName, params) {
+      function showPrestartDialog(serverId, serverName, toolName, params, inputSchema) {
+        console.log('showPrestartDialog called with:', { serverId, serverName, toolName, params, inputSchema });
         prestartContext = {
           serverId,
           serverName: serverName || '',
           toolName,
-          params: params || {}
+          params: params || {},
+          schema: inputSchema || {}
         };
         const dialog = document.getElementById('prestartDialog');
         if (!dialog) return;
         const serverLabel = document.getElementById('prestartServerLabel');
         const toolLabel = document.getElementById('prestartToolLabel');
         const input = document.getElementById('prestartParamsInput');
+        const requiredBox = document.getElementById('prestartRequired');
+        const paramsWrapper = document.getElementById('prestartParamsWrapper');
+        const schema = inputSchema || {};
+        const requiredList = Array.isArray(schema.required) ? schema.required : [];
+        const properties = schema.properties || {};
+        console.log('Schema properties:', properties, 'required:', requiredList);
+
         if (serverLabel) {
           serverLabel.textContent = serverName || serverId;
         }
         if (toolLabel) {
           toolLabel.textContent = toolName || '--';
         }
+        if (requiredBox) {
+          if (requiredList.length === 0) {
+            requiredBox.textContent = '无必填参数';
+          } else {
+            const items = requiredList.map(key => {
+              const desc = properties[key]?.description || '';
+              return desc ? `${key}: ${desc}` : key;
+            });
+            requiredBox.textContent = `必填参数：${items.join('，')}`;
+          }
+        }
+        if (paramsWrapper) {
+          paramsWrapper.style.display = requiredList.length === 0 ? 'none' : 'block';
+        }
+        const mergedParams = Object.assign({}, params || {});
+        const defaultByType = (t) => {
+          if (t === 'array') return [];
+          if (t === 'object') return {};
+          if (t === 'integer' || t === 'number') return 0;
+          if (t === 'boolean') return false;
+          return '';
+        };
+        const getExampleValue = (key) => {
+          const prop = properties[key] || {};
+          if (mergedParams[key] !== undefined) return mergedParams[key];
+          if (prop.examples && prop.examples.length > 0) return prop.examples[0];
+          if (prop.example !== undefined) return prop.example;
+          if (prop.default !== undefined) return prop.default;
+          return defaultByType(prop.type);
+        };
+        Object.keys(properties).forEach((key) => {
+          if (mergedParams[key] === undefined) {
+            mergedParams[key] = getExampleValue(key);
+          }
+        });
+        requiredList.forEach((key) => {
+          if (mergedParams[key] === undefined) {
+            mergedParams[key] = getExampleValue(key);
+          }
+        });
         if (input) {
           try {
-            if (params && Object.keys(params).length > 0) {
-              input.value = JSON.stringify(params, null, 2);
+            if (Object.keys(mergedParams).length > 0) {
+              input.value = JSON.stringify(mergedParams, null, 2);
             } else {
               input.value = '';
             }
@@ -1546,6 +1605,24 @@
           } catch (err) {
             alert('参数格式错误，请输入有效的JSON对象');
             return;
+          }
+        }
+        if (enable) {
+          const schema = prestartContext.schema || {};
+          const requiredList = Array.isArray(schema.required) ? schema.required : [];
+          if (requiredList.length > 0) {
+            const missing = requiredList.filter(key => {
+              const v = params[key];
+              if (v === undefined || v === null) return true;
+              if (typeof v === 'string' && v.trim() === '') return true;
+              if (Array.isArray(v) && v.length === 0) return true;
+              if (typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 0) return true;
+              return false;
+            });
+            if (missing.length > 0) {
+              alert(`请填写必填参数：${missing.join('，')}`);
+              return;
+            }
           }
         }
 
