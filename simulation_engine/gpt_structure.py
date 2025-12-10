@@ -215,67 +215,62 @@ def chat_safe_generate(prompt_input: Union[str, List[str]],
 # #################### [SECTION 3: OTHER API FUNCTIONS] ######################
 # ============================================================================
 
-# 添加模拟embedding函数
+
+# 添加模拟 embedding 函数（仅作为兜底）
 def _create_mock_embedding(dimension=1536):
-  """创建一个模拟的embedding函数，用于替代真实API"""
+  """创建一个可重复的模拟 embedding 向量，用于离线兜底。"""
   import random
   import math
   import hashlib
   
   def _get_mock_vector(text):
-    """生成一个随机但一致的embedding向量"""
-    # 使用文本的哈希值作为随机种子，确保相同文本生成相同向量
-    # 使用hashlib代替hash()函数，确保编码一致性
+    """为给定文本生成可重复的伪 embedding。"""
     try:
-      # 确保文本是UTF-8编码
       if isinstance(text, str):
         text_bytes = text.encode('utf-8')
       else:
         text_bytes = str(text).encode('utf-8')
-      
-      # 使用SHA256生成哈希值
       hash_value = int(hashlib.sha256(text_bytes).hexdigest(), 16) % (10 ** 8)
       random.seed(hash_value)
     except Exception as e:
-      # 如果出现编码错误，使用一个固定的种子
-      print(f"处理文本哈希时出错: {str(e)}")
+      print(f"处理文本哈希时出错，使用固定种子: {str(e)}")
       random.seed(42)
-    
-    # 生成随机向量
     vector = [random.uniform(-1, 1) for _ in range(dimension)]
-    
-    # 归一化向量
-    magnitude = math.sqrt(sum(x*x for x in vector))
-    normalized_vector = [x/magnitude for x in vector]
-    
+    magnitude = math.sqrt(sum(x * x for x in vector))
+    normalized_vector = [x / magnitude for x in vector]
     return normalized_vector
   
   return _get_mock_vector
 
-# 创建模拟函数实例
+# 创建模拟函数实例和 API 服务占位
 _mock_embedding_function = _create_mock_embedding(1536)
+_api_embedding_service = None
 
 def get_text_embedding(text: str, 
                        model: str = "text-embedding-3-small") -> List[float]:
-  """生成文本的embedding向量，使用模拟函数"""
+  """
+  生成文本的 embedding。优先调用 system.conf 配置的 API 服务；
+  若 API 调用失败，则回退到本地模拟 embedding，保证流程不断。
+  """
   try:
-    # 确保输入是有效的字符串
     if not isinstance(text, str):
-      print("Embedding错误: 输入必须是字符串类型")
-      return [0.0] * 1536  # 返回默认embedding
-    
-    # 处理空字符串
+      print("Embedding 错误: 输入必须是字符串")
+      return [0.0] * 1536
     if not text.strip():
-      print("Embedding警告: 输入字符串为空")
-      return [0.0] * 1536  # 返回默认embedding
-    
-    # 标准化文本，替换换行符并去除首尾空格
+      print("Embedding 警告: 输入字符串为空")
+      return [0.0] * 1536
+
     text = text.replace("\n", " ").strip()
-    
-    # 使用模拟函数生成embedding
-    return _mock_embedding_function(text)
+
+    # 优先使用外部 API embedding 服务
+    try:
+      from bionicmemory.services.api_embedding_service import get_embedding_service
+      service = get_embedding_service()
+      return service.encode_text(text)
+    except Exception as api_err:
+      # API 调用失败时使用本地模拟
+      print(f"调用 API embedding 失败，使用模拟向量代替: {api_err}")
+      return _mock_embedding_function(text)
   except Exception as e:
-    # 捕获所有异常，确保函数不会崩溃
-    print(f"生成embedding时出错: {str(e)}")
-    # 返回一个默认的embedding
+    print(f"生成 embedding 时出错: {str(e)}")
     return [0.0] * 1536

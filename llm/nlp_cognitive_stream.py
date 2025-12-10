@@ -45,6 +45,7 @@ from scheduler.thread_manager import MyThread
 from core import content_db
 from core import stream_manager
 from faymcp import tool_registry as mcp_tool_registry
+from faymcp import prestart_registry
 
 # 加载配置
 cfg.load_config()
@@ -178,7 +179,8 @@ def _normalize_tool_output(result: Any) -> str:
 def _apply_question_placeholder(value: Any, question: str) -> Any:
     """Recursively replace question placeholder inside params."""
     if isinstance(value, str):
-        return value.replace("{{question}}", question)
+        # 兼容 {question} 与 {{question}} 两种写法
+        return value.replace("{{question}}", question).replace("{question}", question)
     if isinstance(value, Mapping):
         return {k: _apply_question_placeholder(v, question) for k, v in value.items()}
     if isinstance(value, list):
@@ -197,11 +199,11 @@ def _run_prestart_tools(user_question: str) -> str:
         payload = resp.json()
     except Exception as exc:
         util.log(1, f"获取预启动工具列表失败: {exc}")
-        return ""
+        return f"- 预启动列表请求失败: {exc}"
 
     tools = payload.get("prestart_tools") or []
     if not tools:
-        return ""
+        return "（暂无可运行的预启动工具）"
 
     outputs: List[str] = []
     for item in tools:
@@ -235,7 +237,11 @@ def _run_prestart_tools(user_question: str) -> str:
             error_msg = data.get("error") or "未知错误"
             outputs.append(f"- {item.get('server_name', server_id)}/{tool_name}: 执行失败 {error_msg}")
 
-    return "\n".join(outputs)
+    if outputs:
+        return "\n".join(outputs)
+
+    util.log(1, "预启动工具执行完成但没有任何输出汇总")
+    return "（预启动工具已执行但未返回内容）"
 
 
 def _truncate_history(history: List[ToolResult], limit: int = 6) -> str:
@@ -419,6 +425,9 @@ def _build_planner_messages(state: AgentState) -> List[SystemMessage | HumanMess
     {{"action": "finish_text"}}"""
     ).strip()
 
+    print("***********************************************************************")
+    print(user_block)
+    print("****************************************************************")
     return [
         SystemMessage(content="你负责规划下一步行动，请严格输出合法 JSON。"),
         HumanMessage(content=user_block),
@@ -464,6 +473,10 @@ def _build_final_messages(state: AgentState) -> List[SystemMessage | HumanMessag
 **对话及工具记录**
 {conversation_block}"""
     ).strip()
+
+    print("***********************************************************************")
+    print(user_block)
+    print("****************************************************************")
     return [
         SystemMessage(content="你是最终回复的口播助手，请用中文自然表达。"),
         HumanMessage(content=user_block),
@@ -1355,7 +1368,7 @@ def question(content, username, observation=None):
             util.log(1, f"预启动工具输出 {len(prestart_context.splitlines())} 行")
     except Exception as exc:
         util.log(1, f"预启动工具执行失败: {exc}")
-        prestart_context = ""
+        prestart_context = f"- 预启动工具执行失败: {exc}"
     
     # 获取当前时间
     current_time = datetime.datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
@@ -1690,24 +1703,22 @@ def question(content, username, observation=None):
     def run_direct_llm() -> bool:
         nonlocal full_response_text, accumulated_text, is_first_sentence, messages_buffer
         try:
-            if tool_registry:
-                stream_response_chunks(llm.stream(messages))
-            else:
-                summary_state: AgentState = {
-                    "request": content,
-                    "messages": messages_buffer,
-                    "tool_results": [],
-                    "planner_preview": None,
-                    "context": {
-                        "system_prompt": system_prompt,
-                        "knowledge_context": knowledge_context,
-                        "observation": observation,
-                        "memory_context": memory_context,
-                    },
-                }
-                
-                final_messages = _build_final_messages(summary_state)
-                stream_response_chunks(llm.stream(final_messages))
+            summary_state: AgentState = {
+                "request": content,
+                "messages": messages_buffer,
+                "tool_results": [],
+                "planner_preview": None,
+                "context": {
+                    "system_prompt": system_prompt,
+                    "knowledge_context": knowledge_context,
+                    "observation": observation,
+                    "memory_context": memory_context,
+                    "prestart_context": prestart_context,
+                },
+            }
+
+            final_messages = _build_final_messages(summary_state)
+            stream_response_chunks(llm.stream(final_messages))
             return True
         except requests.exceptions.RequestException as exc:
             util.log(1, f"请求失败: {exc}")
@@ -1978,10 +1989,25 @@ def save_agent_memory():
 def get_mcp_tools() -> List[Dict[str, Any]]:
     """
     从共享缓存获取所有可用且已启用的MCP工具列表。
+    排除预启动工具，因为预启动工具会在LLM推理前自动执行，
+    不需要作为可调用工具提供给规划器。
     """
     try:
         tools = mcp_tool_registry.get_enabled_tools()
-        return tools or []
+        if not tools:
+            return []
+        # 过滤掉预启动工具
+        filtered_tools = []
+        for tool in tools:
+            if not tool:
+                continue
+            server_id = tool.get("server_id")
+            tool_name = tool.get("name")
+            if server_id is not None and tool_name:
+                if prestart_registry.is_prestart(server_id, tool_name):
+                    continue  # 跳过预启动工具
+            filtered_tools.append(tool)
+        return filtered_tools
     except Exception as e:
         util.log(1, f"获取工具列表出错：{e}")
         return []
