@@ -52,6 +52,11 @@
                     </div>
 <div v-if="(parseThinkContent(item.content).thinkContent || item.thinkLoading) && item.thinkExpanded" class="think-content-inline">[[parseThinkContent(item.content).thinkContent]]</div>
                     <div class="message-text">[[parseThinkContent(item.content).mainContent]]</div>
+                    <div v-if="parseThinkContent(item.content).prestartContent" class="prestart-toggle" @click="togglePrestart(index)">
+                      <span class="prestart-arrow" :class="{'expanded': item.prestartExpanded}">▶</span>
+                      <span class="prestart-label">预启动工具</span>
+                    </div>
+                    <div v-if="parseThinkContent(item.content).prestartContent && item.prestartExpanded" class="prestart-content-inline">[[parseThinkContent(item.content).prestartContent]]</div>
                   </div>
                   <div class="message-time">
                     <span class="what-time">[[item.timetext]]</span>

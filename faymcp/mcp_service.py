@@ -731,20 +731,25 @@ def call_server_tool(server_id):
     if success:
         # 处理结果，确保它是可序列化的
         try:
-            # 尝试将结果转换为可序列化的格式
-            if hasattr(result, '__dict__'):
-                # 如果是对象，转换为字典
-                result_dict = dict(vars(result))
-                return jsonify({
-                    "success": True,
-                    "result": result_dict
-                })
-            else:
-                # 如果已经是字典或其他可序列化对象
-                return jsonify({
-                    "success": True,
-                    "result": result
-                })
+            def serialize_object(obj):
+                """递归序列化对象"""
+                if obj is None:
+                    return None
+                if isinstance(obj, (str, int, float, bool)):
+                    return obj
+                if isinstance(obj, dict):
+                    return {k: serialize_object(v) for k, v in obj.items()}
+                if isinstance(obj, (list, tuple)):
+                    return [serialize_object(item) for item in obj]
+                if hasattr(obj, '__dict__'):
+                    return {k: serialize_object(v) for k, v in vars(obj).items()}
+                return str(obj)
+
+            serialized_result = serialize_object(result)
+            return jsonify({
+                "success": True,
+                "result": serialized_result
+            })
         except Exception as e:
             # 如果转换失败，返回字符串形式
             return jsonify({

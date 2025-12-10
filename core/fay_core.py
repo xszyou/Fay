@@ -307,12 +307,16 @@ class FeiFei:
             if not is_first and not is_end and (text is None or text.strip() == ""):
                 return None
                 
+            # 检查是否是 prestart 内容（不应该影响 thinking 状态）
+            is_prestart_content = text and '<prestart>' in text and '</prestart>' in text
+
             # 流式文本拼接存库
             content_id = 0
             if is_first == True:
                 # reset any leftover think-mode at the start of a new reply
+                # 但如果是 prestart 内容，不重置 thinking 状态
                 try:
-                    if uid is not None:
+                    if uid is not None and not is_prestart_content:
                         self.think_mode_users[uid] = False
                         if uid in self.think_time_users:
                             del self.think_time_users[uid]
@@ -400,11 +404,15 @@ class FeiFei:
             
             result = None
             audio_url = interact.data.get('audio', None)#透传的音频
+
+            # 移除 prestart 标签内容，不进行TTS
+            tts_text = self.__remove_prestart_tags(text) if text else text
+
             if audio_url is not None:#透传音频下载
                 file_name = 'sample-' + str(int(time.time() * 1000)) + audio_url[-4:]
                 result = self.download_wav(audio_url, './samples/', file_name)
             elif config_util.config["interact"]["playSound"] or wsa_server.get_instance().get_client_output(interact.data.get("user")) or self.__is_send_remote_device_audio(interact):#tts
-                if text != None and text.replace("*", "").strip() != "":
+                if tts_text != None and tts_text.replace("*", "").strip() != "":
                     # 检查是否需要停止TTS处理（按会话）
                     if stream_manager.new_instance().should_stop_generation(
                         interact.data.get("user", "User"),
@@ -412,9 +420,9 @@ class FeiFei:
                     ):
                         util.printInfo(1, interact.data.get('user'), 'TTS处理被打断，跳过音频合成')
                         return None
-                        
+
                     # 先过滤表情符号，然后再合成语音
-                    filtered_text = self.__remove_emojis(text.replace("*", ""))
+                    filtered_text = self.__remove_emojis(tts_text.replace("*", ""))
                     if filtered_text is not None and filtered_text.strip() != "":
                         util.printInfo(1,  interact.data.get('user'), '合成音频...')
                         tm = time.time()
@@ -429,12 +437,16 @@ class FeiFei:
                             pass
                         util.printInfo(1,  interact.data.get("user"), "合成音频完成. 耗时: {} ms 文件:{}".format(math.floor((time.time() - tm) * 1000), result))
             else:
-                if is_end and wsa_server.get_web_instance().is_connected(interact.data.get('user')):
+                # prestart 内容不应该触发机器人表情重置
+                if is_end and not is_prestart_content and wsa_server.get_web_instance().is_connected(interact.data.get('user')):
                     wsa_server.get_web_instance().add_cmd({"panelMsg": "", 'Username' : interact.data.get('user'), 'robot': f'{cfg.fay_url}/robot/Normal.jpg'})
 
             if result is not None or is_first or is_end:
+                # prestart 内容不需要进入音频处理流程
+                if is_prestart_content:
+                    return result
                 if is_end:#TODO 临时方案：如果结束标记，则延迟1秒处理,免得is end比前面的音频tts要快
-                    time.sleep(1)          
+                    time.sleep(1)
                 MyThread(target=self.__process_output_audio, args=[result, interact, text]).start()
                 return result         
                 
@@ -616,11 +628,15 @@ class FeiFei:
 
             #面板播放
             config_util.load_config()
+            # 检查是否是 prestart 内容
+            is_prestart = text and '<prestart>' in text and '</prestart>' in text
             if config_util.config["interact"]["playSound"]:
-                # 检查是否需要停止音频播放（按会话）
-                self.sound_query.put((file_url, audio_length, interact))
+                # prestart 内容不应该进入播放队列，避免触发 Normal 状态
+                if not is_prestart:
+                    self.sound_query.put((file_url, audio_length, interact))
             else:
-                if wsa_server.get_web_instance().is_connected(interact.data.get('user')):
+                # prestart 内容不应该重置机器人表情
+                if not is_prestart and wsa_server.get_web_instance().is_connected(interact.data.get('user')):
                     wsa_server.get_web_instance().add_cmd({"panelMsg": "", 'Username' : interact.data.get('user'), 'robot': f'{cfg.fay_url}/robot/Normal.jpg'})
             
         except Exception as e:
@@ -672,6 +688,19 @@ class FeiFei:
         self.write_to_file("./logs", "answer_result.txt", text)
         return content_db.new_instance().add_content('fay', 'speak', text, username, uid)
 
+    def __remove_prestart_tags(self, text):
+        """
+        移除文本中的 prestart 标签及其内容
+        :param text: 原始文本
+        :return: 移除 prestart 标签后的文本
+        """
+        if not text:
+            return text
+        import re
+        # 移除 <prestart>...</prestart> 标签及其内容
+        cleaned = re.sub(r'<prestart>[\s\S]*?</prestart>', '', text, flags=re.IGNORECASE)
+        return cleaned.strip()
+
     def __send_panel_message(self, text, username, uid, content_id=None, type=None):
         """
         发送消息到Web面板
@@ -683,12 +712,17 @@ class FeiFei:
         """
         if not wsa_server.get_web_instance().is_connected(username):
             return
-            
-        # gui日志区消息
-        wsa_server.get_web_instance().add_cmd({
-            "panelMsg": text,
-            "Username": username
-        })
+
+        # 检查是否是 prestart 内容，prestart 内容不应该更新日志区消息
+        # 因为这会覆盖掉"思考中..."的状态显示
+        is_prestart = text and '<prestart>' in text and '</prestart>' in text
+
+        # gui日志区消息（prestart 内容跳过，保持"思考中..."状态）
+        if not is_prestart:
+            wsa_server.get_web_instance().add_cmd({
+                "panelMsg": text,
+                "Username": username
+            })
         
         # 聊天窗消息
         if content_id is not None:
@@ -712,7 +746,11 @@ class FeiFei:
         :param is_first: 是否是第一段文本
         :param is_end: 是否是最后一段文本
         """
-        full_text = self.__remove_emojis(text.replace("*", ""))
+        # 移除 prestart 标签内容，不发送给数字人
+        cleaned_text = self.__remove_prestart_tags(text)
+        if not cleaned_text:
+            return
+        full_text = self.__remove_emojis(cleaned_text.replace("*", ""))
         if wsa_server.get_instance().is_connected(username):
             content = {
                 'Topic': 'human',

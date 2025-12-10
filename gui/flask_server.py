@@ -454,7 +454,7 @@ def gpt_stream_response(last_content, username):
             if sentence is None:
                 gsleep(0.01)
                 continue
-            
+
             # 跳过非当前会话
             try:
                 m = re.search(r"__<cid=([^>]+)>__", sentence)
@@ -468,6 +468,8 @@ def gpt_stream_response(last_content, username):
             is_first = "_<isfirst>" in sentence
             is_end = "_<isend>" in sentence
             content = sentence.replace("_<isfirst>", "").replace("_<isend>", "").replace("_<isqa>", "")
+            # 移除 prestart 标签及其内容，不返回给API调用方
+            content = re.sub(r'<prestart>[\s\S]*?</prestart>', '', content, flags=re.IGNORECASE)
             if content or is_first or is_end:  # 只有当有实际内容时才发送
                 message = {
                     "id": "faystreaming-" + str(uuid.uuid4()),
@@ -485,7 +487,7 @@ def gpt_stream_response(last_content, username):
                     ],
                     #TODO 这里的token计算方式需要优化
                     "usage": {
-                        "prompt_tokens": len(last_content) if is_first else 0, 
+                        "prompt_tokens": len(last_content) if is_first else 0,
                         "completion_tokens": len(content),
                         "total_tokens": len(last_content) + len(content)
                     },
@@ -496,7 +498,7 @@ def gpt_stream_response(last_content, username):
                 break
             gsleep(0.01)
         yield 'data: [DONE]\n\n'
-    
+
     return Response(generate(), mimetype='text/event-stream')
 
 # 处理非流式响应
@@ -510,7 +512,7 @@ def non_streaming_response(last_content, username):
         if sentence is None:
             gsleep(0.01)
             continue
-        
+
         # 跳过非当前会话
         try:
             m = re.search(r"__<cid=([^>]+)>__", sentence)
@@ -526,6 +528,8 @@ def non_streaming_response(last_content, username):
         text += sentence.replace("_<isfirst>", "").replace("_<isend>", "").replace("_<isqa>", "")
         if is_end:
             break
+    # 移除 prestart 标签及其内容，不返回给API调用方
+    text = re.sub(r'<prestart>[\s\S]*?</prestart>', '', text, flags=re.IGNORECASE)
     return jsonify({
         "id": "fay-" + str(uuid.uuid4()),
         "object": "chat.completion",
@@ -544,7 +548,7 @@ def non_streaming_response(last_content, username):
         ],
         #TODO 这里的token计算方式需要优化
         "usage": {
-            "prompt_tokens": len(last_content), 
+            "prompt_tokens": len(last_content),
             "completion_tokens": len(text),
             "total_tokens": len(last_content) + len(text)
         },

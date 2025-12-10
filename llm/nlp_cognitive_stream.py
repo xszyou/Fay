@@ -125,51 +125,146 @@ def _extract_text_from_result(value: Any, *, depth: int = 0) -> List[str]:
     """Try to pull human-readable text snippets from tool results."""
     if value is None:
         return []
-    if depth > 6:
+    if depth > 10:
         return []
-    if isinstance(value, (str, int, float, bool)):
-        text = str(value).strip()
-        return [text] if text else []
+
+    # 处理字符串 - 尝试解析为 JSON
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return []
+        # 尝试解析 JSON 字符串
+        if text.startswith('{') or text.startswith('['):
+            try:
+                parsed = json.loads(text)
+                return _extract_text_from_result(parsed, depth=depth + 1)
+            except (json.JSONDecodeError, TypeError):
+                pass
+        return [text]
+
+    if isinstance(value, (int, float, bool)):
+        return [str(value)]
+
+    # 处理字典/映射
     if isinstance(value, Mapping):
-        # Prefer explicit text/content fields
-        if "text" in value and not isinstance(value["text"], (dict, list, tuple)):
-            text = str(value["text"]).strip()
-            return [text] if text else []
+        # 优先提取 document 字段（知识库查询结果常用）
+        if "document" in value:
+            doc = value["document"]
+            if isinstance(doc, str) and doc.strip():
+                return [doc.strip()]
+
+        # 提取 text 字段
+        if "text" in value:
+            text_val = value["text"]
+            if isinstance(text_val, str):
+                # 尝试解析嵌套的 JSON
+                text_str = text_val.strip()
+                if text_str.startswith('{') or text_str.startswith('['):
+                    try:
+                        parsed = json.loads(text_str)
+                        return _extract_text_from_result(parsed, depth=depth + 1)
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                if text_str:
+                    return [text_str]
+            else:
+                return _extract_text_from_result(text_val, depth=depth + 1)
+
+        # 处理 content 字段（MCP 工具常用格式）
         if "content" in value:
-            segments: List[str] = []
-            for item in value.get("content", []):
-                segments.extend(_extract_text_from_result(item, depth=depth + 1))
-            if segments:
-                return segments
+            content = value["content"]
+            if isinstance(content, list):
+                segments: List[str] = []
+                for item in content:
+                    segments.extend(_extract_text_from_result(item, depth=depth + 1))
+                if segments:
+                    return segments
+            else:
+                return _extract_text_from_result(content, depth=depth + 1)
+
+        # 处理 results 字段（查询结果常用）
+        if "results" in value:
+            results = value["results"]
+            if isinstance(results, list):
+                segments: List[str] = []
+                for item in results:
+                    segments.extend(_extract_text_from_result(item, depth=depth + 1))
+                if segments:
+                    return segments
+
+        # 遍历其他字段
         segments = []
+        skip_keys = {"meta", "annotations", "uid", "id", "messageId", "type", "distance", "metadata", "count", "isError", "structuredContent"}
         for key, item in value.items():
-            if key in {"meta", "annotations", "uid", "id", "messageId"}:
+            if key in skip_keys:
                 continue
             segments.extend(_extract_text_from_result(item, depth=depth + 1))
         return segments
-    if isinstance(value, Sequence) and not isinstance(value, (bytes, bytearray)):
+
+    # 处理列表/序列
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
         segments: List[str] = []
         for item in value:
             segments.extend(_extract_text_from_result(item, depth=depth + 1))
         return segments
+
+    # 处理有 content 属性的对象（优先处理，因为 MCP 返回的对象通常有 content）
+    if hasattr(value, "content") and not callable(getattr(value, "content")):
+        content = getattr(value, "content", None)
+        if content is not None:
+            return _extract_text_from_result(content, depth=depth + 1)
+
+    # 处理有 text 属性的对象（如 TextContent）
     if hasattr(value, "text") and not callable(getattr(value, "text")):
-        text = str(getattr(value, "text", "")).strip()
-        return [text] if text else []
+        text = getattr(value, "text", "")
+        if isinstance(text, str):
+            text_str = text.strip()
+            # 尝试解析嵌套的 JSON
+            if text_str.startswith('{') or text_str.startswith('['):
+                try:
+                    parsed = json.loads(text_str)
+                    return _extract_text_from_result(parsed, depth=depth + 1)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            if text_str:
+                return [text_str]
+        return _extract_text_from_result(text, depth=depth + 1)
+
+    # 处理有 __dict__ 的对象
     if hasattr(value, "__dict__"):
-        return _extract_text_from_result(vars(value), depth=depth + 1)
+        obj_dict = vars(value)
+        # 跳过无用字段
+        skip_attrs = {"meta", "annotations", "type", "isError", "structuredContent"}
+        filtered_dict = {k: v for k, v in obj_dict.items() if k not in skip_attrs and v is not None}
+        if filtered_dict:
+            return _extract_text_from_result(filtered_dict, depth=depth + 1)
+
+    # 最后尝试转字符串（但避免输出类似 "TextContent(...)" 的格式）
     text = str(value).strip()
-    return [text] if text else []
+    # 过滤掉看起来像对象表示的字符串
+    if text and not text.startswith('<') and '=' not in text[:50]:
+        return [text]
+    return []
 
 
 def _normalize_tool_output(result: Any) -> str:
     """Convert structured tool output to a concise human-readable string."""
     if result is None:
         return ""
+
     segments = _extract_text_from_result(result)
     if segments:
-        cleaned = [segment for segment in segments if segment]
+        # 过滤空字符串，去重，拼接
+        cleaned = []
+        seen = set()
+        for segment in segments:
+            if segment and segment not in seen:
+                seen.add(segment)
+                cleaned.append(segment)
         if cleaned:
-            return "\n".join(dict.fromkeys(cleaned))
+            return "\n".join(cleaned)
+
+    # 如果提取失败，尝试返回简化的 JSON
     try:
         return json.dumps(result, ensure_ascii=False, default=lambda o: getattr(o, "__dict__", str(o)))
     except TypeError:
@@ -188,6 +283,22 @@ def _apply_question_placeholder(value: Any, question: str) -> Any:
     return value
 
 
+def _remove_prestart_from_text(text: str) -> str:
+    """从文本中移除 prestart 标签及其内容"""
+    if not text:
+        return text
+    import re
+    return re.sub(r'<prestart>[\s\S]*?</prestart>', '', text, flags=re.IGNORECASE).strip()
+
+
+def _remove_think_from_text(text: str) -> str:
+    """从文本中移除 think 标签及其内容"""
+    if not text:
+        return text
+    import re
+    return re.sub(r'<think>[\s\S]*?</think>', '', text, flags=re.IGNORECASE).strip()
+
+
 def _run_prestart_tools(user_question: str) -> str:
     """Call configured prestart MCP tools and return a summary string."""
     try:
@@ -199,11 +310,11 @@ def _run_prestart_tools(user_question: str) -> str:
         payload = resp.json()
     except Exception as exc:
         util.log(1, f"获取预启动工具列表失败: {exc}")
-        return f"- 预启动列表请求失败: {exc}"
+        return ""
 
     tools = payload.get("prestart_tools") or []
     if not tools:
-        return "（暂无可运行的预启动工具）"
+        return ""
 
     outputs: List[str] = []
     for item in tools:
@@ -227,21 +338,21 @@ def _run_prestart_tools(user_question: str) -> str:
             data = resp.json()
         except Exception as exc:
             util.log(1, f"预启动工具 {tool_name} 调用异常: {exc}")
-            outputs.append(f"- {item.get('server_name', server_id)}/{tool_name}: 调用异常 {exc}")
             continue
 
         if data.get("success"):
             output = _normalize_tool_output(data.get("result"))
-            outputs.append(f"- {item.get('server_name', server_id)}/{tool_name}: {output or '（无输出）'}")
+            if output and output.strip():
+                # 格式化为 "工具名: 返回内容"
+                outputs.append(f"【{tool_name}】\n{output.strip()}")
         else:
             error_msg = data.get("error") or "未知错误"
-            outputs.append(f"- {item.get('server_name', server_id)}/{tool_name}: 执行失败 {error_msg}")
+            util.log(1, f"预启动工具 {tool_name} 执行失败: {error_msg}")
 
     if outputs:
-        return "\n".join(outputs)
+        return "\n\n".join(outputs)
 
-    util.log(1, "预启动工具执行完成但没有任何输出汇总")
-    return "（预启动工具已执行但未返回内容）"
+    return ""
 
 
 def _truncate_history(history: List[ToolResult], limit: int = 6) -> str:
@@ -384,10 +495,17 @@ def _build_planner_messages(state: AgentState) -> List[SystemMessage | HumanMess
     observation = context.get("observation", "")
     prestart_context = context.get("prestart_context", "")
 
-    convo_text = "\n".join(f"{msg['role']}: {msg['content']}" for msg in conversation) or "（暂无对话）"
+    # 生成对话文本时移除 prestart 标签内容
+    convo_text = "\n".join(
+        f"{msg['role']}: {_remove_prestart_from_text(msg['content'])}"
+        for msg in conversation
+    ) or "（暂无对话）"
     history_text = _truncate_history(history)
     tools_text = _format_tools_for_prompt(tool_specs)
     preview_section = f"\n（规划器预览：{planner_preview}）" if planner_preview else ""
+
+    # 只有当有预启动工具结果时才显示
+    prestart_section = f"\n**预启动工具结果**\n{prestart_context}\n" if prestart_context and prestart_context.strip() else ""
 
     user_block = textwrap.dedent(
         f"""
@@ -405,10 +523,7 @@ def _build_planner_messages(state: AgentState) -> List[SystemMessage | HumanMess
 
 **关联知识**
 {knowledge_context or '（无相关知识）'}
-
-**预启动工具结果**
-{prestart_context or '（无预启动输出）'}
-
+{prestart_section}
 **可用工具**
 {tools_text}
 
@@ -444,9 +559,16 @@ def _build_final_messages(state: AgentState) -> List[SystemMessage | HumanMessag
     prestart_context = context.get("prestart_context", "")
     conversation = state.get("messages", []) or []
     planner_preview = state.get("planner_preview")
-    conversation_block = "\n".join(f"{msg['role']}: {msg['content']}" for msg in conversation) or "（暂无对话）"
+    # 生成对话文本时移除 prestart 标签内容
+    conversation_block = "\n".join(
+        f"{msg['role']}: {_remove_prestart_from_text(msg['content'])}"
+        for msg in conversation
+    ) or "（暂无对话）"
     history_text = _truncate_history(state.get("tool_results", []))
     preview_section = f"\n（规划器建议：{planner_preview}）" if planner_preview else ""
+
+    # 只有当有预启动工具结果时才显示
+    prestart_section = f"\n**预启动工具结果**\n{prestart_context}\n" if prestart_context and prestart_context.strip() else ""
 
     user_block = textwrap.dedent(
         f"""
@@ -460,10 +582,7 @@ def _build_final_messages(state: AgentState) -> List[SystemMessage | HumanMessag
 
 **关联知识**
 {knowledge_context or '（无相关知识）'}
-
-**预启动工具结果**
-{prestart_context or '（无预启动输出）'}
-
+{prestart_section}
 **其他观察**
 {observation or '（无补充）'}
 
@@ -1563,6 +1682,15 @@ def question(content, username, observation=None):
             else:
                 write_sentence("", force_end=True)
 
+    def send_prestart_content() -> None:
+        """在LLM生成之前先发送预启动工具结果"""
+        nonlocal accumulated_text, full_response_text, is_first_sentence
+        if prestart_context and prestart_context.strip():
+            prestart_tag = f"<prestart>{prestart_context}</prestart>"
+            write_sentence(prestart_tag, force_first=is_first_sentence)
+            full_response_text += prestart_tag
+            is_first_sentence = False
+
     def run_workflow(tool_registry: Dict[str, WorkflowToolSpec]) -> bool:
         nonlocal accumulated_text, full_response_text, is_first_sentence, messages_buffer
 
@@ -1729,6 +1857,10 @@ def question(content, username, observation=None):
             accumulated_text = ""
             return False
 
+    # 在LLM生成之前先发送预启动工具结果
+    if not sm.should_stop_generation(username, conversation_id=conversation_id):
+        send_prestart_content()
+
     workflow_success = False
     if tool_registry:
         workflow_success = run_workflow(tool_registry)
@@ -1752,7 +1884,9 @@ def question(content, username, observation=None):
         except Exception:
             pass
 
-    final_text = full_response_text.split("</think>")[-1] if full_response_text else ""
+    # 记忆内容中去掉 think 和 prestart 标签
+    final_text = _remove_think_from_text(full_response_text) if full_response_text else ""
+    final_text = _remove_prestart_from_text(final_text)
     try:
         MyThread(target=remember_conversation_thread, args=(username, content, final_text)).start()
     except Exception as exc:

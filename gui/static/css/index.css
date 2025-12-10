@@ -539,6 +539,57 @@ html {
   line-height: 1.5;
 }
 
+/* 消息内 prestart 预启动工具折叠样式 */
+.prestart-toggle {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  padding: 4px 8px;
+  margin-top: 8px;
+  margin-bottom: 6px;
+  background-color: #f0fff4;
+  border-radius: 4px;
+  border: 1px solid #a8e6cf;
+  user-select: none;
+}
+
+.prestart-toggle:hover {
+  background-color: #e0ffe8;
+}
+
+.prestart-arrow {
+  display: inline-block;
+  font-size: 10px;
+  margin-right: 6px;
+  color: #4caf50;
+  transition: transform 0.2s ease;
+}
+
+.prestart-arrow.expanded {
+  transform: rotate(90deg);
+}
+
+.prestart-label {
+  font-size: 12px;
+  color: #4caf50;
+  font-weight: 500;
+}
+
+.prestart-content-inline {
+  background-color: #f5fff7;
+  border: 1px dashed #a8e6cf;
+  border-radius: 4px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: #555;
+  white-space: pre-line;
+  word-wrap: break-word;
+  max-height: 200px;
+  overflow-y: auto;
+  line-height: 1.5;
+}
+
 .message-text {
   white-space: pre-wrap;
   word-wrap: break-word;

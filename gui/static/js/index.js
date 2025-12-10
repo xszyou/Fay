@@ -624,37 +624,49 @@ unadoptText(id) {
     panel.classList.toggle('minimized');
   },
 
-  // 解析消息中的 think 内容
+  // 解析消息中的 think 和 prestart 内容
   parseThinkContent(content) {
     if (!content) {
-      return { thinkContent: '', mainContent: '' };
+      return { thinkContent: '', mainContent: '', prestartContent: '' };
+    }
+
+    let thinkContent = '';
+    let mainContent = content;
+    let prestartContent = '';
+
+    // 解析 prestart 标签
+    const prestartRegex = /<prestart>([\s\S]*?)<\/prestart>/i;
+    const prestartMatch = mainContent.match(prestartRegex);
+    if (prestartMatch && prestartMatch[1]) {
+      prestartContent = this.trimThinkLines(prestartMatch[1]);
+      mainContent = mainContent.replace(prestartRegex, '');
     }
 
     // 先尝试匹配完整的 think 标签
     const completeRegex = /<think>([\s\S]*?)<\/think>/i;
-    const completeMatch = content.match(completeRegex);
+    const completeMatch = mainContent.match(completeRegex);
 
     if (completeMatch && completeMatch[1]) {
       // 完整的 think 标签
       const rawThink = completeMatch[1];
-      const thinkContent = this.trimThinkLines(rawThink);
-      const mainContent = content.replace(completeRegex, '').replace(/^\s+/, '').replace(/\s+$/, '');
-      return { thinkContent, mainContent };
+      thinkContent = this.trimThinkLines(rawThink);
+      mainContent = mainContent.replace(completeRegex, '').replace(/^\s+/, '').replace(/\s+$/, '');
+      return { thinkContent, mainContent, prestartContent };
     }
 
     // 尝试匹配未完成的 think 标签（只有开始标签）
     const incompleteRegex = /<think>([\s\S]*)/i;
-    const incompleteMatch = content.match(incompleteRegex);
+    const incompleteMatch = mainContent.match(incompleteRegex);
 
     if (incompleteMatch && incompleteMatch[1]) {
       // 未完成的 think 标签，正在接收中
       const rawThink = incompleteMatch[1];
-      const thinkContent = this.trimThinkLines(rawThink);
-      const mainContent = ''; // 正在思考中，主内容为空
-      return { thinkContent, mainContent };
+      thinkContent = this.trimThinkLines(rawThink);
+      mainContent = ''; // 正在思考中，主内容为空
+      return { thinkContent, mainContent, prestartContent };
     }
 
-    return { thinkContent: '', mainContent: content.replace(/^\s+/, '').replace(/\s+$/, '') };
+    return { thinkContent: '', mainContent: mainContent.replace(/^\s+/, '').replace(/\s+$/, ''), prestartContent };
   },
 
   // 处理 think 内容的每行 trim
@@ -674,6 +686,12 @@ unadoptText(id) {
   toggleThink(index) {
     const message = this.messages[index];
     this.$set(message, 'thinkExpanded', !message.thinkExpanded);
+  },
+
+  // 切换 prestart 内容的展开/折叠状态
+  togglePrestart(index) {
+    const message = this.messages[index];
+    this.$set(message, 'prestartExpanded', !message.prestartExpanded);
   },
   
   // 检查MCP服务器状态
