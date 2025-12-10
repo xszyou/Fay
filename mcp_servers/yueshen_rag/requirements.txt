@@ -1,0 +1,6 @@
+mcp
+chromadb
+pdfplumber
+python-docx
+requests
+# doc 格式已转成 docx，则无需额外依赖

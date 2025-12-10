@@ -883,6 +883,63 @@ def api_start_genagents():
         util.log(1, f"启动决策分析页面时出错: {str(e)}")
         return jsonify({'success': False, 'message': f'启动决策分析页面时出错: {str(e)}'}), 500
 
+# 获取本地图片（用于在网页中显示本地图片）
+@__app.route('/api/local-image')
+def api_local_image():
+    try:
+        file_path = request.args.get('path', '')
+        if not file_path:
+            return jsonify({'error': '缺少文件路径参数'}), 400
+
+        # 检查文件是否存在
+        if not os.path.exists(file_path):
+            return jsonify({'error': f'文件不存在: {file_path}'}), 404
+
+        # 检查是否为图片文件
+        valid_extensions = ('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp')
+        if not file_path.lower().endswith(valid_extensions):
+            return jsonify({'error': '不是有效的图片文件'}), 400
+
+        # 返回图片文件
+        return send_file(file_path)
+    except Exception as e:
+        return jsonify({'error': f'获取图片时出错: {str(e)}'}), 500
+
+# 打开图片文件（使用系统默认程序）
+@__app.route('/api/open-image', methods=['POST'])
+def api_open_image():
+    try:
+        data = request.get_json()
+        if not data or 'path' not in data:
+            return jsonify({'success': False, 'message': '缺少文件路径参数'}), 400
+
+        file_path = data['path']
+
+        # 检查文件是否存在
+        if not os.path.exists(file_path):
+            return jsonify({'success': False, 'message': f'文件不存在: {file_path}'}), 404
+
+        # 检查是否为图片文件
+        valid_extensions = ('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp')
+        if not file_path.lower().endswith(valid_extensions):
+            return jsonify({'success': False, 'message': '不是有效的图片文件'}), 400
+
+        # 使用系统默认程序打开图片
+        import subprocess
+        import platform
+
+        system = platform.system()
+        if system == 'Windows':
+            os.startfile(file_path)
+        elif system == 'Darwin':  # macOS
+            subprocess.run(['open', file_path])
+        else:  # Linux
+            subprocess.run(['xdg-open', file_path])
+
+        return jsonify({'success': True, 'message': '已打开图片'}), 200
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'打开图片时出错: {str(e)}'}), 500
+
 def run():
     class NullLogHandler:
         def write(self, *args, **kwargs):

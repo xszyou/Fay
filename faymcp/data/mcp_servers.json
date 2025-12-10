@@ -3,7 +3,7 @@
         "id": 1,
         "name": "tools",
         "ip": "",
-        "connection_time": "2025-11-11 11:44:56",
+        "connection_time": "2025-12-10 21:16:35",
         "key": "",
         "transport": "stdio",
         "command": "python",
@@ -17,7 +17,7 @@
         "id": 2,
         "name": "Fay日程管理",
         "ip": "",
-        "connection_time": "2025-11-11 11:44:59",
+        "connection_time": "2025-12-10 21:16:38",
         "key": "",
         "transport": "stdio",
         "command": "python",
@@ -31,7 +31,7 @@
         "id": 3,
         "name": "logseq",
         "ip": "",
-        "connection_time": "2025-10-21 11:07:20",
+        "connection_time": "2025-12-10 21:16:39",
         "key": "",
         "transport": "stdio",
         "command": "python",
@@ -42,5 +42,40 @@
         "env": {
             "LOGSEQ_GRAPH_DIR": "D:/iCloudDrive/iCloud~com~logseq~logseq/第二大脑"
         }
+    },
+    {
+        "id": 4,
+        "name": "yueshen rag",
+        "ip": "",
+        "connection_time": "2025-12-10 21:16:44",
+        "key": "",
+        "transport": "stdio",
+        "command": "C:\\Users\\Lenovo\\anaconda3\\envs\\rag\\python.exe",
+        "args": [
+            "mcp_servers/yueshen_rag/server.py"
+        ],
+        "cwd": "",
+        "env": {
+            "YUESHEN_AUTO_INGEST": "1",
+            "YUESHEN_AUTO_INTERVAL": "300",
+            "YUESHEN_AUTO_RESET_ON_START": "0",
+            "YUESHEN_EMBED_API_KEY": "sk-izmvqrzyhjghzyghiofqfpusxprmfljntxzggkcovtneqpas",
+            "YUESHEN_EMBED_BASE_URL": "https://api.siliconflow.cn/v1",
+            "YUESHEN_EMBED_MODEL": "Qwen/Qwen3-Embedding-8B"
+        }
+    },
+    {
+        "id": 5,
+        "name": "window capture",
+        "ip": "",
+        "connection_time": "2025-12-10 21:16:45",
+        "key": "",
+        "transport": "stdio",
+        "command": "python",
+        "args": [
+            "mcp_servers/window_capture/server.py"
+        ],
+        "cwd": "",
+        "env": {}
     }
 ]

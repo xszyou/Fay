@@ -4,18 +4,41 @@
         "add": false,
         "upper": false,
         "echo": false,
-        "ping": false
+        "ping": false,
+        "ingest_yueshen": false,
+        "yueshen_stats": false
     },
     "1": {
         "add": true,
         "upper": false,
         "echo": false,
         "ping": false,
-        "now": true
+        "now": true,
+        "display_media": true
     },
     "2": {
         "('meta', None)": true,
-        "('nextCursor', None)": true
+        "('nextCursor', None)": true,
+        "browser_snapshot": false
     },
-    "3": {}
+    "3": {
+        "get_file_info": false,
+        "list_allowed_directories": true,
+        "edit_file": false,
+        "list_directory": false,
+        "directory_tree": false,
+        "create_directory": false,
+        "read_text_file": false,
+        "read_multiple_files": false,
+        "read_media_file": false,
+        "read_file": false,
+        "move_file": false,
+        "list_directory_with_sizes": false,
+        "search_files": false,
+        "write_file": false
+    },
+    "4": {},
+    "6": {
+        "list_windows": true
+    }
 }

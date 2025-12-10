@@ -491,7 +491,6 @@ def _build_planner_messages(state: AgentState) -> List[SystemMessage | HumanMess
     conversation = state.get("messages", []) or []
     history = state.get("tool_results", []) or []
     memory_context = context.get("memory_context", "")
-    knowledge_context = context.get("knowledge_context", "")
     observation = context.get("observation", "")
     prestart_context = context.get("prestart_context", "")
 
@@ -520,9 +519,6 @@ def _build_planner_messages(state: AgentState) -> List[SystemMessage | HumanMess
 
 **关联记忆**
 {memory_context or '（无相关记忆）'}
-
-**关联知识**
-{knowledge_context or '（无相关知识）'}
 {prestart_section}
 **可用工具**
 {tools_text}
@@ -540,9 +536,6 @@ def _build_planner_messages(state: AgentState) -> List[SystemMessage | HumanMess
     {{"action": "finish_text"}}"""
     ).strip()
 
-    print("***********************************************************************")
-    print(user_block)
-    print("****************************************************************")
     return [
         SystemMessage(content="你负责规划下一步行动，请严格输出合法 JSON。"),
         HumanMessage(content=user_block),
@@ -553,7 +546,6 @@ def _build_final_messages(state: AgentState) -> List[SystemMessage | HumanMessag
     context = state.get("context", {}) or {}
     system_prompt = context.get("system_prompt", "")
     request = state.get("request", "")
-    knowledge_context = context.get("knowledge_context", "")
     memory_context = context.get("memory_context", "")
     observation = context.get("observation", "")
     prestart_context = context.get("prestart_context", "")
@@ -579,9 +571,6 @@ def _build_final_messages(state: AgentState) -> List[SystemMessage | HumanMessag
 
 **关联记忆**
 {memory_context or '（无相关记忆）'}
-
-**关联知识**
-{knowledge_context or '（无相关知识）'}
 {prestart_section}
 **其他观察**
 {observation or '（无补充）'}
@@ -593,9 +582,6 @@ def _build_final_messages(state: AgentState) -> List[SystemMessage | HumanMessag
 {conversation_block}"""
     ).strip()
 
-    print("***********************************************************************")
-    print(user_block)
-    print("****************************************************************")
     return [
         SystemMessage(content="你是最终回复的口播助手，请用中文自然表达。"),
         HumanMessage(content=user_block),
@@ -1464,22 +1450,6 @@ def question(content, username, observation=None):
         except Exception as exc:
             util.log(1, f"获取相关记忆时出错: {exc}")
 
-    knowledge_context = ""
-    try:
-        knowledge_base = get_knowledge_base()
-        if knowledge_base:
-            knowledge_results = search_knowledge_base(content, knowledge_base, max_results=3)
-            if knowledge_results:
-                parts = ["**本地知识库相关信息**："]
-                for result in knowledge_results:
-                    parts.append(f"来源文件：{result['file_name']}")
-                    parts.append(result["content"])
-                    parts.append("")
-                knowledge_context = "\n".join(parts).strip()
-                util.log(1, f"找到 {len(knowledge_results)} 条相关知识库信息")
-    except Exception as exc:
-        util.log(1, f"搜索知识库时出错: {exc}")
-    
     prestart_context = ""
     try:
         prestart_context = _run_prestart_tools(content)
@@ -1703,7 +1673,6 @@ def question(content, username, observation=None):
             "max_steps": 30,
             "context": {
                 "system_prompt": system_prompt,
-                "knowledge_context": knowledge_context,
                 "observation": observation,
                 "memory_context": memory_context,
                 "prestart_context": prestart_context,
@@ -1838,7 +1807,6 @@ def question(content, username, observation=None):
                 "planner_preview": None,
                 "context": {
                     "system_prompt": system_prompt,
-                    "knowledge_context": knowledge_context,
                     "observation": observation,
                     "memory_context": memory_context,
                     "prestart_context": prestart_context,

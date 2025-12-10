@@ -352,7 +352,6 @@ def _build_planner_messages(state: AgentState) -> List[SystemMessage | HumanMess
     planner_preview = state.get("planner_preview")
     conversation = state.get("messages", []) or []
     history = state.get("tool_results", []) or []
-    knowledge_context = context.get("knowledge_context", "")
     observation = context.get("observation", "")
 
     convo_text = "\n".join(f"{msg['role']}: {msg['content']}" for msg in conversation) or "（暂无对话）"
@@ -370,9 +369,6 @@ def _build_planner_messages(state: AgentState) -> List[SystemMessage | HumanMess
 
 **额外观察**
 {observation or '（无补充）'}
-
-**关联知识**
-{knowledge_context or '（无相关知识）'}
 
 **可用工具**
 {tools_text}
@@ -400,7 +396,6 @@ def _build_final_messages(state: AgentState) -> List[SystemMessage | HumanMessag
     context = state.get("context", {}) or {}
     system_prompt = context.get("system_prompt", "")
     request = state.get("request", "")
-    knowledge_context = context.get("knowledge_context", "")
     observation = context.get("observation", "")
     conversation = state.get("messages", []) or []
     planner_preview = state.get("planner_preview")
@@ -414,9 +409,6 @@ def _build_final_messages(state: AgentState) -> List[SystemMessage | HumanMessag
 {request}
 
 {system_prompt}
-
-**关联知识**
-{knowledge_context or '（无相关知识）'}
 
 **其他观察**
 {observation or '（无补充）'}
@@ -1049,22 +1041,6 @@ def question(content, username, observation=None):
         memory_prompt = ""
         query_embedding = None
 
-    knowledge_context = ""
-    try:
-        knowledge_base = get_knowledge_base()
-        if knowledge_base:
-            knowledge_results = search_knowledge_base(content, knowledge_base, max_results=3)
-            if knowledge_results:
-                parts = ["**本地知识库相关信息**："]
-                for result in knowledge_results:
-                    parts.append(f"来源文件：{result['file_name']}")
-                    parts.append(result["content"])
-                    parts.append("")
-                knowledge_context = "\n".join(parts).strip()
-                util.log(1, f"找到 {len(knowledge_results)} 条相关知识库信息")
-    except Exception as exc:
-        util.log(1, f"搜索知识库时出错: {exc}")
-
     # 方案B：保留人设信息，补充记忆提示语
     # 1. 构建人设部分
     persona_prompt = f"""\n**角色设定**\n
@@ -1237,7 +1213,6 @@ def question(content, username, observation=None):
             "max_steps": 30,
             "context": {
                 "system_prompt": system_prompt,
-                "knowledge_context": knowledge_context,
                 "observation": observation,
                 "tool_registry": tool_registry,
             },
@@ -1371,7 +1346,6 @@ def question(content, username, observation=None):
                 "planner_preview": None,
                 "context": {
                     "system_prompt": system_prompt,
-                    "knowledge_context": knowledge_context,
                     "observation": observation,
                 },
             }

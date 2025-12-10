@@ -1,4 +1,30 @@
 // fayApp.js
+
+// 全局函数：打开图片文件
+window.openImageFile = function(encodedPath) {
+  const filePath = decodeURIComponent(encodedPath);
+  const baseUrl = window.location.protocol + '//' + window.location.hostname + ':' + window.location.port;
+
+  fetch(`${baseUrl}/api/open-image`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ path: filePath })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (!data.success) {
+      console.error('打开图片失败:', data.message);
+      alert('打开图片失败: ' + data.message);
+    }
+  })
+  .catch(error => {
+    console.error('请求失败:', error);
+    alert('打开图片时发生错误');
+  });
+};
+
 class FayInterface {
   constructor(baseWsUrl, baseApiUrl, vueInstance) {
     this.baseWsUrl = baseWsUrl;
@@ -634,12 +660,14 @@ unadoptText(id) {
     let mainContent = content;
     let prestartContent = '';
 
-    // 解析 prestart 标签
-    const prestartRegex = /<prestart>([\s\S]*?)<\/prestart>/i;
+    // 解析 prestart 标签 - 使用贪婪匹配确保匹配到最后一个 </prestart>
+    // 同时支持多个 prestart 标签的情况
+    const prestartRegex = /<prestart>([\s\S]*)<\/prestart>/i;
     const prestartMatch = mainContent.match(prestartRegex);
     if (prestartMatch && prestartMatch[1]) {
       prestartContent = this.trimThinkLines(prestartMatch[1]);
-      mainContent = mainContent.replace(prestartRegex, '');
+      // 移除所有 prestart 标签及其内容
+      mainContent = mainContent.replace(/<prestart>[\s\S]*<\/prestart>/gi, '');
     }
 
     // 先尝试匹配完整的 think 标签
@@ -693,7 +721,64 @@ unadoptText(id) {
     const message = this.messages[index];
     this.$set(message, 'prestartExpanded', !message.prestartExpanded);
   },
-  
+
+  // 检测并转换图片路径为缩略图
+  convertImagePaths(content) {
+    if (!content) return content;
+    // 匹配常见图片路径格式：
+    // Windows: D:\path\to\image.png 或 D:/path/to/image.png
+    // Unix: /path/to/image.png
+    // 支持的图片格式: png, jpg, jpeg, gif, bmp, webp
+    const imagePathRegex = /([A-Za-z]:[\\\/][^\s<>"']+\.(png|jpg|jpeg|gif|bmp|webp)|\/[^\s<>"']+\.(png|jpg|jpeg|gif|bmp|webp))/gi;
+
+    const baseUrl = window.location.protocol + '//' + window.location.hostname + ':' + window.location.port;
+
+    return content.replace(imagePathRegex, (match) => {
+      // 对原始路径进行编码
+      const encodedPath = encodeURIComponent(match);
+      // 通过后端 API 获取图片（解决浏览器安全限制）
+      const imgSrc = `${baseUrl}/api/local-image?path=${encodedPath}`;
+      // 用于显示的安全路径
+      const displayPath = match.replace(/\\/g, '/').replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+      return `<span class="image-thumbnail-container" onclick="window.openImageFile('${encodedPath}')">
+        <img src="${imgSrc}" class="message-image-thumbnail" alt="图片" onerror="this.parentElement.innerHTML='<span class=\\'image-path-text\\'>${displayPath}</span>'" />
+        <span class="image-zoom-hint">点击查看</span>
+      </span>`;
+    });
+  },
+
+  // 渲染 Markdown 内容
+  renderMarkdown(content) {
+    if (!content) return '';
+    try {
+      // 配置 marked 选项
+      if (typeof marked !== 'undefined') {
+        marked.setOptions({
+          breaks: true,  // 支持换行
+          gfm: true,     // 支持 GitHub 风格的 Markdown
+        });
+        // 预处理：确保 ** 和 * 标记能正确解析
+        // 处理中文加粗：**文字** 后面可能有空格或其他字符
+        let processed = content;
+        // 手动处理加粗语法 **text**
+        processed = processed.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+        // 手动处理斜体语法 *text*（避免与加粗冲突）
+        processed = processed.replace(/(?<!\*)\*([^*\n]+)\*(?!\*)/g, '<em>$1</em>');
+        // 对剩余内容使用 marked 解析
+        let result = marked.parse(processed);
+        // 转换图片路径为缩略图
+        result = this.convertImagePaths(result);
+        return result;
+      }
+    } catch (e) {
+      console.error('Markdown rendering error:', e);
+    }
+    // 如果 marked 不可用，返回简单处理的内容
+    let result = content.replace(/\n/g, '<br>');
+    result = this.convertImagePaths(result);
+    return result;
+  },
+
   // 检查MCP服务器状态
   checkMcpStatus() {
     const mcpUrl = `http://${this.hostname}:5010/api/mcp/servers`;
