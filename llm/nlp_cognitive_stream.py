@@ -301,8 +301,8 @@ def _remove_think_from_text(text: str) -> str:
     return re.sub(r'<think>[\s\S]*?</think>', '', text, flags=re.IGNORECASE).strip()
 
 
-def _run_prestart_tools(user_question: str) -> str:
-    """Call configured prestart MCP tools and return a summary string."""
+def _run_prestart_tools(user_question: str) -> List[Dict[str, Any]]:
+    """Call configured prestart MCP tools and return a list of result objects."""
     try:
         resp = requests.get(
             "http://127.0.0.1:5010/api/mcp/prestart/runnable",
@@ -312,19 +312,21 @@ def _run_prestart_tools(user_question: str) -> str:
         payload = resp.json()
     except Exception as exc:
         util.log(1, f"获取预启动工具列表失败: {exc}")
-        return ""
+        return []
 
     tools = payload.get("prestart_tools") or []
     if not tools:
-        return ""
+        return []
 
-    outputs: List[str] = []
+    results: List[Dict[str, Any]] = []
     for item in tools:
         server_id = item.get("server_id")
         tool_name = item.get("tool")
         if not server_id or not tool_name:
             continue
         params = item.get("params") or {}
+        include_history = item.get("include_history", True)
+
         try:
             filled_params = _apply_question_placeholder(params, user_question)
         except Exception:
@@ -355,16 +357,16 @@ def _run_prestart_tools(user_question: str) -> str:
                     except Exception:
                         pass
 
-                # 格式化为 "工具名(参数): 返回内容"
-                outputs.append(f"【{tool_name}】{params_str}\n{output.strip()}")
+                formatted_output = f"【{tool_name}】{params_str}\n{output.strip()}"
+                results.append({
+                    "text": formatted_output,
+                    "include_history": include_history
+                })
         else:
             error_msg = data.get("error") or "未知错误"
             util.log(1, f"预启动工具 {tool_name} 执行失败: {error_msg}")
 
-    if outputs:
-        return "\n\n".join(outputs)
-
-    return ""
+    return results
 
 
 def _truncate_history(history: List[ToolResult], limit: int = 6) -> str:
@@ -1463,13 +1465,27 @@ def question(content, username, observation=None):
             util.log(1, f"获取相关记忆时出错: {exc}")
 
     prestart_context = ""
+    prestart_stream_text = ""
     try:
-        prestart_context = _run_prestart_tools(content)
-        if prestart_context:
-            util.log(1, f"预启动工具输出 {len(prestart_context.splitlines())} 行")
+        prestart_results = _run_prestart_tools(content)
+        if prestart_results:
+            # 提示词用的上下文（纯文本）
+            prestart_context = "\n\n".join(r["text"] for r in prestart_results)
+
+            # 流式输出用的文本（带标签）
+            stream_parts = []
+            for r in prestart_results:
+                if r.get("include_history"):
+                    stream_parts.append(f'<prestart keep="true">{r["text"]}</prestart>')
+                else:
+                    stream_parts.append(f'<prestart>{r["text"]}</prestart>')
+            prestart_stream_text = "\n".join(stream_parts)
+
+            util.log(1, f"预启动工具输出 {len(prestart_results)} 项")
     except Exception as exc:
         util.log(1, f"预启动工具执行失败: {exc}")
         prestart_context = f"- 预启动工具执行失败: {exc}"
+        prestart_stream_text = f"<prestart>{prestart_context}</prestart>"
     
     # 获取当前时间
     current_time = datetime.datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
@@ -1667,10 +1683,10 @@ def question(content, username, observation=None):
     def send_prestart_content() -> None:
         """在LLM生成之前先发送预启动工具结果"""
         nonlocal accumulated_text, full_response_text, is_first_sentence
-        if prestart_context and prestart_context.strip():
-            prestart_tag = f"<prestart>{prestart_context}</prestart>"
-            write_sentence(prestart_tag, force_first=is_first_sentence)
-            full_response_text += prestart_tag
+        if prestart_stream_text and prestart_stream_text.strip():
+            # prestart_stream_text 已经包含标签
+            write_sentence(prestart_stream_text, force_first=is_first_sentence)
+            full_response_text += prestart_stream_text
             is_first_sentence = False
 
     def run_workflow(tool_registry: Dict[str, WorkflowToolSpec]) -> bool:
@@ -2101,30 +2117,19 @@ def save_agent_memory():
         util.log(1, f"保存代理记忆失败: {str(e)}")
 
 def get_mcp_tools() -> List[Dict[str, Any]]:
-    """
-    从共享缓存获取所有可用且已启用的MCP工具列表。
-    排除预启动工具，因为预启动工具会在LLM推理前自动执行，
-    不需要作为可调用工具提供给规划器。
-    """
+    """Fetch all available MCP tools from the registry."""
     try:
-        tools = mcp_tool_registry.get_enabled_tools()
-        if not tools:
-            return []
-        # 过滤掉预启动工具
-        filtered_tools = []
-        for tool in tools:
-            if not tool:
-                continue
-            server_id = tool.get("server_id")
-            tool_name = tool.get("name")
-            if server_id is not None and tool_name:
-                if prestart_registry.is_prestart(server_id, tool_name):
-                    continue  # 跳过预启动工具
-            filtered_tools.append(tool)
-        return filtered_tools
+        resp = requests.get("http://127.0.0.1:5010/api/mcp/servers/online/tools", timeout=5)
+        if resp.status_code == 200:
+            data = resp.json()
+            raw_tools = data.get("tools") or []
+            # 只返回启用的工具，预启动工具只要启用也可以被LLM调用
+            filtered = [tool for tool in raw_tools if tool.get("enabled", True)]
+            return filtered
     except Exception as e:
-        util.log(1, f"获取工具列表出错：{e}")
+        util.log(1, f"Failed to fetch MCP tools: {e}")
         return []
+    return []
 
 
 if __name__ == "__main__":

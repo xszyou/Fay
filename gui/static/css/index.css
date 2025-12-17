@@ -547,21 +547,21 @@ html {
   padding: 4px 8px;
   margin-top: 8px;
   margin-bottom: 6px;
-  background-color: #f0fff4;
+  background-color: #f7f7f7; /* 改为浅灰背景 */
   border-radius: 4px;
-  border: 1px solid #a8e6cf;
+  border: 1px solid #dcdcdc; /* 改为灰色边框 */
   user-select: none;
 }
 
 .prestart-toggle:hover {
-  background-color: #e0ffe8;
+  background-color: #eeeeee; /* 悬停加深 */
 }
 
 .prestart-arrow {
   display: inline-block;
   font-size: 10px;
   margin-right: 6px;
-  color: #4caf50;
+  color: #666666; /* 改为暗灰色 */
   transition: transform 0.2s ease;
 }
 
@@ -571,13 +571,13 @@ html {
 
 .prestart-label {
   font-size: 12px;
-  color: #4caf50;
+  color: #666666; /* 改为暗灰色 */
   font-weight: 500;
 }
 
 .prestart-content-inline {
-  background-color: #f5fff7;
-  border: 1px dashed #a8e6cf;
+  background-color: #fafafa; /* 改为灰白背景 */
+  border: 1px dashed #dcdcdc; /* 改为灰色虚线 */
   border-radius: 4px;
   padding: 8px 10px;
   margin-bottom: 8px;

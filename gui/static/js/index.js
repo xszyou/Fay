@@ -714,13 +714,13 @@ unadoptText(id) {
     let prestartContent = '';
 
     // 解析 prestart 标签 - 使用贪婪匹配确保匹配到最后一个 </prestart>
-    // 同时支持多个 prestart 标签的情况
-    const prestartRegex = /<prestart>([\s\S]*)<\/prestart>/i;
+    // 同时支持多个 prestart 标签的情况，以及支持属性
+    const prestartRegex = /<prestart(?:[^>]*)>([\s\S]*)<\/prestart>/i;
     const prestartMatch = mainContent.match(prestartRegex);
     if (prestartMatch && prestartMatch[1]) {
       prestartContent = this.trimThinkLines(prestartMatch[1]);
       // 移除所有 prestart 标签及其内容
-      mainContent = mainContent.replace(/<prestart>[\s\S]*<\/prestart>/gi, '');
+      mainContent = mainContent.replace(/<prestart(?:[^>]*)>[\s\S]*<\/prestart>/gi, '');
     }
 
     // 先尝试匹配完整的 think 标签

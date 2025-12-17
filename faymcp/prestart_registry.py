@@ -44,7 +44,13 @@ def _ensure_loaded() -> None:
                     if not name:
                         continue
                     params = cfg.get("params", {}) if isinstance(cfg, Mapping) else {}
-                    normalized[str(name)] = {"params": params if isinstance(params, Mapping) else {}}
+                    include_history = cfg.get("include_history", True) if isinstance(cfg, Mapping) else True
+                    allow_function_call = cfg.get("allow_function_call", False) if isinstance(cfg, Mapping) else False
+                    normalized[str(name)] = {
+                        "params": params if isinstance(params, Mapping) else {},
+                        "include_history": include_history,
+                        "allow_function_call": allow_function_call
+                    }
                 if normalized:
                     loaded[server_id] = normalized
             _prestart = loaded
@@ -77,14 +83,18 @@ def get_server_map(server_id: int) -> Dict[str, Dict[str, Any]]:
         return dict(_prestart.get(server_id, {}))
 
 
-def set_prestart(server_id: int, tool_name: str, params: Dict[str, Any]) -> None:
-    """Enable prestart for a tool with parameter template."""
+def set_prestart(server_id: int, tool_name: str, params: Dict[str, Any], include_history: bool = True, allow_function_call: bool = False) -> None:
+    """Enable prestart for a tool with parameter template and options."""
     if not tool_name:
         return
     _ensure_loaded()
     with _lock:
         server_map = _prestart.setdefault(int(server_id), {})
-        server_map[str(tool_name)] = {"params": params or {}}
+        server_map[str(tool_name)] = {
+            "params": params or {},
+            "include_history": include_history,
+            "allow_function_call": allow_function_call
+        }
         _save_locked()
 
 

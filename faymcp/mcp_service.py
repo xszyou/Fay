@@ -167,6 +167,8 @@ def _attach_prestart_metadata(server_id: int, tools: List[Dict[str, Any]]) -> Li
         cfg = pre_map.get(name, {}) if name else {}
         item["prestart"] = bool(cfg)
         item["prestart_params"] = dict(cfg.get("params", {})) if isinstance(cfg, dict) else {}
+        item["include_history"] = cfg.get("include_history", True) if isinstance(cfg, dict) else True
+        item["allow_function_call"] = cfg.get("allow_function_call", False) if isinstance(cfg, dict) else False
         enriched.append(item)
     return enriched
 
@@ -852,6 +854,8 @@ def get_all_online_server_tools():
             name = tool.get('name')
             if not name:
                 continue
+            # Ensure server_id is included for filtering
+            tool['server_id'] = server_id
             current = aggregated.get(name)
             if not current or tool.get('last_checked', 0.0) >= current.get('last_checked', 0.0):
                 aggregated[name] = tool
@@ -1106,6 +1110,9 @@ def set_prestart_tool(server_id, tool_name):
         data = request.json or {}
         enabled = bool(data.get("enabled", False))
         params = data.get("params", {}) or {}
+        include_history = bool(data.get("include_history", True))
+        allow_function_call = bool(data.get("allow_function_call", False))
+        
         if params and not isinstance(params, dict):
             return jsonify({
                 "success": False,
@@ -1113,7 +1120,13 @@ def set_prestart_tool(server_id, tool_name):
             }), 400
 
         if enabled:
-            prestart_registry.set_prestart(server_id, tool_name, params if isinstance(params, dict) else {})
+            prestart_registry.set_prestart(
+                server_id, 
+                tool_name, 
+                params if isinstance(params, dict) else {},
+                include_history=include_history,
+                allow_function_call=allow_function_call
+            )
             action = "启用"
         else:
             prestart_registry.remove_prestart(server_id, tool_name)
@@ -1132,6 +1145,8 @@ def set_prestart_tool(server_id, tool_name):
             "message": f"工具 {tool_name} 已{action}预启动",
             "prestart": enabled,
             "prestart_params": params if isinstance(params, dict) else {},
+            "include_history": include_history if enabled else True,
+            "allow_function_call": allow_function_call if enabled else False,
             "tools": tools
         })
     except Exception as e:
@@ -1163,7 +1178,8 @@ def list_runnable_prestart_tools():
             available = {t.get("name"): t for t in snapshot or []}
             for tool_name, cfg in tool_map.items():
                 entry = available.get(tool_name)
-                if not entry or not entry.get("enabled", True):
+                # 预启动工具只需要工具可用即可，不检查是否启用
+                if not entry:
                     continue
                 params = cfg.get("params", {}) if isinstance(cfg, dict) else {}
                 runnable.append({
@@ -1171,6 +1187,8 @@ def list_runnable_prestart_tools():
                     "server_name": server.get("name", f"Server {server_id}"),
                     "tool": tool_name,
                     "params": params if isinstance(params, dict) else {},
+                    "include_history": cfg.get("include_history", True),
+                    "allow_function_call": cfg.get("allow_function_call", False)
                 })
         return jsonify({
             "success": True,

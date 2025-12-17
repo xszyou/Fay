@@ -357,17 +357,31 @@
       .tool-btn.enabled .tool-status-dot {
         background-color: #67c23a;
       }
-      .tool-btn.prestart {
+      /* 预启动工具 - 已启用状态（红色实心背景） */
+      .tool-btn.prestart.enabled {
         border-color: #f56c6c !important;
         background-color: #f56c6c !important;
         color: #fff !important;
       }
-      .tool-btn.prestart .tool-status-dot {
-        background-color: #fff !important;
+      .tool-btn.prestart.enabled .tool-status-dot {
+        background-color: #67c23a !important;  /* 绿色点表示已启用 */
       }
-      .tool-btn.prestart:hover {
+      .tool-btn.prestart.enabled:hover {
         background-color: #e64545 !important;
         border-color: #e64545 !important;
+      }
+      /* 预启动工具 - 未启用状态（红色边框，白色背景） */
+      .tool-btn.prestart:not(.enabled) {
+        border: 2px solid #f56c6c !important;
+        background-color: #fff !important;
+        color: #f56c6c !important;
+      }
+      .tool-btn.prestart:not(.enabled) .tool-status-dot {
+        background-color: #c0c4cc !important;  /* 灰色点表示未启用 */
+      }
+      .tool-btn.prestart:not(.enabled):hover {
+        background-color: #fef0f0 !important;
+        border-color: #f56c6c !important;
       }
       .prestart-tag {
         margin-left: auto;
@@ -633,6 +647,10 @@
                   <div class="prestart-required" id="prestartRequired"></div>
                   <div id="prestartParamsWrapper">
                     <textarea class="mcp-textarea" id="prestartParamsInput" placeholder='例如: {"query": "{{question}}"}'></textarea>
+                  </div>
+                  <div class="mcp-form-item" style="margin-top: 10px;">
+                    <label class="mcp-label" style="width: auto; margin-right: 10px;">结果保存到记忆:</label>
+                    <input type="checkbox" id="prestartIncludeHistory" checked>
                   </div>
                 </div>
                 <div class="mcp-dialog-footer">
@@ -1422,7 +1440,8 @@
                   let toolEnabled = true; // 默认启用
                   let prestart = false;
                   let prestartParams = {};
-                  
+                  let includeHistory = true;
+
                   if (typeof tool === 'object' && tool !== null) {
                     toolName = tool.name || '未知工具';
                     if (typeof tool.enabled !== 'undefined') {
@@ -1432,12 +1451,13 @@
                     if (tool.prestart_params && typeof tool.prestart_params === 'object') {
                       prestartParams = tool.prestart_params;
                     }
+                    includeHistory = tool.include_history !== false;
                   } else if (typeof tool === 'string') {
                     toolName = tool;
                   } else {
                     toolName = '未知工具';
                   }
-                  
+
                   // 创建工具按钮
                   const toolBtn = document.createElement('div');
                   toolBtn.className = `tool-btn ${toolEnabled ? 'enabled' : ''} ${prestart ? 'prestart' : ''}`;
@@ -1446,20 +1466,21 @@
                   toolBtn.dataset.serverId = serverId;
                   toolBtn.dataset.enabled = toolEnabled;
                   toolBtn.dataset.prestartParams = JSON.stringify(prestartParams || {});
+                  toolBtn.dataset.includeHistory = includeHistory;
 
                   const statusDot = document.createElement('span');
                   statusDot.className = 'tool-status-dot';
-                  
+
                   const nameSpan = document.createElement('span');
                   nameSpan.textContent = toolName;
 
                   const prestartTag = document.createElement('span');
                   prestartTag.className = `prestart-tag ${prestart ? '' : 'inactive'}`;
                   prestartTag.textContent = prestart ? '预启动' : '预启动?';
-                  prestartTag.title = '配置预启动参数（支持 {{question}} 占位符）';
+                  prestartTag.title = '配置预启动参数';
                   prestartTag.addEventListener('click', function(event) {
                     event.stopPropagation();
-                    showPrestartDialog(serverId, serverName, toolName, prestartParams, tool.inputSchema || {});
+                    showPrestartDialog(serverId, serverName, toolName, prestartParams, tool.inputSchema || {}, includeHistory);
                   });
                   
                   // 添加点击事件
@@ -1487,16 +1508,17 @@
       }
 
 
-      let prestartContext = { serverId: null, serverName: '', toolName: '', params: {} };
+      let prestartContext = { serverId: null, serverName: '', toolName: '', params: {}, includeHistory: true };
 
-      function showPrestartDialog(serverId, serverName, toolName, params, inputSchema) {
-        console.log('showPrestartDialog called with:', { serverId, serverName, toolName, params, inputSchema });
+      function showPrestartDialog(serverId, serverName, toolName, params, inputSchema, includeHistory) {
+        console.log('showPrestartDialog called with:', { serverId, serverName, toolName, params, inputSchema, includeHistory });
         prestartContext = {
           serverId,
           serverName: serverName || '',
           toolName,
           params: params || {},
-          schema: inputSchema || {}
+          schema: inputSchema || {},
+          includeHistory: includeHistory !== false // default true
         };
         const dialog = document.getElementById('prestartDialog');
         if (!dialog) return;
@@ -1505,6 +1527,10 @@
         const input = document.getElementById('prestartParamsInput');
         const requiredBox = document.getElementById('prestartRequired');
         const paramsWrapper = document.getElementById('prestartParamsWrapper');
+        const includeHistoryCheck = document.getElementById('prestartIncludeHistory');
+
+        if (includeHistoryCheck) includeHistoryCheck.checked = prestartContext.includeHistory;
+
         const schema = inputSchema || {};
         const requiredList = Array.isArray(schema.required) ? schema.required : [];
         const properties = schema.properties || {};
@@ -1626,12 +1652,14 @@
           }
         }
 
+        const includeHistory = document.getElementById('prestartIncludeHistory').checked;
+
         fetch(`/api/mcp/servers/${prestartContext.serverId}/tools/${encodeURIComponent(prestartContext.toolName)}/prestart`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify(enable ? { enabled: true, params } : { enabled: false })
+          body: JSON.stringify(enable ? { enabled: true, params, include_history: includeHistory } : { enabled: false })
         })
         .then(resp => resp.json())
         .then(data => {
@@ -1642,7 +1670,10 @@
           hidePrestartDialog();
           const btn = findToolButton(prestartContext.serverId, prestartContext.toolName);
           if (btn) {
-            btn.dataset.prestartParams = JSON.stringify(params || {});
+            // Update dataset with new values from response
+            btn.dataset.prestartParams = JSON.stringify(data.prestart_params || {});
+            btn.dataset.includeHistory = data.include_history;
+            
             const tag = btn.querySelector('.prestart-tag');
             if (enable) {
               btn.classList.add('prestart');
@@ -1656,6 +1687,24 @@
                 tag.textContent = '预启动?';
                 tag.classList.add('inactive');
               }
+            }
+            
+            // Update onclick listener to use new values (needs recreation or just rely on dataset/fetching again?
+            // Recreating the onclick handler on the tag is tricky without removing old one.
+            // Simplest is to refresh tools for this card, or update the click handler via a closure if possible.
+            // But here we can just update the tag's click handler property if we stored it, or
+            // since we used addEventListener with anonymous function, we can't remove it easily.
+            // However, the `showPrestartDialog` is called with values from `tool` object in `onCardSelected`.
+            // We need to update that `tool` object reference or reload the tools list.
+            // Triggering a reload of the current card's tools is best.
+            const card = document.querySelector(`.mcp-card[data-server-id="${prestartContext.serverId}"]`);
+            if (card && card.classList.contains('selected')) {
+               // Re-trigger selection logic to refresh tools list
+               // onCardSelected(card); // But we don't have access to onCardSelected here easily? 
+               // It is defined in global scope.
+               if (typeof onCardSelected === 'function') {
+                   onCardSelected(card);
+               }
             }
           }
         })
