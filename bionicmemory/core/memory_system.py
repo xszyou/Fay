@@ -17,7 +17,7 @@ from bionicmemory.algorithms.newton_cooling_helper import NewtonCoolingHelper, C
 from bionicmemory.core.chroma_service import ChromaService
 from bionicmemory.services.summary_service import SummaryService
 from bionicmemory.algorithms.clustering_suppression import ClusteringSuppression
-from bionicmemory.services.local_embedding_service import get_embedding_service
+from bionicmemory.services.api_embedding_service import get_embedding_service
 
 # 使用统一日志配置
 from bionicmemory.utils.logging_config import get_logger

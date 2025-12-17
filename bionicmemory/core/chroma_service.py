@@ -15,7 +15,7 @@ from bionicmemory.utils.logging_config import get_logger
 logger = get_logger(__name__)
 
 # 在文件顶部添加导入
-from bionicmemory.services.local_embedding_service import get_embedding_service
+from bionicmemory.services.api_embedding_service import get_embedding_service
 
 
 class ChromaService:

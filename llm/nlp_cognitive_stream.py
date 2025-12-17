@@ -198,7 +198,9 @@ def _extract_text_from_result(value: Any, *, depth: int = 0) -> List[str]:
         for key, item in value.items():
             if key in skip_keys:
                 continue
-            segments.extend(_extract_text_from_result(item, depth=depth + 1))
+            item_segments = _extract_text_from_result(item, depth=depth + 1)
+            for seg in item_segments:
+                segments.append(f"{key}: {seg}")
         return segments
 
     # 处理列表/序列
@@ -343,8 +345,18 @@ def _run_prestart_tools(user_question: str) -> str:
         if data.get("success"):
             output = _normalize_tool_output(data.get("result"))
             if output and output.strip():
-                # 格式化为 "工具名: 返回内容"
-                outputs.append(f"【{tool_name}】\n{output.strip()}")
+                # 格式化参数显示
+                params_str = ""
+                if filled_params:
+                    try:
+                        # 将参数格式化为 (key=value, ...)
+                        items = [f"{k}={v}" for k, v in filled_params.items()]
+                        params_str = f"({', '.join(items)})"
+                    except Exception:
+                        pass
+
+                # 格式化为 "工具名(参数): 返回内容"
+                outputs.append(f"【{tool_name}】{params_str}\n{output.strip()}")
         else:
             error_msg = data.get("error") or "未知错误"
             util.log(1, f"预启动工具 {tool_name} 执行失败: {error_msg}")
