@@ -529,23 +529,16 @@ new Vue({
     loadUserList() {
       this.fayService.getUserList().then((response) => {
         if (response && response.list) {
-          if (response.list.length == 0){
-            // 检查是否已经有默认用户
-            const defaultUserExists = this.userList.some(user => user[1] === 'User');
-            if (!defaultUserExists) {
-              // 只有在不存在默认用户时才添加
-              const info = [];
-              info[0] = 1;
-              info[1] = 'User';
-              this.userList.push(info);
-              this.selectUser(info);
-              console.log('添加默认用户: User');
-            }
-          } else {
-            this.userList = response.list;
-            if (!this.selectedUser) {
-              this.selectUser(this.userList[0]);
-            }
+          let list = response.list || [];
+          // 始终确保 "User"（主人）存在于列表中
+          const defaultUserExists = list.some(user => user[1] === 'User');
+          if (!defaultUserExists) {
+            // 将主人添加到列表开头
+            list = [[1, 'User'], ...list];
+          }
+          this.userList = list;
+          if (!this.selectedUser) {
+            this.selectUser(this.userList[0]);
           }
         }
       });
