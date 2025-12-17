@@ -10,7 +10,7 @@ def test_gpt(prompt):
     data = {
         'model': 'fay-streaming',
         'messages': [
-            {'role': 'user', 'content': prompt}
+            {'role': '张三', 'content': prompt}
         ],
         'stream': True  # 启用流式传输
     }

@@ -1542,33 +1542,73 @@ def question(content, username, observation=None):
         "请始终以符合以上人设的身份和语气与用户交流。\n\n"
     )
 
+    # 根据配置决定是否按用户隔离历史消息
     try:
-        history_records = content_db.new_instance().get_recent_messages_by_user(username=username, limit=30)
+        cfg.load_config()
+        isolate_by_user = cfg.config.get("memory", {}).get("isolate_by_user", False)
+    except Exception:
+        isolate_by_user = False
+
+    try:
+        if isolate_by_user:
+            history_records = content_db.new_instance().get_recent_messages_by_user(username=username, limit=30)
+        else:
+            history_records = content_db.new_instance().get_recent_messages_all(limit=30)
     except Exception as exc:
         util.log(1, f"加载历史消息失败: {exc}")
         history_records = []
 
     messages_buffer: List[ConversationMessage] = []
 
-    def append_to_buffer(role: str, text_value: str) -> None:
-        if not text_value:
-            return
-        messages_buffer.append({"role": role, "content": text_value})
-        if len(messages_buffer) > 60:
-            del messages_buffer[:-60]
+    if isolate_by_user:
+        # 按用户隔离：使用传统的 user/assistant 角色区分
+        def append_to_buffer(role: str, text_value: str) -> None:
+            if not text_value:
+                return
+            messages_buffer.append({"role": role, "content": text_value})
+            if len(messages_buffer) > 60:
+                del messages_buffer[:-60]
 
-    for msg_type, msg_text in history_records:
-        role = 'assistant'
-        if msg_type and msg_type.lower() in ('member', 'user'):
-            role = 'user'
-        append_to_buffer(role, msg_text)
+        for record in history_records:
+            msg_type, msg_text = record
+            role = 'assistant'
+            if msg_type and msg_type.lower() in ('member', 'user'):
+                role = 'user'
+            append_to_buffer(role, msg_text)
 
-    if (
-        not messages_buffer
-        or messages_buffer[-1]['role'] != 'user'
-        or messages_buffer[-1]['content'] != content
-    ):
-        append_to_buffer('user', content)
+        # 检查是否需要添加当前消息
+        if (
+            not messages_buffer
+            or messages_buffer[-1]['role'] != 'user'
+            or messages_buffer[-1]['content'] != content
+        ):
+            messages_buffer.append({"role": "user", "content": content})
+    else:
+        # 不隔离：所有消息合并成一个对话文本块
+        history_lines = []
+        for record in history_records:
+            msg_type, msg_text, msg_username = record
+            if not msg_text:
+                continue
+            if msg_type and msg_type.lower() in ('member', 'user'):
+                display_name = "主人" if msg_username == "User" else msg_username
+                history_lines.append(f"{display_name}：{msg_text}")
+            else:
+                history_lines.append(f"Fay：{msg_text}")
+
+        # 添加当前用户消息
+        current_display_name = "主人" if username == "User" else username
+        current_line = f"{current_display_name}：{content}"
+        if not history_lines or history_lines[-1] != current_line:
+            history_lines.append(current_line)
+
+        # 限制历史记录数量
+        if len(history_lines) > 60:
+            history_lines = history_lines[-60:]
+
+        # 合并成一个 user 消息
+        if history_lines:
+            messages_buffer.append({"role": "user", "content": "\n".join(history_lines)})
 
     messages = [SystemMessage(content=system_prompt), HumanMessage(content=content)]
     

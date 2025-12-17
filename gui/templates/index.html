@@ -113,8 +113,8 @@
           </button>
           <div class="menu" ref="menuContainer">
             <div class="tag" v-for="user in userList" :key="user[0]" :class="{'selected': selectedUser && selectedUser[0] === user[0]}" @click="selectUser(user)">
-              [[ user[1] ]]
-            </div>    
+              [[ user[1] === 'User' ? '主人' : user[1] ]]
+            </div>
           </div>
           <button id="nextButton">
             <img src="{{ url_for('static',filename='images/scrollright.png') }}" alt="向右滑动">
