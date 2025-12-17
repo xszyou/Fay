@@ -765,7 +765,31 @@ html {
   max-width: 150px;
 }
 
-.prestart-content-inline .message-image-thumbnail {
-  max-width: 150px;
-  max-height: 100px;
+
+/* 状态指示器样式 */
+.status-indicators {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 100;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #ccc; /* 默认灰色 */
+  cursor: pointer;
+  transition: all 0.3s;
+  border: 1px solid #fff;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+.status-dot.connected {
+  background-color: #4CAF50; /* 绿色 */
+  box-shadow: 0 0 4px #4CAF50;
 }

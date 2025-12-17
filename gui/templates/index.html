@@ -17,7 +17,12 @@
   <body>
     <div id="app" class="main_bg">
       <div class="main_left">
-        <div class="main_left_logo">
+        <div class="main_left_logo" style="position: relative;">
+          <div class="status-indicators">
+            <div class="status-dot" :class="{ 'connected': systemStatus.server }" title="服务器"></div>
+            <div class="status-dot" :class="{ 'connected': systemStatus.digital_human }" title="数字人"></div>
+            <div class="status-dot" :class="{ 'connected': systemStatus.remote_audio }" title="远程音频"></div>
+          </div>
           <img src="{{ url_for('static',filename='images/Logo.png') }}" alt="">
         </div>
 

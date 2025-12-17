@@ -32,7 +32,7 @@
       </div>
 
       <div class="main_right">
-        <div class="setting_fay_top"><span style="color: #000; font-size: 20px; padding-right: 10px;">人设</span><span v-if="isConnected" style="color: #f56c6c;">已连接数字人</span><span style="margin-left: 10px;color:#f56c6c;" v-if="remoteAudioConnected">已连接远程音频</span> </div>
+        <div class="setting_fay_top"><span style="color: #000; font-size: 20px; padding-right: 10px;">人设</span></div>
         <!-- 以上是即时信息显示 -->
   
         <div class="setting_fay">          
@@ -121,7 +121,7 @@
               </li>
               <li> <span class="font_name">仿生记忆:</span>
                 <el-switch v-model="use_bionic_memory" active-color="#13ce66" inactive-color="#ff4949" @change="onBionicMemoryChange"></el-switch>
-                <span style="font-size: 12px; color: #666; margin-left: 10px;">开启后使用仿生记忆系统（人格克隆不可用）</span>
+                <span style="font-size: 12px; color: #666; margin-left: 10px;">开启后使用仿生记忆系统（试验功能，人格克隆不可用）</span>
               </li>
             </ul>
           </div>

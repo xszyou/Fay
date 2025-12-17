@@ -326,6 +326,12 @@ new Vue({
       isThinkPanelMinimized: false,
       mcpOnlineStatus: false,
       mcpCheckTimer: null,
+      systemStatus: {
+        server: false,
+        digital_human: false,
+        remote_audio: false
+      },
+      systemStatusTimer: null,
     };
   },
   watch: {
@@ -337,8 +343,51 @@ new Vue({
     this.startUserListTimer();
     this.checkMcpStatus();
     this.startMcpStatusTimer();
+    this.startSystemStatusTimer();
   },
   methods: {
+    // 检查系统各组件连接状态
+    checkSystemStatus() {
+      let username = '';
+      if (this.selectedUser && this.selectedUser.length > 1) {
+        username = this.selectedUser[1];
+      }
+      
+      const statusUrl = `${this.base_url}/api/get-system-status?username=${encodeURIComponent(username)}`;
+      
+      fetch(statusUrl)
+        .then(response => response.json())
+        .then(data => {
+          this.systemStatus = {
+            server: data.server,
+            digital_human: data.digital_human,
+            remote_audio: data.remote_audio
+          };
+        })
+        .catch(error => {
+          console.warn('获取系统状态失败:', error);
+          this.systemStatus = {
+            server: false,
+            digital_human: false,
+            remote_audio: false
+          };
+        });
+    },
+
+    // 启动系统状态检查定时器
+    startSystemStatusTimer() {
+      // 立即执行一次
+      this.checkSystemStatus();
+      
+      if (this.systemStatusTimer) {
+        clearInterval(this.systemStatusTimer);
+      }
+      // 每3秒检查一次
+      this.systemStatusTimer = setInterval(() => {
+        this.checkSystemStatus();
+      }, 3000);
+    },
+
     initFayService() {
       const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsHost = window.location.hostname;
@@ -520,6 +569,10 @@ new Vue({
       if (this.mcpCheckTimer) {
         clearInterval(this.mcpCheckTimer);
         this.mcpCheckTimer = null;
+      }
+      if (this.systemStatusTimer) {
+        clearInterval(this.systemStatusTimer);
+        this.systemStatusTimer = null;
       }
     },
     selectUser(user) {

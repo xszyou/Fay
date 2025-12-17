@@ -373,6 +373,43 @@ def api_get_run_status():
     except Exception as e:
         return jsonify({'status': False, 'message': f'获取运行状态时出错: {e}'}), 500
 
+@__app.route('/api/get-system-status', methods=['get'])
+def api_get_system_status():
+    # 获���系统各组件连接状态
+    try:
+        username = request.args.get('username')
+        server_status = True
+        
+        # 数字人状态 (HumanServer 10002)
+        # 检查指定用户是否连接了数字人端
+        digital_human_status = False
+        try:
+            wsa_instance = wsa_server.get_instance()
+            if wsa_instance and username:
+                digital_human_status = wsa_instance.is_connected(username)
+        except Exception:
+            digital_human_status = False
+        
+        # 远程音频状态 (Socket 10001)
+        # 检查指定用户是否连接了远程音频
+        remote_audio_status = False
+        try:
+            if username and hasattr(fay_booter, 'DeviceInputListenerDict'):
+                for listener in fay_booter.DeviceInputListenerDict.values():
+                    if listener.username == username:
+                        remote_audio_status = True
+                        break
+        except Exception:
+            remote_audio_status = False
+            
+        return jsonify({
+            'server': server_status,
+            'digital_human': digital_human_status,
+            'remote_audio': remote_audio_status
+        })
+    except Exception as e:
+        return jsonify({'server': False, 'digital_human': False, 'remote_audio': False, 'error': str(e)}), 500
+
 @__app.route('/api/adopt-msg', methods=['POST'])
 def adopt_msg():
     # 采纳消息
