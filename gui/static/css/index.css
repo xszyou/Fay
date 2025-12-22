@@ -318,18 +318,64 @@ html {
 	
   }
 
- .tag {	
+ .tag {
 	background: url('../images/tabline.png') right no-repeat;
 	padding: 5px 10px;
 	font-size: 14px;
 	cursor: pointer;
 	color: #617bab;line-height: 30px;
+	position: relative;
   }
 
  .tag.selected {
 	background-color: #f4f7ff;
 	color: #0064fb;
   }
+
+ .user-delete-btn {
+	position: absolute;
+	top: -2px;
+	right: 2px;
+	width: 14px;
+	height: 14px;
+	line-height: 12px;
+	text-align: center;
+	font-size: 12px;
+	font-weight: bold;
+	color: #fff;
+	background-color: #f56c6c;
+	border-radius: 50%;
+	cursor: pointer;
+	z-index: 10;
+  }
+
+ .user-delete-btn:hover {
+	background-color: #e04040;
+  }
+
+ .add-user-btn {
+	position: absolute;
+	right: 35px;
+	top: 50%;
+	transform: translateY(-50%);
+	width: 24px;
+	height: 24px;
+	line-height: 22px;
+	text-align: center;
+	font-size: 18px;
+	font-weight: bold;
+	color: #fff;
+	background-color: #67c23a;
+	border: none;
+	border-radius: 50%;
+	cursor: pointer;
+	z-index: 2;
+  }
+
+ .add-user-btn:hover {
+	background-color: #529b2e;
+  }
+
   #prevButton{background-color: #FFFFFF; border: none;
 	    z-index: 1;
 	    position: absolute;

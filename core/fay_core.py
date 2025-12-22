@@ -77,7 +77,7 @@ class FeiFei:
         self.sound_query = Queue()
         self.think_mode_users = {}  # 使用字典存储每个用户的think模式状态
         self.think_time_users = {} #使用字典存储每个用户的think开始时间
-        self.user_conv_map = {} #存储用户对话id及句子流序号
+        self.user_conv_map = {} #存储用户对话id及句子流序号，key为(username, conversation_id)
     
     def __remove_emojis(self, text):
         """
@@ -312,6 +312,10 @@ class FeiFei:
 
             # 流式文本拼接存库
             content_id = 0
+            # 使用 (username, conversation_id) 作为 key，避免并发会话覆盖
+            conv = interact.data.get("conversation_id") or ""
+            conv_map_key = (username, conv)
+
             if is_first == True:
                 # reset any leftover think-mode at the start of a new reply
                 # 但如果是 prestart 内容，不重置 thinking 状态
@@ -322,25 +326,42 @@ class FeiFei:
                             del self.think_time_users[uid]
                 except Exception:
                     pass
-                conv = interact.data.get("conversation_id") or ("conv_" + str(uuid.uuid4()))
+                # 如果没有 conversation_id，生成一个新的
+                if not conv:
+                    conv = "conv_" + str(uuid.uuid4())
+                    conv_map_key = (username, conv)
                 conv_no = 0
                 # 创建第一条数据库记录，获得content_id
                 if text and text.strip():
                     content_id = content_db.new_instance().add_content('fay', 'speak', text, username, uid)
                 else:
                     content_id = content_db.new_instance().add_content('fay', 'speak', '', username, uid)
-                
-                # 保存content_id到会话映射中
-                self.user_conv_map[username] = {
-                    "conversation_id": conv, 
+
+                # 保存content_id到会话映射中，使用 (username, conversation_id) 作为 key
+                self.user_conv_map[conv_map_key] = {
+                    "conversation_id": conv,
                     "conversation_msg_no": conv_no,
-                    "content_id": content_id  # 新增：保存content_id
+                    "content_id": content_id
                 }
+                util.log(1, f"流式会话开始: key={conv_map_key}, content_id={content_id}")
             else:
-                self.user_conv_map[username]["conversation_msg_no"] += 1
                 # 获取之前保存的content_id
-                content_id = self.user_conv_map.get(username, {}).get("content_id", 0)
-                
+                conv_info = self.user_conv_map.get(conv_map_key, {})
+                content_id = conv_info.get("content_id", 0)
+
+                # 如果 conv_map_key 不存在，尝试使用 username 作为备用查找
+                if not conv_info and text and text.strip():
+                    # 查找所有匹配用户名的会话
+                    for (u, c), info in list(self.user_conv_map.items()):
+                        if u == username and info.get("content_id", 0) > 0:
+                            content_id = info.get("content_id", 0)
+                            conv_info = info
+                            util.log(1, f"警告：使用备用会话 ({u}, {c}) 的 content_id={content_id}，原 key=({username}, {conv})")
+                            break
+
+                if conv_info:
+                    conv_info["conversation_msg_no"] = conv_info.get("conversation_msg_no", 0) + 1
+
                 # 如果有新内容，更新数据库
                 if content_id > 0 and text and text.strip():
                     # 获取当前已有内容
@@ -349,8 +370,14 @@ class FeiFei:
                         # 累积内容
                         accumulated_text = existing_content[3] + text
                         content_db.new_instance().update_content(content_id, accumulated_text)
+                elif content_id == 0 and text and text.strip():
+                    # content_id 为 0 表示可能会话 key 不匹配，记录警告
+                    util.log(1, f"警告：content_id=0，无法更新数据库。user={username}, conv={conv}, text片段={text[:50] if len(text) > 50 else text}")
 
-            
+            # 会话结束时清理 user_conv_map 中的对应条目，避免内存泄漏
+            if is_end and conv_map_key in self.user_conv_map:
+                del self.user_conv_map[conv_map_key]
+
             # 推送给前端和数字人
             try:
                 user_for_stop = interact.data.get("user", "User")
@@ -612,7 +639,11 @@ class FeiFei:
 
             #发送音频给数字人接口
             if file_url is not None and wsa_server.get_instance().get_client_output(interact.data.get("user")):
-                content = {'Topic': 'human', 'Data': {'Key': 'audio', 'Value': os.path.abspath(file_url), 'HttpValue': f'{cfg.fay_url}/audio/' + os.path.basename(file_url),  'Text': text, 'Time': audio_length, 'Type': interact.interleaver, 'IsFirst': 1 if interact.data.get("isfirst", False) else 0,  'IsEnd': 1 if interact.data.get("isend", False) else 0, 'CONV_ID' : self.user_conv_map[interact.data.get("user", "User")]["conversation_id"], 'CONV_MSG_NO' : self.user_conv_map[interact.data.get("user", "User")]["conversation_msg_no"]  }, 'Username' : interact.data.get('user'), 'robot': f'{cfg.fay_url}/robot/Speaking.jpg'}
+                # 使用 (username, conversation_id) 作为 key 获取会话信息
+                audio_username = interact.data.get("user", "User")
+                audio_conv_id = interact.data.get("conversation_id") or ""
+                audio_conv_info = self.user_conv_map.get((audio_username, audio_conv_id), {})
+                content = {'Topic': 'human', 'Data': {'Key': 'audio', 'Value': os.path.abspath(file_url), 'HttpValue': f'{cfg.fay_url}/audio/' + os.path.basename(file_url),  'Text': text, 'Time': audio_length, 'Type': interact.interleaver, 'IsFirst': 1 if interact.data.get("isfirst", False) else 0,  'IsEnd': 1 if interact.data.get("isend", False) else 0, 'CONV_ID' : audio_conv_info.get("conversation_id", ""), 'CONV_MSG_NO' : audio_conv_info.get("conversation_msg_no", 0)  }, 'Username' : interact.data.get('user'), 'robot': f'{cfg.fay_url}/robot/Speaking.jpg'}
                 #计算lips
                 if platform.system() == "Windows":
                     try:

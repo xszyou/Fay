@@ -246,3 +246,34 @@ class Content_Db:
         record = cur.fetchone()
         conn.close()
         return record
+
+    # 删除指定用户名的所有消息
+    @synchronized
+    def delete_messages_by_username(self, username):
+        """
+        删除指定用户名的所有消息（包括用户发送的和Fay回复给该用户的）
+        :param username: 用户名
+        :return: 删除的消息数量
+        """
+        conn = sqlite3.connect("memory/fay.db")
+        conn.text_factory = str
+        cur = conn.cursor()
+        try:
+            # 先获取该用户所有消息的ID，用于删除采纳记录
+            cur.execute("SELECT id FROM T_Msg WHERE username = ?", (username,))
+            msg_ids = [row[0] for row in cur.fetchall()]
+
+            # 删除这些消息的采纳记录
+            if msg_ids:
+                placeholders = ','.join('?' * len(msg_ids))
+                cur.execute(f"DELETE FROM T_Adopted WHERE msg_id IN ({placeholders})", msg_ids)
+
+            # 删除消息
+            cur.execute("DELETE FROM T_Msg WHERE username = ?", (username,))
+            deleted_count = cur.rowcount
+            conn.commit()
+        except Exception as e:
+            util.log(1, f"删除用户消息失败: {e}")
+            deleted_count = 0
+        conn.close()
+        return deleted_count

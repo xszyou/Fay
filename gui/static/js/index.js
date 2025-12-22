@@ -332,6 +332,8 @@ new Vue({
         remote_audio: false
       },
       systemStatusTimer: null,
+      addUserDialogVisible: false,
+      newUsername: '',
     };
   },
   watch: {
@@ -552,6 +554,98 @@ new Vue({
       this.userListTimer = setInterval(() => {
         this.loadUserList();
       }, 30000);
+    },
+    showDeleteBtn(user) {
+      // 只有非主人用户才显示删除按钮
+      if (user[1] !== 'User') {
+        this.$set(user, 'showDelete', true);
+      }
+    },
+    hideDeleteBtn(user) {
+      this.$set(user, 'showDelete', false);
+    },
+    confirmDeleteUser(user) {
+      if (user[1] === 'User') {
+        this.$message.warning('无法删除主人账户');
+        return;
+      }
+      this.$confirm(`确定要删除用户 "${user[1]}" 吗？这将同时删除该用户的所有聊天记录和记忆数据，此操作不可恢复！`, '删除确认', {
+        confirmButtonText: '确定删除',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }).then(() => {
+        this.deleteUser(user);
+      }).catch(() => {
+        // 用户取消
+      });
+    },
+    deleteUser(user) {
+      this.fayService.fetchData(`${this.base_url}/api/delete-user`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: user[1] })
+      }).then((response) => {
+        if (response && response.success) {
+          this.$message.success(`用户 "${user[1]}" 已删除`);
+          // 从列表中移除该用户
+          const index = this.userList.findIndex(u => u[0] === user[0]);
+          if (index > -1) {
+            this.userList.splice(index, 1);
+          }
+          // 如果删除的是当前选中的用户，切换到主人
+          if (this.selectedUser && this.selectedUser[0] === user[0]) {
+            const defaultUser = this.userList.find(u => u[1] === 'User') || this.userList[0];
+            if (defaultUser) {
+              this.selectUser(defaultUser);
+            }
+          }
+        } else {
+          this.$message.error(response.message || '删除失败');
+        }
+      }).catch((err) => {
+        this.$message.error('删除用户时发生错误');
+        console.error(err);
+      });
+    },
+    showAddUserDialog() {
+      this.newUsername = '';
+      this.addUserDialogVisible = true;
+    },
+    addUser() {
+      const username = this.newUsername.trim();
+      if (!username) {
+        this.$message.warning('请输入用户名');
+        return;
+      }
+      if (username === 'User') {
+        this.$message.warning('不能使用保留的用户名 "User"');
+        return;
+      }
+      // 检查用户名是否已存在
+      if (this.userList.some(u => u[1] === username)) {
+        this.$message.warning('该用户名已存在');
+        return;
+      }
+      // 调用后端 API 添加用户
+      this.fayService.fetchData(`${this.base_url}/api/add-user`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: username })
+      }).then((response) => {
+        if (response && response.success) {
+          this.$message.success(`用户 "${username}" 已添加`);
+          // 添加到用户列表
+          this.userList.push([response.uid, username]);
+          // 选中新添加的用户
+          this.selectUser([response.uid, username]);
+          this.addUserDialogVisible = false;
+        } else {
+          this.$message.error(response.message || '添加失败');
+        }
+      }).catch((err) => {
+        this.$message.error('添加用户时发生错误');
+        console.error(err);
+      });
     },
     // 组件销毁时清除定时器
     beforeDestroy() {

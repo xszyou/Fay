@@ -112,15 +112,26 @@
             <img src="{{ url_for('static',filename='images/scrollleft.png') }}" alt="向左滑动">
           </button>
           <div class="menu" ref="menuContainer">
-            <div class="tag" v-for="user in userList" :key="user[0]" :class="{'selected': selectedUser && selectedUser[0] === user[0]}" @click="selectUser(user)">
+            <div class="tag" v-for="user in userList" :key="user[0]" :class="{'selected': selectedUser && selectedUser[0] === user[0]}" @click="selectUser(user)" @mouseenter="showDeleteBtn(user)" @mouseleave="hideDeleteBtn(user)">
               [[ user[1] === 'User' ? '主人' : user[1] ]]
+              <span v-if="user[1] !== 'User' && user.showDelete" class="user-delete-btn" @click.stop="confirmDeleteUser(user)" title="删除用户">&times;</span>
             </div>
           </div>
           <button id="nextButton">
             <img src="{{ url_for('static',filename='images/scrollright.png') }}" alt="向右滑动">
           </button>
+          <button class="add-user-btn" @click="showAddUserDialog" title="添加用户">+</button>
         </div>
       </div>
+
+      <!-- 添加用户对话框 -->
+      <el-dialog title="添加新用户" :visible.sync="addUserDialogVisible" width="350px" :close-on-click-modal="false">
+        <el-input v-model="newUsername" placeholder="请输入用户名" @keyup.enter.native="addUser" maxlength="20" show-word-limit></el-input>
+        <span slot="footer" class="dialog-footer">
+          <el-button @click="addUserDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="addUser">添加</el-button>
+        </span>
+      </el-dialog>
 
       <!-- 固定在右侧的 think 信息面板 -->
       <div class="think-panel-container" v-show="thinkContent">

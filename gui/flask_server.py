@@ -364,6 +364,43 @@ def api_get_Member_list():
     except Exception as e:
         return jsonify({'list': [], 'message': f'获取成员列表时出错: {e}'}), 500
 
+@__app.route('/api/add-user', methods=['POST'])
+def api_add_user():
+    """添加新用户"""
+    try:
+        data = request.get_json()
+        if not data or 'username' not in data:
+            return jsonify({'success': False, 'message': '缺少用户名参数'}), 400
+
+        username = data['username'].strip()
+
+        if not username:
+            return jsonify({'success': False, 'message': '用户名不能为空'}), 400
+
+        if username == 'User':
+            return jsonify({'success': False, 'message': '不能使用保留的用户名 "User"'}), 400
+
+        # 检查用户是否已存在
+        memberdb = member_db.new_instance()
+        if memberdb.is_username_exist(username) != "notexists":
+            return jsonify({'success': False, 'message': '该用户名已存在'}), 400
+
+        # 添加用户
+        result = memberdb.add_user(username)
+        if result == "success":
+            # 获取新用户的 uid
+            uid = memberdb.find_user(username)
+            return jsonify({
+                'success': True,
+                'message': f'用户 {username} 已添加',
+                'uid': uid
+            })
+        else:
+            return jsonify({'success': False, 'message': result}), 400
+
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'添加用户时出错: {e}'}), 500
+
 @__app.route('/api/get-run-status', methods=['post'])
 def api_get_run_status():
     # 获取运行状态
@@ -372,6 +409,72 @@ def api_get_run_status():
         return json.dumps({'status': status})
     except Exception as e:
         return jsonify({'status': False, 'message': f'获取运行状态时出错: {e}'}), 500
+
+@__app.route('/api/delete-user', methods=['POST'])
+def api_delete_user():
+    """删除用户及其所有数据（聊天记录、记忆文件）"""
+    try:
+        data = request.get_json()
+        if not data or 'username' not in data:
+            return jsonify({'success': False, 'message': '缺少用户名参数'}), 400
+
+        username = data['username']
+
+        # 不允许删除主人账户
+        if username == 'User':
+            return jsonify({'success': False, 'message': '无法删除主人账户'}), 400
+
+        deleted_msgs = 0
+        deleted_memory = False
+        deleted_user = False
+
+        # 1. 删除聊天记录（fay.db 中的 T_Msg 和 T_Adopted）
+        try:
+            deleted_msgs = content_db.new_instance().delete_messages_by_username(username)
+        except Exception as e:
+            print(f"删除聊天记录时出错: {e}")
+
+        # 2. 删除用户记忆文件目录（如果启用了按用户隔离）
+        try:
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            mem_base = os.path.join(base_dir, "memory")
+            user_memory_dir = os.path.join(mem_base, str(username))
+
+            if os.path.exists(user_memory_dir) and os.path.isdir(user_memory_dir):
+                import shutil
+                shutil.rmtree(user_memory_dir)
+                deleted_memory = True
+                print(f"已删除用户记忆目录: {user_memory_dir}")
+
+            # 清除缓存的 agent 对象
+            try:
+                from llm import nlp_cognitive_stream
+                if hasattr(nlp_cognitive_stream, 'agents') and username in nlp_cognitive_stream.agents:
+                    del nlp_cognitive_stream.agents[username]
+            except Exception:
+                pass
+        except Exception as e:
+            print(f"删除记忆文件时出错: {e}")
+
+        # 3. 从用户表删除用户
+        try:
+            member_db.new_instance().delete_user(username)
+            deleted_user = True
+        except Exception as e:
+            print(f"删除用户记录时出错: {e}")
+
+        return jsonify({
+            'success': True,
+            'message': f'用户 {username} 已删除',
+            'details': {
+                'deleted_messages': deleted_msgs,
+                'deleted_memory': deleted_memory,
+                'deleted_user': deleted_user
+            }
+        })
+
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'删除用户时出错: {e}'}), 500
 
 @__app.route('/api/get-system-status', methods=['get'])
 def api_get_system_status():
