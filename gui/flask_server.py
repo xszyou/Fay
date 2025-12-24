@@ -476,6 +476,64 @@ def api_delete_user():
     except Exception as e:
         return jsonify({'success': False, 'message': f'删除用户时出错: {e}'}), 500
 
+@__app.route('/api/get-user-extra-info', methods=['POST'])
+def api_get_user_extra_info():
+    """获取用户补充信息"""
+    try:
+        data = request.get_json()
+        if not data or 'username' not in data:
+            return jsonify({'success': False, 'message': '缺少用户名参数'}), 400
+
+        username = data['username']
+        extra_info = member_db.new_instance().get_extra_info(username)
+        return jsonify({'success': True, 'extra_info': extra_info})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'获取补充信息时出错: {e}'}), 500
+
+@__app.route('/api/update-user-extra-info', methods=['POST'])
+def api_update_user_extra_info():
+    """更新用户补充信息"""
+    try:
+        data = request.get_json()
+        if not data or 'username' not in data:
+            return jsonify({'success': False, 'message': '缺少用户名参数'}), 400
+
+        username = data['username']
+        extra_info = data.get('extra_info', '')
+        member_db.new_instance().update_extra_info(username, extra_info)
+        return jsonify({'success': True, 'message': '补充信息已更新'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'更新补充信息时出错: {e}'}), 500
+
+@__app.route('/api/get-user-portrait', methods=['POST'])
+def api_get_user_portrait():
+    """获取用户画像"""
+    try:
+        data = request.get_json()
+        if not data or 'username' not in data:
+            return jsonify({'success': False, 'message': '缺少用户名参数'}), 400
+
+        username = data['username']
+        user_portrait = member_db.new_instance().get_user_portrait(username)
+        return jsonify({'success': True, 'user_portrait': user_portrait})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'获取用户画像时出错: {e}'}), 500
+
+@__app.route('/api/update-user-portrait', methods=['POST'])
+def api_update_user_portrait():
+    """更新用户画像"""
+    try:
+        data = request.get_json()
+        if not data or 'username' not in data:
+            return jsonify({'success': False, 'message': '缺少用户名参数'}), 400
+
+        username = data['username']
+        user_portrait = data.get('user_portrait', '')
+        member_db.new_instance().update_user_portrait(username, user_portrait)
+        return jsonify({'success': True, 'message': '用户画像已更新'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'更新用户画像时出错: {e}'}), 500
+
 @__app.route('/api/get-system-status', methods=['get'])
 def api_get_system_status():
     # 获���系统各组件连接状态

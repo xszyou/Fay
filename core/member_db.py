@@ -31,7 +31,16 @@ class Member_Db:
         c = conn.cursor()
         c.execute('''CREATE TABLE IF NOT EXISTS T_Member
             (id INTEGER PRIMARY KEY     autoincrement,
-            username        TEXT    NOT NULL UNIQUE);''')
+            username        TEXT    NOT NULL UNIQUE,
+            extra_info      TEXT    DEFAULT '',
+            user_portrait   TEXT    DEFAULT '');''')
+        # 检查是否需要添加新列（兼容旧数据库）
+        c.execute("PRAGMA table_info(T_Member)")
+        columns = [column[1] for column in c.fetchall()]
+        if 'extra_info' not in columns:
+            c.execute('ALTER TABLE T_Member ADD COLUMN extra_info TEXT DEFAULT ""')
+        if 'user_portrait' not in columns:
+            c.execute('ALTER TABLE T_Member ADD COLUMN user_portrait TEXT DEFAULT ""')
         conn.commit()
         conn.close()
        
@@ -107,7 +116,49 @@ class Member_Db:
         else:
            return result[0]
 
+    # 获取用户补充信息
+    def get_extra_info(self, username):
+        conn = sqlite3.connect('memory/user_profiles.db')
+        c = conn.cursor()
+        c.execute('SELECT extra_info FROM T_Member WHERE username = ?', (username,))
+        result = c.fetchone()
+        conn.close()
+        if result is None:
+            return ""
+        else:
+            return result[0] if result[0] else ""
 
+    # 更新用户补充信息
+    @synchronized
+    def update_extra_info(self, username, extra_info):
+        conn = sqlite3.connect('memory/user_profiles.db')
+        c = conn.cursor()
+        c.execute('UPDATE T_Member SET extra_info = ? WHERE username = ?', (extra_info, username))
+        conn.commit()
+        conn.close()
+        return "success"
+
+    # 获取用户画像
+    def get_user_portrait(self, username):
+        conn = sqlite3.connect('memory/user_profiles.db')
+        c = conn.cursor()
+        c.execute('SELECT user_portrait FROM T_Member WHERE username = ?', (username,))
+        result = c.fetchone()
+        conn.close()
+        if result is None:
+            return ""
+        else:
+            return result[0] if result[0] else ""
+
+    # 更新用户画像
+    @synchronized
+    def update_user_portrait(self, username, user_portrait):
+        conn = sqlite3.connect('memory/user_profiles.db')
+        c = conn.cursor()
+        c.execute('UPDATE T_Member SET user_portrait = ? WHERE username = ?', (user_portrait, username))
+        conn.commit()
+        conn.close()
+        return "success"
 
     @synchronized
     def query(self, sql):

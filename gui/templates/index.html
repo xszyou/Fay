@@ -10,7 +10,7 @@
     <script src="{{ url_for('static',filename='js/vue.js') }}"></script>
     <script src="{{ url_for('static',filename='js/element-ui.js') }}"></script>
     <link rel="stylesheet" href="{{ url_for('static',filename='css/element/theme-chalk.css') }}" />
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="{{ url_for('static',filename='js/marked.min.js') }}"></script>
     <script src="{{ url_for('static',filename='js/index.js') }}" defer></script>
     <script src="{{ url_for('static',filename='js/script.js') }}" defer></script>
   </head>
@@ -130,6 +130,23 @@
         <span slot="footer" class="dialog-footer">
           <el-button @click="addUserDialogVisible = false">取消</el-button>
           <el-button type="primary" @click="addUser">添加</el-button>
+        </span>
+      </el-dialog>
+
+      <!-- 用户信息编辑对话框 -->
+      <el-dialog :title="'编辑用户信息 - ' + (editingUserForExtraInfo ? (editingUserForExtraInfo[1] === 'User' ? '主人' : editingUserForExtraInfo[1]) : '')" :visible.sync="extraInfoDialogVisible" width="600px" :close-on-click-modal="false">
+        <div style="margin-bottom: 15px;">
+          <div style="font-weight: bold; margin-bottom: 8px; color: #606266;">补充信息</div>
+          <el-input type="textarea" v-model="editingExtraInfo" placeholder="请输入用户补充信息，例如：喜好、特征、注意事项等" :rows="4" maxlength="500" show-word-limit></el-input>
+          <div style="margin-top: 5px; color: #909399; font-size: 12px;">此信息会附加到对话提示词中，帮助AI更好地了解该用户</div>
+        </div>
+        <div>
+          <div style="font-weight: bold; margin-bottom: 8px; color: #606266;">用户画像 <span style="font-weight: normal; color: #909399; font-size: 12px;">(每晚22:35自动分析更新)</span></div>
+          <el-input type="textarea" v-model="editingUserPortrait" placeholder="用户画像由系统根据对话内容自动分析生成，也可手动编辑" :rows="6" maxlength="1000" show-word-limit></el-input>
+        </div>
+        <span slot="footer" class="dialog-footer">
+          <el-button @click="extraInfoDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="saveUserInfo">保存</el-button>
         </span>
       </el-dialog>
 

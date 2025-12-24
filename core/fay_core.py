@@ -778,10 +778,13 @@ class FeiFei:
         :param is_end: 是否是最后一段文本
         """
         # 移除 prestart 标签内容，不发送给数字人
-        cleaned_text = self.__remove_prestart_tags(text)
-        if not cleaned_text:
+        cleaned_text = self.__remove_prestart_tags(text) if text else ""
+        full_text = self.__remove_emojis(cleaned_text.replace("*", "")) if cleaned_text else ""
+
+        # 如果文本为空且不是结束标记，则不发送
+        if not full_text and not is_end:
             return
-        full_text = self.__remove_emojis(cleaned_text.replace("*", ""))
+
         if wsa_server.get_instance().is_connected(username):
             content = {
                 'Topic': 'human',

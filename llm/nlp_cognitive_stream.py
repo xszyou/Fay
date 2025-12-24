@@ -44,6 +44,7 @@ from urllib3.exceptions import InsecureRequestWarning
 from scheduler.thread_manager import MyThread
 from core import content_db
 from core import stream_manager
+from core import member_db
 from faymcp import tool_registry as mcp_tool_registry
 from faymcp import prestart_registry
 
@@ -1226,15 +1227,18 @@ def init_memory_scheduler():
     
     # 设置每天0点保存记忆
     schedule.every().day.at("00:00").do(save_agent_memory)
-    
+
     # 设置每天晚上11点执行反思
     schedule.every().day.at("23:00").do(perform_daily_reflection)
-    
+
+    # 设置执行用户画像分析（测试用11:30，正式改回22:35）
+    schedule.every().day.at("11:30").do(perform_user_portrait_analysis)
+
     # 启动定时任务线程
     scheduler_thread = MyThread(target=memory_scheduler_thread)
     scheduler_thread.start()
-    
-    util.log(1, '定时任务已启动：每天0点保存记忆，每天23点执行反思')
+
+    util.log(1, '定时任务已启动：每天0点保存记忆，每天11:30用户画像分析，每天23点执行反思')
 
 def check_memory_files(username=None):
     """
@@ -1541,6 +1545,15 @@ def question(content, username, observation=None):
         "你将参与日常问答、任务执行、工具调用以及角色扮演等多轮对话。"
         "请始终以符合以上人设的身份和语气与用户交流。\n\n"
     )
+
+    # 获取当前对话用户的补充信息
+    try:
+        user_extra_info = member_db.new_instance().get_extra_info(username)
+        if user_extra_info:
+            display_username = "主人" if username == "User" else username
+            system_prompt += f"**当前对话用户补充信息**\n当前与你对话的用户是「{display_username}」，以下是关于该用户的补充信息：\n{user_extra_info}\n\n"
+    except Exception as exc:
+        util.log(1, f"获取用户补充信息失败: {exc}")
 
     # 根据配置决定是否按用户隔离历史消息
     try:
@@ -1975,6 +1988,103 @@ def clear_agent_memory():
     except Exception as e:
         util.log(1, f"清除代理记忆时出错: {str(e)}")
         return False
+
+# 用户画像分析锁
+portrait_analysis_lock = threading.RLock()
+portrait_analysis_time = None
+
+def perform_user_portrait_analysis():
+    """
+    每晚22点执行的用户画像分析任务
+    根据当天对话内容和原有画像，使用LLM生成更新后的用户画像
+    """
+    global portrait_analysis_time
+    global portrait_analysis_lock
+
+    with portrait_analysis_lock:
+        if portrait_analysis_time and datetime.datetime.now() - portrait_analysis_time < datetime.timedelta(seconds=60):
+            return
+        portrait_analysis_time = datetime.datetime.now()
+
+        util.log(1, "开始执行用户画像分析...")
+
+        try:
+            # 获取所有用户
+            all_users = member_db.new_instance().get_all_users()
+
+            for user in all_users:
+                username = user[1]
+                try:
+                    # 获取当天对话记录
+                    today_messages = content_db.new_instance().get_today_messages_by_user(username)
+
+                    # 如果当天没有对话，跳过
+                    if not today_messages:
+                        util.log(1, f"用户 {username} 今天没有对话记录，跳过画像分析")
+                        continue
+
+                    # 构建对话文本
+                    conversation_lines = []
+                    display_name = "主人" if username == "User" else username
+                    for msg_type, msg_content in today_messages:
+                        if msg_type in ('member', 'user'):
+                            conversation_lines.append(f"{display_name}: {msg_content}")
+                        else:
+                            conversation_lines.append(f"Fay: {msg_content}")
+                    conversation_text = "\n".join(conversation_lines)
+
+                    # 获取原有用户画像
+                    current_portrait = member_db.new_instance().get_user_portrait(username)
+
+                    # 构建分析prompt
+                    analysis_prompt = f"""你是一个用户画像分析专家。请根据以下信息分析并更新用户画像。
+
+**用户名**: {display_name}
+
+**原有用户画像**:
+{current_portrait if current_portrait else "（暂无）"}
+
+**今日对话记录**:
+{conversation_text}
+
+**分析要求**:
+1. 基于今日对话内容，提取并分析以下维度的信息：
+   - 基本信息（姓名、年龄、性别、生日等）
+   - 性格特点、兴趣爱好、行为习惯、情感状态
+   - 亲朋好友信息（家人、朋友、同事等人物关系）
+   - 生活信息（工作、居住、日常活动等）
+   - 身体状况（健康状态、疾病、运动习惯等）
+   - 身边事物（宠物、车辆、常用物品等）
+2. 如果原有画像存在，请在其基础上进行补充和修正
+3. 如果发现与原有画像矛盾的信息，以最新对话为准进行更新
+4. 画像应简洁明了，使用分点描述，按维度分类整理
+5. 只输出用户画像内容，不要输出分析过程
+6. 总字数控制在800字以内
+
+请输出更新后的用户画像:"""
+
+                    # 调用LLM进行分析
+                    try:
+                        response = llm.invoke([
+                            SystemMessage(content="你是用户画像分析专家，擅长从对话中提取用户特征。"),
+                            HumanMessage(content=analysis_prompt)
+                        ])
+                        new_portrait = response.content.strip()
+
+                        # 保存新的用户画像
+                        member_db.new_instance().update_user_portrait(username, new_portrait)
+                        util.log(1, f"用户 {username} 画像分析完成并已保存")
+
+                    except Exception as llm_err:
+                        util.log(1, f"用户 {username} LLM分析失败: {llm_err}")
+
+                except Exception as user_err:
+                    util.log(1, f"处理用户 {username} 时出错: {user_err}")
+
+            util.log(1, "用户画像分析任务完成")
+
+        except Exception as e:
+            util.log(1, f"用户画像分析任务出错: {e}")
 
 # 反思
 def perform_daily_reflection():

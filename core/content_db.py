@@ -247,6 +247,34 @@ class Content_Db:
         conn.close()
         return record
 
+    # 获取指定用户当天的对话记录
+    @synchronized
+    def get_today_messages_by_user(self, username):
+        """
+        获取指定用户当天的对话记录
+        :param username: 用户名
+        :return: [(type, content), ...]
+        """
+        import datetime
+        conn = sqlite3.connect("memory/fay.db")
+        conn.text_factory = str
+        cur = conn.cursor()
+        # 获取当天0点的时间戳
+        today = datetime.date.today()
+        today_start = int(datetime.datetime.combine(today, datetime.time.min).timestamp())
+        cur.execute(
+            """
+            SELECT type, content
+            FROM T_Msg
+            WHERE username = ? AND createtime >= ?
+            ORDER BY id ASC
+            """,
+            (username, today_start),
+        )
+        rows = cur.fetchall()
+        conn.close()
+        return rows
+
     # 删除指定用户名的所有消息
     @synchronized
     def delete_messages_by_username(self, username):

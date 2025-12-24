@@ -334,6 +334,10 @@ new Vue({
       systemStatusTimer: null,
       addUserDialogVisible: false,
       newUsername: '',
+      extraInfoDialogVisible: false,
+      editingUserForExtraInfo: null,
+      editingExtraInfo: '',
+      editingUserPortrait: '',
     };
   },
   watch: {
@@ -663,9 +667,82 @@ new Vue({
       }
     },
     selectUser(user) {
+      // 如果点击的是当前已选中的用户，打开补充信息编辑框
+      if (this.selectedUser && this.selectedUser[0] === user[0]) {
+        this.openExtraInfoDialog(user);
+        return;
+      }
       this.selectedUser = user;
       this.fayService.websocket.send(JSON.stringify({ "Username": user[1] }));
-      this.loadMessageHistory(user[1], 'common'); 
+      this.loadMessageHistory(user[1], 'common');
+    },
+    // 打开用户信息编辑对话框
+    openExtraInfoDialog(user) {
+      this.editingUserForExtraInfo = user;
+      this.editingExtraInfo = '';
+      this.editingUserPortrait = '';
+      this.extraInfoDialogVisible = true;
+      // 并行获取补充信息和用户画像
+      Promise.all([
+        this.fayService.fetchData(`${this.base_url}/api/get-user-extra-info`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: user[1] })
+        }),
+        this.fayService.fetchData(`${this.base_url}/api/get-user-portrait`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: user[1] })
+        })
+      ]).then(([extraInfoRes, portraitRes]) => {
+        if (extraInfoRes && extraInfoRes.success) {
+          this.editingExtraInfo = extraInfoRes.extra_info || '';
+        }
+        if (portraitRes && portraitRes.success) {
+          this.editingUserPortrait = portraitRes.user_portrait || '';
+        }
+      }).catch((error) => {
+        console.error('获取用户信息失败:', error);
+      });
+    },
+    // 保存用户信息（补充信息和用户画像）
+    saveUserInfo() {
+      if (!this.editingUserForExtraInfo) return;
+      const username = this.editingUserForExtraInfo[1];
+      // 并行保存补充信息和用户画像
+      Promise.all([
+        this.fayService.fetchData(`${this.base_url}/api/update-user-extra-info`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: username, extra_info: this.editingExtraInfo })
+        }),
+        this.fayService.fetchData(`${this.base_url}/api/update-user-portrait`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: username, user_portrait: this.editingUserPortrait })
+        })
+      ]).then(([extraInfoRes, portraitRes]) => {
+        if ((extraInfoRes && extraInfoRes.success) && (portraitRes && portraitRes.success)) {
+          this.$notify({
+            title: '成功',
+            message: '用户信息已保存',
+            type: 'success',
+          });
+          this.extraInfoDialogVisible = false;
+        } else {
+          this.$notify({
+            title: '失败',
+            message: '部分信息保存失败',
+            type: 'error',
+          });
+        }
+      }).catch((error) => {
+        this.$notify({
+          title: '错误',
+          message: '保存用户信息时出错',
+          type: 'error',
+        });
+      });
     },
     startLive() {
       this.liveState = 2
