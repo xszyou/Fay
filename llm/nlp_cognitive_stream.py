@@ -336,7 +336,7 @@ def _run_prestart_tools(user_question: str) -> List[Dict[str, Any]]:
         try:
             resp = requests.post(
                 f"http://127.0.0.1:5010/api/mcp/servers/{server_id}/call",
-                json={"method": tool_name, "params": filled_params},
+                json={"method": tool_name, "params": filled_params, "is_prestart": True},
                 timeout=120,
             )
             resp.raise_for_status()

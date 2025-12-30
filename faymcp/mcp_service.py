@@ -331,24 +331,25 @@ def disconnect_all_mcp_servers():
     util.log(1, f'成功断开 {disconnected_count} 个MCP服务连接，资源已清理')
 
 # 调用MCP服务器工具
-def call_mcp_tool(server_id, method, params=None):
+def call_mcp_tool(server_id, method, params=None, skip_enabled_check=False):
     """
     调用MCP服务器工具
     :param server_id: 服务器ID
     :param method: 方法名
     :param params: 参数字典
+    :param skip_enabled_check: 是否跳过启用状态检查（用于预启动调用）
     :return: (是否成功, 结果或错误信息)
     """
     try:
-        # 检查工具是否被启用
-        if not get_tool_state(server_id, method):
+        # 检查工具是否被启用（预启动调用跳过此检查）
+        if not skip_enabled_check and not get_tool_state(server_id, method):
             return False, f"工具 '{method}' 已被禁用"
-        
+
         # 获取客户端对象
         client = get_mcp_client(server_id)
         if not client:
             return False, "未找到服务器连接"
-            
+
         # 调用工具
         return client.call_tool(method, params)
     except Exception as e:
@@ -724,11 +725,12 @@ def call_server_tool(server_id):
     data = request.json
     method = data.get('method')
     params = data.get('params', {})
-    
+    is_prestart = data.get('is_prestart', False)  # 预启动调用跳过启用状态检查
+
     if not method:
         return jsonify({"error": "缺少方法名"}), 400
-        
-    success, result = call_mcp_tool(server_id, method, params)
+
+    success, result = call_mcp_tool(server_id, method, params, skip_enabled_check=is_prestart)
     
     if success:
         # 处理结果，确保它是可序列化的
