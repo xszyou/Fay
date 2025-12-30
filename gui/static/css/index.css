@@ -189,9 +189,49 @@ html {
  
 .chat-container {
 	max-width: 100%;
-	margin: 20px auto;	
+	margin: 20px auto;
 	padding: 20px;
   }
+
+/* 加载更多样式 */
+.loading-more,
+.load-more-hint,
+.no-more-messages {
+  text-align: center;
+  padding: 10px;
+  color: #999;
+  font-size: 13px;
+}
+
+.loading-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.loading-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #e0e0e0;
+  border-top-color: #617bab;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.load-more-hint {
+  color: #617bab;
+  cursor: pointer;
+}
+
+.no-more-messages {
+  color: #ccc;
+  font-size: 12px;
+}
 
 .message {
 	display: flex;

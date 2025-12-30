@@ -286,7 +286,7 @@ def api_send():
     except Exception as e:
         return jsonify({'result': 'error', 'message': f'发送消息时出错: {e}'}), 500
 
-# 获取指定用户的消息记录
+# 获取指定用户的消息记录（支持分页）
 @__app.route('/api/get-msg', methods=['post'])
 def api_get_Msg():
     try:
@@ -296,12 +296,15 @@ def api_get_Msg():
         else:
             data = json.loads(data)
         uid = member_db.new_instance().find_user(data["username"])
-        limit = data.get("limit", 1000)  # 可选的条数限制参数，默认1000
+        limit = data.get("limit", 30)  # 默认每页30条
+        offset = data.get("offset", 0)  # 默认从0开始
         contentdb = content_db.new_instance()
         if uid == 0:
-            return json.dumps({'list': []})
+            return json.dumps({'list': [], 'total': 0, 'hasMore': False})
         else:
-            list = contentdb.get_list('all', 'desc', limit, uid)
+            # 获取总数用于判断是否还有更多
+            total = contentdb.get_message_count(uid)
+            list = contentdb.get_list('all', 'desc', limit, uid, offset)
         relist = []
         i = len(list) - 1
         while i >= 0:
@@ -311,11 +314,12 @@ def api_get_Msg():
             i -= 1
         if fay_booter.is_running():
             wsa_server.get_web_instance().add_cmd({"liveState": 1})
-        return json.dumps({'list': relist})
+        hasMore = (offset + len(list)) < total
+        return json.dumps({'list': relist, 'total': total, 'hasMore': hasMore})
     except json.JSONDecodeError:
-        return jsonify({'list': [], 'message': '无效的JSON数据'})
+        return jsonify({'list': [], 'total': 0, 'hasMore': False, 'message': '无效的JSON数据'})
     except Exception as e:
-        return jsonify({'list': [], 'message': f'获取消息时出错: {e}'}), 500
+        return jsonify({'list': [], 'total': 0, 'hasMore': False, 'message': f'获取消息时出错: {e}'}), 500
 
 #文字沟通接口
 @__app.route('/v1/chat/completions', methods=['post'])

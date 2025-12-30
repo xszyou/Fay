@@ -162,7 +162,7 @@ class Content_Db:
 
     # 获取对话内容
     @synchronized
-    def get_list(self, way, order, limit, uid=0):
+    def get_list(self, way, order, limit, uid=0, offset=0):
         conn = sqlite3.connect("memory/fay.db")
         conn.text_factory = str
         cur = conn.cursor()
@@ -179,17 +179,31 @@ class Content_Db:
             WHERE 1 {where_uid}
         """
         if way == 'all':
-            query = base_query + f" ORDER BY T_Msg.id {order} LIMIT ?"
-            cur.execute(query, (limit,))
+            query = base_query + f" ORDER BY T_Msg.id {order} LIMIT ? OFFSET ?"
+            cur.execute(query, (limit, offset))
         elif way == 'notappended':
-            query = base_query + f" AND T_Msg.way != 'appended' ORDER BY T_Msg.id {order} LIMIT ?"
-            cur.execute(query, (limit,))
+            query = base_query + f" AND T_Msg.way != 'appended' ORDER BY T_Msg.id {order} LIMIT ? OFFSET ?"
+            cur.execute(query, (limit, offset))
         else:
-            query = base_query + f" AND T_Msg.way = ? ORDER BY T_Msg.id {order} LIMIT ?"
-            cur.execute(query, (way, limit))
+            query = base_query + f" AND T_Msg.way = ? ORDER BY T_Msg.id {order} LIMIT ? OFFSET ?"
+            cur.execute(query, (way, limit, offset))
         list = cur.fetchall()
         conn.close()
         return list
+
+    # 获取用户消息总数
+    @synchronized
+    def get_message_count(self, uid=0):
+        conn = sqlite3.connect("memory/fay.db")
+        conn.text_factory = str
+        cur = conn.cursor()
+        where_uid = ""
+        if int(uid) != 0:
+            where_uid = f" WHERE uid = {uid} "
+        cur.execute(f"SELECT COUNT(*) FROM T_Msg {where_uid}")
+        count = cur.fetchone()[0]
+        conn.close()
+        return count
     
 
     @synchronized

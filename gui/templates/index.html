@@ -46,6 +46,17 @@
 
         <div class="chatmessage">
           <div class="chat-container" id="user0">
+            <!-- 加载更多提示 -->
+            <div v-if="loadingMoreMessages" class="loading-more">
+              <span class="loading-spinner"></span>
+              <span>加载中...</span>
+            </div>
+            <div v-else-if="hasMoreMessages" class="load-more-hint">
+              ↑ 上拉加载更多历史消息
+            </div>
+            <div v-else-if="messages.length > 0" class="no-more-messages">
+              — 没有更多消息了 —
+            </div>
             <div v-for="(item, index) in messages" :key="index">
               <div class="message receiver-message" v-if="item.type == 'fay'">
                 <img class="avatar" src="{{ url_for('static',filename='images/Fay_send.png') }}" alt="接收者头像">

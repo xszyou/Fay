@@ -126,13 +126,13 @@ class FayInterface {
     });
   }
 
-  getMessageHistory(username) {
+  getMessageHistory(username, limit = 30, offset = 0) {
     return new Promise((resolve, reject) => {
       const url = `${this.baseApiUrl}/api/get-msg`;
       const xhr = new XMLHttpRequest();
       xhr.open("POST", url);
       xhr.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
-      const send_data = `data=${encodeURIComponent(JSON.stringify({ username }))}`;
+      const send_data = `data=${encodeURIComponent(JSON.stringify({ username, limit, offset }))}`;
       xhr.send(send_data);
 
       xhr.onreadystatechange = function () {
@@ -141,10 +141,14 @@ class FayInterface {
             try {
               const data = JSON.parse(xhr.responseText);
               if (data && data.list) {
-                const combinedList = data.list.flat(); 
-                resolve(combinedList);
+                const combinedList = data.list.flat();
+                resolve({
+                  list: combinedList,
+                  total: data.total || 0,
+                  hasMore: data.hasMore || false
+                });
               } else {
-                resolve([]);
+                resolve({ list: [], total: 0, hasMore: false });
               }
             } catch (e) {
               console.error('Error parsing response:', e);
@@ -313,8 +317,8 @@ new Vue({
       selectedUser: null,
       loading: false,
       chatMessages: {},
-      panelMsg: '', 
-      panelReply: '', 
+      panelMsg: '',
+      panelReply: '',
       robot:'static/images/Normal.gif',
       base_url: window.location.protocol + '//' + window.location.hostname + ':' + window.location.port,
       hostname: window.location.hostname,
@@ -338,6 +342,11 @@ new Vue({
       editingUserForExtraInfo: null,
       editingExtraInfo: '',
       editingUserPortrait: '',
+      // 分页相关
+      messageOffset: 0,
+      messageLimit: 30,
+      hasMoreMessages: false,
+      loadingMoreMessages: false,
     };
   },
   watch: {
@@ -759,18 +768,81 @@ new Vue({
   },
 
     loadMessageHistory(username, type) {
-      this.fayService.getMessageHistory(username).then((response) => {
+      // 重置分页状态
+      this.messageOffset = 0;
+      this.hasMoreMessages = false;
+      this.loadingMoreMessages = false;
+
+      this.fayService.getMessageHistory(username, this.messageLimit, 0).then((response) => {
         if (response) {
-          this.messages = response;
+          this.messages = response.list || [];
+          this.hasMoreMessages = response.hasMore || false;
+          this.messageOffset = this.messages.length;
+
           if(type == 'common'){
+            this.$nextTick(() => {
+              const chatContainer = document.querySelector('.chatmessage');
+              if (chatContainer) {
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+                // 绑定滚动事件监听
+                this.bindScrollListener(chatContainer);
+              }
+            });
+          }
+        }
+      });
+    },
+
+    // 绑定滚动事件监听器
+    bindScrollListener(container) {
+      // 移除旧的监听器
+      if (this._scrollHandler) {
+        container.removeEventListener('scroll', this._scrollHandler);
+      }
+
+      // 创建新的监听器
+      this._scrollHandler = () => {
+        // 当滚动到顶部附近时加载更多
+        if (container.scrollTop < 50 && this.hasMoreMessages && !this.loadingMoreMessages) {
+          this.loadMoreMessages();
+        }
+      };
+
+      container.addEventListener('scroll', this._scrollHandler);
+    },
+
+    // 加载更多历史消息
+    loadMoreMessages() {
+      if (!this.selectedUser || this.loadingMoreMessages || !this.hasMoreMessages) {
+        return;
+      }
+
+      this.loadingMoreMessages = true;
+      const username = this.selectedUser[1];
+
+      this.fayService.getMessageHistory(username, this.messageLimit, this.messageOffset).then((response) => {
+        if (response && response.list && response.list.length > 0) {
+          const chatContainer = document.querySelector('.chatmessage');
+          const oldScrollHeight = chatContainer ? chatContainer.scrollHeight : 0;
+
+          // 将新消息添加到列表开头（因为是更早的消息）
+          this.messages = [...response.list, ...this.messages];
+          this.messageOffset += response.list.length;
+          this.hasMoreMessages = response.hasMore || false;
+
+          // 保持滚动位置
           this.$nextTick(() => {
-            const chatContainer = document.querySelector('.chatmessage');
             if (chatContainer) {
-              chatContainer.scrollTop = chatContainer.scrollHeight;
+              const newScrollHeight = chatContainer.scrollHeight;
+              chatContainer.scrollTop = newScrollHeight - oldScrollHeight;
             }
           });
+        } else {
+          this.hasMoreMessages = false;
         }
-        }
+        this.loadingMoreMessages = false;
+      }).catch(() => {
+        this.loadingMoreMessages = false;
       });
     },
     sendSuccessMsg(message) {
