@@ -608,7 +608,8 @@ def _call_planner_llm(state: AgentState) -> Dict[str, Any]:
     content = getattr(response, "content", None)
     if not isinstance(content, str):
         raise RuntimeError("规划器返回内容异常，未获得字符串。")
-    trimmed = content.strip()
+    # 先移除 think 标签，兼容带思考标签的模型（如 DeepSeek R1）
+    trimmed = _remove_think_from_text(content.strip())
     try:
         decision = json.loads(trimmed)
     except json.JSONDecodeError as exc:
