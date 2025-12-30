@@ -525,16 +525,21 @@ def disconnect_server(server_id):
     global mcp_servers, mcp_clients
     for server in mcp_servers:
         if server['id'] == server_id:
-            # 这里可以添加实际的断开连接逻辑
+            # 断开连接并终止子进程
             server['status'] = 'offline'
-            
-            # 删除客户端对象
+
+            # 正确断开客户端连接
             if server_id in mcp_clients:
+                client = mcp_clients[server_id]
+                try:
+                    client.disconnect()  # 正确断开并终止子进程
+                except Exception as e:
+                    util.log(1, f"断开 MCP 服务器 {server_id} 时出错: {e}")
                 del mcp_clients[server_id]
-                
+
             # 更新工具可用状态
             tool_registry.mark_all_unavailable(server_id)
-            
+
             save_mcp_servers(mcp_servers)
             return jsonify({"message": f"服务器 {server['name']} 已断开连接", "server": server})
     return jsonify({"error": "服务器未找到"}), 404
@@ -656,13 +661,16 @@ def update_mcp_server(server_id):
 
     # 如果需要自动重连
     if auto_reconnect:
-        # 先断开
+        # 先正确断开旧连接
         if server_id in mcp_clients:
             try:
-                del mcp_clients[server_id]
-                tool_registry.mark_all_unavailable(server_id)
+                client = mcp_clients[server_id]
+                client.disconnect()  # 正确断开并终止子进程
             except Exception as e:
                 util.log(1, f"断开连接失败: {e}")
+            finally:
+                del mcp_clients[server_id]
+                tool_registry.mark_all_unavailable(server_id)
 
         # 重新连接
         try:
@@ -702,16 +710,15 @@ def delete_server(server_id):
     global mcp_servers
     for i, server in enumerate(mcp_servers):
         if server['id'] == server_id:
-            # 如果服务器处于连接状态，先断开连接
-            if server['status'] == 'online':
-                # 删除客户端对象
-                if server_id in mcp_clients:
-                    del mcp_clients[server_id]
-                tool_registry.remove_server(server_id)
+            # 正确断开客户端连接并终止子进程
+            if server_id in mcp_clients:
+                client = mcp_clients[server_id]
+                try:
+                    client.disconnect()  # 正确断开并终止子进程
+                except Exception as e:
+                    util.log(1, f"断开 MCP 服务器 {server_id} 时出错: {e}")
+                del mcp_clients[server_id]
 
-                # 更新服务器状态
-                server['status'] = 'offline'
-            
             # 删除服务器
             deleted_server = mcp_servers.pop(i)
             tool_registry.remove_server(server_id)

@@ -617,7 +617,7 @@
                   </div>
                 </div>
                 <div class="mcp-dialog-footer">
-                  <button class="add-server-btn" onclick="saveEdit(true)">保存</button>
+                  <button class="add-server-btn" id="editSaveBtn" onclick="saveEdit()">保存</button>
                 </div>
               </div>
             </div>
@@ -765,6 +765,12 @@
         const envText = document.getElementById('editMcpEnv').value.trim();
         const autoReconnect = document.getElementById('editAutoReconnect').checked;
 
+        // 获取保存按钮并设置加载状态
+        const saveBtn = document.getElementById('editSaveBtn');
+        const originalText = saveBtn.textContent;
+        saveBtn.textContent = '保存中...';
+        saveBtn.disabled = true;
+
         let payload = { name, transport, auto_reconnect: autoReconnect };
         if (transport === 'sse') {
           payload.ip = ip;
@@ -840,6 +846,11 @@
         })
         .catch(err => {
           alert('保存失败: ' + err.message);
+        })
+        .finally(() => {
+          // 恢复按钮状态
+          saveBtn.textContent = originalText;
+          saveBtn.disabled = false;
         });
       }
 

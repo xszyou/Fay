@@ -444,13 +444,73 @@ class McpClient:
                 return False
         return True
 
+    def _kill_stdio_process(self) -> None:
+        """强制终止 stdio 子进程，确保子进程被完全清理"""
+        if self.transport != "stdio":
+            return
+
+        cfg = self.stdio_config or {}
+        command = cfg.get("command") or ""
+        args = cfg.get("args") or []
+
+        # 构建用于匹配进程的关键字
+        if args:
+            # 使用第一个参数（通常是脚本路径）作为匹配关键字
+            match_pattern = str(args[0]) if args else command
+        else:
+            match_pattern = command
+
+        if not match_pattern:
+            return
+
+        import subprocess
+
+        try:
+            if sys.platform == "win32":
+                # Windows: 使用 wmic 查找进程并用 taskkill 终止
+                # 查找包含匹配模式的 python 进程
+                result = subprocess.run(
+                    ["wmic", "process", "where",
+                     f"commandline like '%{match_pattern.replace(os.sep, os.sep + os.sep)}%'",
+                     "get", "processid"],
+                    capture_output=True, text=True, timeout=5
+                )
+                if result.returncode == 0:
+                    for line in result.stdout.strip().split('\n'):
+                        line = line.strip()
+                        if line.isdigit():
+                            pid = int(line)
+                            try:
+                                subprocess.run(
+                                    ["taskkill", "/F", "/PID", str(pid)],
+                                    capture_output=True, timeout=5
+                                )
+                                logger.info(f"强制终止 stdio 子进程 PID: {pid}")
+                            except Exception as e:
+                                logger.debug(f"终止进程 {pid} 失败: {e}")
+            else:
+                # Unix: 使用 pkill 终止
+                try:
+                    subprocess.run(
+                        ["pkill", "-f", match_pattern],
+                        capture_output=True, timeout=5
+                    )
+                    logger.info(f"强制终止匹配 '{match_pattern}' 的进程")
+                except Exception as e:
+                    logger.debug(f"pkill 执行失败: {e}")
+        except Exception as e:
+            logger.debug(f"强制终止 stdio 子进程失败: {e}")
+
     def disconnect(self):
         if not self._manager_task and not self._disconnect_event:
             return True
         try:
             fut = asyncio.run_coroutine_threadsafe(self._disconnect_async(), self.event_loop)
-            return fut.result(timeout=10)
+            fut.result(timeout=5)
         except Exception as e:
             logger.error(f"Error while closing connection: {e}")
-            return False
+
+        # 确保 stdio 子进程被终止
+        self._kill_stdio_process()
+        return True
 
