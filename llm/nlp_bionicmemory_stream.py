@@ -421,7 +421,7 @@ def _build_final_messages(state: AgentState) -> List[SystemMessage | HumanMessag
     ).strip()
 
     return [
-        SystemMessage(content="你是最终回复的口播助手，请用中文自然表达。"),
+        SystemMessage(content="你是最终回复的数字人，请自然表达。"),
         HumanMessage(content=user_block),
     ]
 

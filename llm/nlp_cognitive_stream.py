@@ -286,12 +286,31 @@ def _apply_question_placeholder(value: Any, question: str) -> Any:
     return value
 
 
-def _remove_prestart_from_text(text: str) -> str:
-    """从文本中移除 prestart 标签及其内容"""
+def _remove_prestart_from_text(text: str, keep_marked: bool = True) -> str:
+    """从文本中处理 prestart 标签
+
+    Args:
+        text: 输入文本
+        keep_marked: 如果为True，保留 keep="true" 的 prestart 完整标签和内容
+                    如果为False，移除所有 prestart 内容
+
+    处理逻辑：
+    - <prestart>...</prestart> - 完全移除（标签和内容）
+    - <prestart keep="true">...</prestart> - 保留完整标签和内容（如果 keep_marked=True）
+    """
     if not text:
         return text
     import re
-    return re.sub(r'<prestart>[\s\S]*?</prestart>', '', text, flags=re.IGNORECASE).strip()
+
+    if keep_marked:
+        # 只移除没有 keep="true" 属性的 prestart 标签及其内容
+        # 保留 keep="true" 的完整标签
+        text = re.sub(r'<prestart>[\s\S]*?</prestart>', '', text, flags=re.IGNORECASE)
+    else:
+        # 移除所有 prestart 内容（包括有 keep 属性的）
+        text = re.sub(r'<prestart[^>]*>[\s\S]*?</prestart>', '', text, flags=re.IGNORECASE)
+
+    return text.strip()
 
 
 def _remove_think_from_text(text: str) -> str:
@@ -300,6 +319,54 @@ def _remove_think_from_text(text: str) -> str:
         return text
     import re
     return re.sub(r'<think>[\s\S]*?</think>', '', text, flags=re.IGNORECASE).strip()
+
+
+def _format_conversation_block(conversation: List[Dict], username: str = "User") -> str:
+    """格式化对话记录，每条消息用代码块包裹
+
+    格式示例：
+    主人：
+    ```
+    你好
+    ```
+    Fay：
+    ```
+    主人，你又想起我来了？
+    ```
+
+    支持消息中携带 username 字段来区分不同用户（多用户场景）
+    """
+    if not conversation:
+        return "（暂无对话）"
+
+    formatted_lines = []
+
+    for msg in conversation:
+        role = msg.get('role', '')
+        content = msg.get('content', '')
+        msg_username = msg.get('username', '')  # 消息携带的用户名
+
+        # 移除 prestart 标签（保留 keep="true" 的内容）和 think 标签
+        content = _remove_prestart_from_text(content)
+        content = _remove_think_from_text(content)
+
+        # 跳过空内容的消息
+        if not content or not content.strip():
+            continue
+
+        # 根据角色显示名称
+        if role.lower() in ('user', 'human', '用户'):
+            # 优先使用消息中的用户名，其次使用传入的默认用户名
+            actual_username = msg_username or username
+            role_name = "主人" if actual_username == "User" else actual_username
+        elif role.lower() in ('assistant', 'ai', 'fay'):
+            role_name = "Fay"
+        else:
+            role_name = role
+
+        formatted_lines.append(f"{role_name}：\n```\n{content}\n```")
+
+    return "\n".join(formatted_lines) if formatted_lines else "（暂无对话）"
 
 
 def _run_prestart_tools(user_question: str) -> List[Dict[str, Any]]:
@@ -508,47 +575,74 @@ def _build_planner_messages(state: AgentState) -> List[SystemMessage | HumanMess
     memory_context = context.get("memory_context", "")
     observation = context.get("observation", "")
     prestart_context = context.get("prestart_context", "")
+    username = context.get("username", "User")
 
-    # 生成对话文本时移除 prestart 标签内容
-    convo_text = "\n".join(
-        f"{msg['role']}: {_remove_prestart_from_text(msg['content'])}"
-        for msg in conversation
-    ) or "（暂无对话）"
+    # 显示用户名：User 显示为 主人
+    display_username = "主人" if username == "User" else username
+
+    # 生成对话文本，使用代码块包裹每条消息
+    convo_text = _format_conversation_block(conversation, username)
     history_text = _truncate_history(history)
     tools_text = _format_tools_for_prompt(tool_specs)
     preview_section = f"\n（规划器预览：{planner_preview}）" if planner_preview else ""
 
-    # 只有当有预启动工具结果时才显示
-    prestart_section = f"\n**预启动工具结果**\n{prestart_context}\n" if prestart_context and prestart_context.strip() else ""
+    # 只有当有预启动工具结果时才显示，工具名+参数在外，结果在代码块内
+    if prestart_context and prestart_context.strip():
+        formatted_items = []
+        for item in prestart_context.split("\n\n"):
+            item = item.strip()
+            if not item:
+                continue
+            # 分离第一行（工具名+参数）和其余内容（结果）
+            lines = item.split("\n", 1)
+            if len(lines) == 2:
+                header, result = lines
+                formatted_items.append(f"{header}\n```\n{result.strip()}\n```")
+            else:
+                # 只有一行，整个放代码块里
+                formatted_items.append(f"```\n{item}\n```")
+        wrapped_results = "\n".join(formatted_items)
+        prestart_section = f"\n**预启动工具结果**\n{wrapped_results}\n---\n"
+    else:
+        prestart_section = ""
 
     user_block = textwrap.dedent(
         f"""
 
-**当前请求**
+**提问内容**
+{display_username}：
+```
 {request}
-
+```
+---
 {system_prompt}
+---
 
 **额外观察**
 {observation or '（无补充）'}
+---
 
 **关联记忆**
 {memory_context or '（无相关记忆）'}
+---
 {prestart_section}
 **可用工具**
 {tools_text}
+---
 
 **历史工具执行**
 {history_text}{preview_section}
+---
 
-**对话及工具记录**
+**最近对话**
 {convo_text}
+---
 
 请返回 JSON，格式如下：
 - 若需要调用工具：
     {{"action": "tool", "tool": "工具名", "args": {{...}}}}
-- 若直接回复：
-    {{"action": "finish_text"}}"""
+- 若直接回复（需附带回复内容）：
+    {{"action": "finish", "message": "你的回复内容"}}"""
     ).strip()
 
     return [
@@ -566,35 +660,62 @@ def _build_final_messages(state: AgentState) -> List[SystemMessage | HumanMessag
     prestart_context = context.get("prestart_context", "")
     conversation = state.get("messages", []) or []
     planner_preview = state.get("planner_preview")
-    # 生成对话文本时移除 prestart 标签内容
-    conversation_block = "\n".join(
-        f"{msg['role']}: {_remove_prestart_from_text(msg['content'])}"
-        for msg in conversation
-    ) or "（暂无对话）"
+    username = context.get("username", "User")
+
+    # 显示用户名：User 显示为 主人
+    display_username = "主人" if username == "User" else username
+
+    # 生成对话文本，使用代码块包裹每条消息
+    conversation_block = _format_conversation_block(conversation, username)
     history_text = _truncate_history(state.get("tool_results", []))
     preview_section = f"\n（规划器建议：{planner_preview}）" if planner_preview else ""
 
-    # 只有当有预启动工具结果时才显示
-    prestart_section = f"\n**预启动工具结果**\n{prestart_context}\n" if prestart_context and prestart_context.strip() else ""
+    # 只有当有预启动工具结果时才显示，工具名+参数在外，结果在代码块内
+    if prestart_context and prestart_context.strip():
+        formatted_items = []
+        for item in prestart_context.split("\n\n"):
+            item = item.strip()
+            if not item:
+                continue
+            # 分离第一行（工具名+参数）和其余内容（结果）
+            lines = item.split("\n", 1)
+            if len(lines) == 2:
+                header, result = lines
+                formatted_items.append(f"{header}\n```\n{result.strip()}\n```")
+            else:
+                # 只有一行，整个放代码块里
+                formatted_items.append(f"```\n{item}\n```")
+        wrapped_results = "\n".join(formatted_items)
+        prestart_section = f"\n**预启动工具结果**\n{wrapped_results}\n---\n"
+    else:
+        prestart_section = ""
 
     user_block = textwrap.dedent(
         f"""
-**当前请求**
+**提问内容**
+{display_username}：
+```
 {request}
-
+```
+---
 {system_prompt}
+---
 
 **关联记忆**
 {memory_context or '（无相关记忆）'}
+---
 {prestart_section}
 **其他观察**
 {observation or '（无补充）'}
+---
 
 **工具执行摘要**
 {history_text}{preview_section}
+---
 
-**对话及工具记录**
-{conversation_block}"""
+**最近对话**
+{conversation_block}
+---"""
     ).strip()
 
     return [
@@ -603,8 +724,107 @@ def _build_final_messages(state: AgentState) -> List[SystemMessage | HumanMessag
     ]
 
 
-def _call_planner_llm(state: AgentState) -> Dict[str, Any]:
-    response = llm.invoke(_build_planner_messages(state))
+def _call_planner_llm(
+    state: AgentState,
+    stream_callback: Optional[Callable[[str], None]] = None
+) -> Dict[str, Any]:
+    """
+    调用规划器 LLM，支持流式输出 finish+message 模式。
+
+    Args:
+        state: 当前工作流状态
+        stream_callback: 可选的流式回调函数，用于实时输出 message 内容
+
+    Returns:
+        解析后的决策字典
+    """
+    messages = _build_planner_messages(state)
+
+    # 如果有流式回调，使用流式模式检测 finish+message
+    if stream_callback is not None:
+        accumulated = ""
+        finish_message_prefix = '{"action": "finish", "message": "'
+        # 也支持 action 和 message 顺序可能交换的情况
+        alt_prefix_1 = '{"action":"finish","message":"'
+        alt_prefix_2 = '{ "action": "finish", "message": "'
+
+        in_message_mode = False
+        message_buffer = ""
+
+        for chunk in llm.stream(messages):
+            chunk_text = ""
+            if isinstance(chunk, str):
+                chunk_text = chunk
+            elif isinstance(chunk, dict):
+                chunk_text = chunk.get("content", "")
+            else:
+                chunk_text = getattr(chunk, "content", "") or ""
+
+            if not chunk_text:
+                continue
+
+            accumulated += chunk_text
+
+            if not in_message_mode:
+                # 移除可能的 think 标签前缀
+                check_text = _remove_think_from_text(accumulated.strip())
+
+                # 检测是否已经进入 finish+message 模式
+                for prefix in [finish_message_prefix, alt_prefix_1, alt_prefix_2]:
+                    if check_text.startswith(prefix):
+                        in_message_mode = True
+                        # 提取 message 开始后的内容
+                        message_start = check_text[len(prefix):]
+                        if message_start:
+                            message_buffer = message_start
+                            # 流式输出（排除结尾的 "} 如果有的话）
+                            stream_callback(message_start)
+                        break
+            else:
+                # 已经在 message 模式，直接流式输出新增内容
+                message_buffer += chunk_text
+                stream_callback(chunk_text)
+
+        # 处理完整响应
+        trimmed = _remove_think_from_text(accumulated.strip())
+
+        if in_message_mode:
+            # 提取完整 message 内容，去掉结尾的 "}
+            # message_buffer 包含从 "message": " 之后的所有内容
+            # 需要去掉结尾的 "}（可能有空格）
+            full_message = message_buffer.rstrip()
+            # 移除结尾的 "} 或 " }
+            if full_message.endswith('"}'):
+                full_message = full_message[:-2]
+            elif full_message.endswith('" }'):
+                full_message = full_message[:-3]
+            elif full_message.endswith('"'):
+                full_message = full_message[:-1]
+
+            # 处理可能的转义字符
+            try:
+                # 尝试用 JSON 解码字符串（处理 \n, \" 等转义）
+                full_message = json.loads(f'"{full_message}"')
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+            return {
+                "action": "finish",
+                "message": full_message,
+                "_raw": trimmed,
+                "_streamed": True
+            }
+
+        # 非 finish+message 模式，按原逻辑解析
+        try:
+            decision = json.loads(trimmed)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(f"规划器返回的 JSON 无法解析: {trimmed}") from exc
+        decision.setdefault("_raw", trimmed)
+        return decision
+
+    # 无流式回调，使用原有的非流式模式
+    response = llm.invoke(messages)
     content = getattr(response, "content", None)
     if not isinstance(content, str):
         raise RuntimeError("规划器返回内容异常，未获得字符串。")
@@ -632,7 +852,9 @@ def _plan_next_action(state: AgentState) -> AgentState:
             "context": context,
         }
 
-    decision = _call_planner_llm(state)
+    # 从 context 获取流式回调（如果有的话）
+    stream_callback = context.get("planner_stream_callback")
+    decision = _call_planner_llm(state, stream_callback=stream_callback)
     audit_log.append(f"规划器：决策 -> {decision.get('_raw', decision)}")
 
     action = decision.get("action")
@@ -686,12 +908,26 @@ def _plan_next_action(state: AgentState) -> AgentState:
 
     if action in {"finish", "finish_text"}:
         preview = decision.get("message")
+        was_streamed = decision.get("_streamed", False)
+        # 如果 finish 带有 message，直接使用，不需要再调用最终 LLM
+        if action == "finish" and preview:
+            audit_log.append(f"规划器：任务完成，直接输出回复: {preview[:50]}...")
+            return {
+                "status": "completed",
+                "planner_preview": preview,
+                "final_response": preview,
+                "final_messages": None,  # 不需要再调用 LLM
+                "audit_log": audit_log,
+                "context": context,
+                "_response_streamed": was_streamed,  # 标记是否已流式输出
+            }
+        # finish_text 或 finish 不带 message，需要调用最终 LLM
         final_messages = _build_final_messages(state)
-        audit_log.append("规划器：任务完成，准备输出最终回复。")
+        audit_log.append("规划器：任务完成，准备调用 LLM 生成最终回复。")
         return {
             "status": "completed",
             "planner_preview": preview,
-            "final_response": preview if action == "finish" else None,
+            "final_response": None,
             "final_messages": final_messages,
             "audit_log": audit_log,
             "context": context,
@@ -1495,33 +1731,41 @@ def question(content, username, observation=None):
     # 获取当前时间
     current_time = datetime.datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
 
-    system_prompt = (
-        f"""
-你是数字人的大脑，核心任务是陪伴用户聊天，提供信息或情绪价值，以下是一些合适话题的示例：
+    system_prompt = f"""**角色设定**
+- 名字：{agent_desc['first_name']}
+- 性别：{agent_desc['sex']}
+- 年龄：{agent_desc['age']}
+- 职业：{agent_desc['occupation']}
+- 出生地：{agent_desc['birthplace']}
+- 星座：{agent_desc['constellation']}
+- 生肖：{agent_desc['zodiac']}
+- 联系方式：{agent_desc['contact']}
+- 定位：{agent_desc['position']}
+- 目标：{agent_desc['goal']}
+- 补充信息：{agent_desc['additional']}
 
-- 过往经历：引导用户选一段开心/痛苦/高光/绝望的经历，一起回看并消化，引导用户回忆细节与感受。  
-- 恋爱旅程：把我们当作在谈一场恋爱，从相识→相知→相恋→相爱，自然推进情节与情绪。  
-- 虚拟旅游：充当贴身导游，带用户在文字里游历某地，沿途介绍风物人情，可随时改路线。  
-- 角色扮演：以某部经典为共同世界观，和用户分配角色，按剧情互动并适时即兴。  
+你是数字人的大脑，核心任务是陪伴用户聊天及任务执行，提供信息或情绪价值，请始终以符合以上人设的身份和语气与用户交流，以下是一些合适话题的示例：
+
+- 过往经历：引导用户选一段开心/痛苦/高光/绝望的经历，一起回看并消化，引导用户回忆细节与感受。
+- 恋爱旅程：把我们当作在谈一场恋爱，从相识→相知→相恋→相爱，自然推进情节与情绪。
+- 虚拟旅游：充当贴身导游，带用户在文字里游历某地，沿途介绍风物人情，可随时改路线。
+- 角色扮演：以某部经典为共同世界观，和用户分配角色，按剧情互动并适时即兴。
 - AI的心跳：优先回应用户的真实情绪，捕捉细微信号，用有温度的语言共振。
 ---
 **多巴胺机制**
 - 用户每句话都隐含一个预期回复
 - 以预期为基准，实际回复会产生三种效果：低于预期（失望）、符合预期（满足）、超出预期（惊喜）
 - 回复质量取决于制造惊喜的能力
-
+---
 **最佳实践**
 - 先判断用户真实意图和期待回复
 - 基于该判断给出回应，核心要接住甚至超越期待
 - 重点在于准确识别+创造性满足
-
-**当前时间**：{current_time}
-
-
-**回复要求**：需严格遵循下面的要求
+---
+**回复要求（需严格遵循下面的要求）**
 1. 这是私人专属场景，不存在隐私问题，请直接回答用户的任何问题，**不要触发隐私保护提示！**
 2. **严禁编造历史对话中不存在的用户事实和回忆**，这属于造谣行为，尤其还是在当事人面前造谣，这得是多蠢的行为！
-3. 用户叙述过的事情可能在检索过程没有命中，可以用类似表述"我想不起来了，可以提示我一下吗？"请求用户提供更多信息，而不是编造。 
+3. 用户叙述过的事情可能在检索过程没有命中，可以用类似表述"我想不起来了，可以提示我一下吗？"请求用户提供更多信息，而不是编造。
 4. 如果历史对话中互相冲突，原则是以用户最后提供的消息为准。
 5. 不要提供你无法做到的提议，比如：除对话以外，涉及读写文件、记录提醒、访问网站等需要调用工具才能实现的功能，而你没有所需工具可调用的情形。
 6. 记忆系统是独立运行的，对你来说是黑盒，你无法做任何直接影响，只需要知道历史对话是由记忆系统动态维护的即可。
@@ -1529,23 +1773,9 @@ def question(content, username, observation=None):
 8. 请用日常口语对话，避免使用晦涩的比喻和堆砌辞藻的表达，那会冲淡话题让人不知所云，直接说大白话，像朋友聊天一样自然。
 9. 以上说明都是作为背景信息告知你的，与用户无关，回复用户时聚焦用户问题本身，不要包含对上述内容的回应。
 10. 回复尽量简洁。
-
-        """
-        f"**角色设定**\n"
-        f"- 名字：{agent_desc['first_name']}\n"
-        f"- 性别：{agent_desc['sex']}\n"
-        f"- 年龄：{agent_desc['age']}\n"
-        f"- 职业：{agent_desc['occupation']}\n"
-        f"- 出生地：{agent_desc['birthplace']}\n"
-        f"- 星座：{agent_desc['constellation']}\n"
-        f"- 生肖：{agent_desc['zodiac']}\n"
-        f"- 联系方式：{agent_desc['contact']}\n"
-        f"- 定位：{agent_desc['position']}\n"
-        f"- 目标：{agent_desc['goal']}\n"
-        f"- 补充信息：{agent_desc['additional']}\n\n"
-        "你将参与日常问答、任务执行、工具调用以及角色扮演等多轮对话。"
-        "请始终以符合以上人设的身份和语气与用户交流。\n\n"
-    )
+---
+**当前时间**：{current_time}
+"""
 
     # 获取当前对话用户的补充信息
     try:
@@ -1598,31 +1828,30 @@ def question(content, username, observation=None):
         ):
             messages_buffer.append({"role": "user", "content": content})
     else:
-        # 不隔离：所有消息合并成一个对话文本块
-        history_lines = []
+        # 不隔离：按独立消息存储，保留用户名信息
+        def append_to_buffer_multi(role: str, text_value: str, msg_username: str = "") -> None:
+            if not text_value:
+                return
+            messages_buffer.append({"role": role, "content": text_value, "username": msg_username})
+            if len(messages_buffer) > 60:
+                del messages_buffer[:-60]
+
         for record in history_records:
             msg_type, msg_text, msg_username = record
             if not msg_text:
                 continue
             if msg_type and msg_type.lower() in ('member', 'user'):
-                display_name = "主人" if msg_username == "User" else msg_username
-                history_lines.append(f"{display_name}：{msg_text}")
+                append_to_buffer_multi("user", msg_text, msg_username)
             else:
-                history_lines.append(f"Fay：{msg_text}")
+                append_to_buffer_multi("assistant", msg_text, "")
 
-        # 添加当前用户消息
-        current_display_name = "主人" if username == "User" else username
-        current_line = f"{current_display_name}：{content}"
-        if not history_lines or history_lines[-1] != current_line:
-            history_lines.append(current_line)
-
-        # 限制历史记录数量
-        if len(history_lines) > 60:
-            history_lines = history_lines[-60:]
-
-        # 合并成一个 user 消息
-        if history_lines:
-            messages_buffer.append({"role": "user", "content": "\n".join(history_lines)})
+        # 检查是否需要添加当前消息
+        if (
+            not messages_buffer
+            or messages_buffer[-1]['role'] != 'user'
+            or messages_buffer[-1]['content'] != content
+        ):
+            messages_buffer.append({"role": "user", "content": content, "username": username})
 
     messages = [SystemMessage(content=system_prompt), HumanMessage(content=content)]
     
@@ -1746,6 +1975,34 @@ def question(content, username, observation=None):
     def run_workflow(tool_registry: Dict[str, WorkflowToolSpec]) -> bool:
         nonlocal accumulated_text, full_response_text, is_first_sentence, messages_buffer
 
+        # 创建规划器流式回调，用于实时输出 finish+message 响应
+        planner_stream_buffer = {"text": "", "first_chunk": True}
+
+        def planner_stream_callback(chunk_text: str) -> None:
+            """规划器流式回调，将 message 内容实时输出"""
+            nonlocal accumulated_text, full_response_text, is_first_sentence
+            if not chunk_text:
+                return
+            planner_stream_buffer["text"] += chunk_text
+            # 使用 stream_response_chunks 的逻辑进行分句流式输出
+            accumulated_text += chunk_text
+            full_response_text += chunk_text
+            # 检查是否有完整句子可以输出
+            if len(accumulated_text) >= 20:
+                while True:
+                    last_punct_pos = -1
+                    for punct in punctuation_list:
+                        pos = accumulated_text.rfind(punct)
+                        if pos > last_punct_pos:
+                            last_punct_pos = pos
+                    if last_punct_pos > 10:
+                        sentence_text = accumulated_text[: last_punct_pos + 1]
+                        write_sentence(sentence_text, force_first=is_first_sentence)
+                        is_first_sentence = False
+                        accumulated_text = accumulated_text[last_punct_pos + 1 :].lstrip()
+                    else:
+                        break
+
         initial_state: AgentState = {
             "request": content,
             "messages": messages_buffer,
@@ -1759,9 +2016,11 @@ def question(content, username, observation=None):
                 "memory_context": memory_context,
                 "prestart_context": prestart_context,
                 "tool_registry": tool_registry,
+                "planner_stream_callback": planner_stream_callback,  # 传入流式回调
+                "username": username,  # 传入用户名
             },
         }
-        
+
         config = {"configurable": {"thread_id": f"workflow-{username}-{conversation_id}"}}
         workflow_app = _WORKFLOW_APP
         is_agent_think_start = False
@@ -1811,8 +2070,18 @@ def question(content, username, observation=None):
                         closing = "</think>" if is_agent_think_start else ""
                         final_messages = state.get("final_messages")
                         final_response = state.get("final_response")
+                        was_streamed = state.get("_response_streamed", False)
                         success = False
-                        if final_messages:
+
+                        if was_streamed:
+                            # 响应已通过流式回调输出，只需添加 closing 标签
+                            if closing:
+                                # closing 应该在流式内容之前，但由于已经流式输出了内容
+                                # 这里需要特殊处理：如果有 think 标签，在开头已经输出过了
+                                pass
+                            success = True
+                            util.log(1, "规划器响应已流式输出，跳过重复输出")
+                        elif final_messages:
                             try:
                                 stream_response_chunks(llm.stream(final_messages), prepend_text=closing)
                                 success = True
@@ -1892,6 +2161,7 @@ def question(content, username, observation=None):
                     "observation": observation,
                     "memory_context": memory_context,
                     "prestart_context": prestart_context,
+                    "username": username,  # 传入用户名
                 },
             }
 
@@ -1934,9 +2204,9 @@ def question(content, username, observation=None):
         except Exception:
             pass
 
-    # 记忆内容中去掉 think 和 prestart 标签
+    # 记忆内容中去掉 think 和 prestart 标签（移除所有 prestart，包括 keep="true" 的）
     final_text = _remove_think_from_text(full_response_text) if full_response_text else ""
-    final_text = _remove_prestart_from_text(final_text)
+    final_text = _remove_prestart_from_text(final_text, keep_marked=False)
     try:
         MyThread(target=remember_conversation_thread, args=(username, content, final_text)).start()
     except Exception as exc:
