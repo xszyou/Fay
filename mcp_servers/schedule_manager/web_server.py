@@ -105,20 +105,27 @@ class ScheduleWebAPI:
             return {"success": False, "message": f"获取日程列表失败: {str(e)}"}
     
     def add_schedule(self, title, content, schedule_time, repeat_rule='0000000', uid=0):
-        """添加日程"""
+        """添加日程
+        schedule_time: 只需要时间 HH:MM 格式
+        """
         try:
-            # 验证时间格式
+            # 验证并标准化时间格式，只保留 HH:MM
             try:
-                datetime.datetime.strptime(schedule_time, '%Y-%m-%d %H:%M')
+                if ' ' in schedule_time:
+                    time_part = schedule_time.split(' ')[1]
+                else:
+                    time_part = schedule_time
+                datetime.datetime.strptime(time_part, '%H:%M')
+                schedule_time = time_part  # 只保存 HH:MM
             except ValueError:
-                return {"success": False, "message": "时间格式错误，请使用 YYYY-MM-DD HH:MM 格式"}
-            
+                return {"success": False, "message": "时间格式错误，请使用 HH:MM 格式（如 09:30）"}
+
             # 验证重复规则
             if not all(c in '01' for c in repeat_rule) or len(repeat_rule) != 7:
                 return {"success": False, "message": "重复规则格式错误"}
-            
+
             now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            
+
             conn = sqlite3.connect(DB_PATH)
             cursor = conn.cursor()
             cursor.execute(
@@ -128,9 +135,9 @@ class ScheduleWebAPI:
             schedule_id = cursor.lastrowid
             conn.commit()
             conn.close()
-            
+
             return {"success": True, "message": "日程添加成功", "schedule_id": schedule_id}
-            
+
         except Exception as e:
             return {"success": False, "message": f"添加日程失败: {str(e)}"}
     
@@ -161,22 +168,23 @@ class ScheduleWebAPI:
                 updates.append("content = ?")
                 params.append(content)
             if schedule_time is not None:
-                # 验证时间格式
+                # 验证并标准化时间格式，只保留 HH:MM
                 try:
-                    new_time = datetime.datetime.strptime(schedule_time, '%Y-%m-%d %H:%M')
+                    if ' ' in schedule_time:
+                        time_part = schedule_time.split(' ')[1]
+                    else:
+                        time_part = schedule_time
+                    datetime.datetime.strptime(time_part, '%H:%M')
                     updates.append("schedule_time = ?")
-                    params.append(schedule_time)
-                    
-                    # 如果更新了时间，并且当前状态是completed，检查是否需要重新激活
+                    params.append(time_part)
+
+                    # 如果更新了时间，并且当前状态是completed，自动激活
                     if current_status == 'completed':
-                        now = datetime.datetime.now()
-                        # 如果新时间在未来，或者是重复任务，自动激活
-                        if new_time > now or (repeat_rule or current_repeat_rule) != '0000000':
-                            auto_activate = True
-                            print(f"[Web] 日程 ID {schedule_id} 时间更新，自动从completed恢复为active")
-                            
+                        auto_activate = True
+                        print(f"[Web] 日程 ID {schedule_id} 时间更新，自动从completed恢复为active")
+
                 except ValueError:
-                    return {"success": False, "message": "时间格式错误"}
+                    return {"success": False, "message": "时间格式错误，请使用 HH:MM 格式"}
             if repeat_rule is not None:
                 if not all(c in '01' for c in repeat_rule) or len(repeat_rule) != 7:
                     return {"success": False, "message": "重复规则格式错误"}

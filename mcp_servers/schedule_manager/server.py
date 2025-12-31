@@ -81,25 +81,31 @@ class ScheduleManager:
         logger.info("数据库初始化完成")
     
     def add_schedule(self, title: str, content: str, schedule_time: str, repeat_rule: str = '0000000', uid: int = 0) -> Dict[str, Any]:
-        """添加日程"""
+        """添加日程
+        schedule_time: 只需要时间 HH:MM 格式，不需要日期
+        repeat_rule: 7位数字，周一到周日，1=重复，0=不重复
+                     '0000000' 表示单次执行（在最近的该时间点执行）
+        """
         try:
-            # 验证时间格式
+            # 验证并标准化时间格式，只保留 HH:MM
             try:
-                datetime.datetime.strptime(schedule_time, '%Y-%m-%d %H:%M')
+                # 尝试解析完整格式，提取时间部分
+                if ' ' in schedule_time:
+                    time_part = schedule_time.split(' ')[1]
+                else:
+                    time_part = schedule_time
+                # 验证时间格式
+                datetime.datetime.strptime(time_part, '%H:%M')
+                schedule_time = time_part  # 只保存 HH:MM
             except ValueError:
-                try:
-                    # 如果只有时间，默认为今天
-                    time_part = datetime.datetime.strptime(schedule_time, '%H:%M').time()
-                    schedule_time = datetime.datetime.combine(datetime.date.today(), time_part).strftime('%Y-%m-%d %H:%M')
-                except ValueError:
-                    return {"success": False, "message": "时间格式错误，请使用 YYYY-MM-DD HH:MM 或 HH:MM 格式"}
-            
+                return {"success": False, "message": "时间格式错误，请使用 HH:MM 格式（如 09:30）"}
+
             # 验证重复规则
             if not all(c in '01' for c in repeat_rule) or len(repeat_rule) != 7:
                 return {"success": False, "message": "重复规则格式错误，应为7位数字，每位代表周一到周日(1=重复,0=不重复)"}
-            
+
             now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            
+
             conn = sqlite3.connect(DB_PATH)
             cursor = conn.cursor()
             cursor.execute(
@@ -109,10 +115,10 @@ class ScheduleManager:
             schedule_id = cursor.lastrowid
             conn.commit()
             conn.close()
-            
-            logger.info(f"添加日程成功: {title} - {schedule_time}")
+
+            logger.info(f"添加日程成功: {title} - {schedule_time} (重复规则: {repeat_rule})")
             return {"success": True, "message": "日程添加成功", "schedule_id": schedule_id}
-            
+
         except Exception as e:
             logger.error(f"添加日程失败: {e}")
             return {"success": False, "message": f"添加日程失败: {str(e)}"}
@@ -188,22 +194,23 @@ class ScheduleManager:
                 updates.append("content = ?")
                 params.append(content)
             if schedule_time is not None:
-                # 验证时间格式
+                # 验证并标准化时间格式，只保留 HH:MM
                 try:
-                    new_time = datetime.datetime.strptime(schedule_time, '%Y-%m-%d %H:%M')
+                    if ' ' in schedule_time:
+                        time_part = schedule_time.split(' ')[1]
+                    else:
+                        time_part = schedule_time
+                    datetime.datetime.strptime(time_part, '%H:%M')
                     updates.append("schedule_time = ?")
-                    params.append(schedule_time)
-                    
-                    # 如果更新了时间，并且当前状态是completed，检查是否需要重新激活
+                    params.append(time_part)  # 只保存 HH:MM
+
+                    # 如果更新了时间，并且当前状态是completed，自动激活
                     if current_status == 'completed':
-                        now = datetime.datetime.now()
-                        # 如果新时间在未来，或者是重复任务，自动激活
-                        if new_time > now or (repeat_rule or current_repeat_rule) != '0000000':
-                            auto_activate = True
-                            logger.info(f"日程 ID {schedule_id} 时间更新，自动从completed恢复为active")
-                            
+                        auto_activate = True
+                        logger.info(f"日程 ID {schedule_id} 时间更新，自动从completed恢复为active")
+
                 except ValueError:
-                    return {"success": False, "message": "时间格式错误"}
+                    return {"success": False, "message": "时间格式错误，请使用 HH:MM 格式"}
             if repeat_rule is not None:
                 if not all(c in '01' for c in repeat_rule) or len(repeat_rule) != 7:
                     return {"success": False, "message": "重复规则格式错误"}
@@ -647,82 +654,93 @@ class ScheduleManager:
             logger.error(f"发送消息给Fay失败: {e}")
     
     def parse_repeat_rule(self, rule: str, task_time: str) -> Optional[datetime.datetime]:
-        """解析重复规则，返回下次执行时间"""
+        """解析重复规则，返回下次执行时间
+        task_time: HH:MM 格式的时间
+        rule: 7位重复规则，'0000000' 表示单次执行
+        """
         try:
-            task_datetime = datetime.datetime.strptime(task_time, '%Y-%m-%d %H:%M')
-            now = datetime.datetime.now()
-            
-            if rule == '0000000':  # 不重复
-                if task_datetime > now:
-                    return task_datetime
-                else:
-                    return None
+            # 解析时间（只有 HH:MM）
+            # 兼容旧格式 YYYY-MM-DD HH:MM
+            if ' ' in task_time:
+                time_str = task_time.split(' ')[1]
             else:
-                # 重复任务，找到下一个执行时间
-                today = now.date()
-                task_time_obj = task_datetime.time()
-                
-                # 检查今天是否需要执行
+                time_str = task_time
+            task_time_obj = datetime.datetime.strptime(time_str, '%H:%M').time()
+            now = datetime.datetime.now()
+            today = now.date()
+
+            if rule == '0000000':
+                # 单次执行：找最近的执行时间（今天或明天）
+                today_task_time = datetime.datetime.combine(today, task_time_obj)
+                if today_task_time > now:
+                    # 今天还没到这个时间，今天执行
+                    return today_task_time
+                else:
+                    # 今天已过，明天执行
+                    tomorrow = today + datetime.timedelta(days=1)
+                    return datetime.datetime.combine(tomorrow, task_time_obj)
+            else:
+                # 重复任务：找下一个符合规则的执行时间
+                # 先检查今天
                 weekday = today.weekday()  # 0=周一，6=周日
                 if rule[weekday] == '1':
                     today_task_time = datetime.datetime.combine(today, task_time_obj)
                     if today_task_time > now:
                         return today_task_time
-                
-                # 找到下一个执行日期
+
+                # 找下一个执行日期
                 for i in range(1, 8):
                     next_day = today + datetime.timedelta(days=i)
                     next_weekday = next_day.weekday()
                     if rule[next_weekday] == '1':
                         return datetime.datetime.combine(next_day, task_time_obj)
-                
+
                 return None
-                
+
         except Exception as e:
             logger.error(f"解析重复规则失败: {e}")
             return None
     
     def execute_schedule_task(self, schedule: Dict[str, Any]):
-        """执行日程任务"""
+        """执行日程任务
+        - 单次任务：执行后标记为 completed
+        - 重复任务：执行后不变更状态，继续调度下次执行
+        """
         schedule_id = schedule['id']
-        
+
         # 检查是否在短时间内已执行过（防止重复执行）
         now = datetime.datetime.now()
-        executed_key = f"{schedule_id}_{schedule['schedule_time']}"
-        
+        # 使用日期+时间作为执行记录的key，确保每天只执行一次
+        executed_key = f"{schedule_id}_{now.strftime('%Y-%m-%d')}_{schedule['schedule_time']}"
+
         if executed_key in self.executed_tasks:
             last_executed = self.executed_tasks[executed_key]
             if (now - last_executed).total_seconds() < 120:  # 2分钟内不重复执行
-                logger.warning(f"[DEBUG] 任务 {schedule['title']} (ID: {schedule_id}) 在2分钟内已执行过，跳过")
+                logger.warning(f"任务 {schedule['title']} (ID: {schedule_id}) 今天已执行过，跳过")
                 return
-        
-        logger.info(f"[DEBUG] 开始执行日程任务: {schedule['title']} (ID: {schedule_id}), 时间: {now}")
-        logger.info(f"[DEBUG] task_threads 当前内容: {list(self.task_threads.keys())}")
-        logger.info(f"[DEBUG] executed_tasks 当前内容: {list(self.executed_tasks.keys())}")
-        
+
+        logger.info(f"执行日程任务: {schedule['title']} (ID: {schedule_id})")
+
         # 记录执行时间
         self.executed_tasks[executed_key] = now
-        
+
         # 构建消息
         message = f"【日程提醒】{schedule['title']}: {schedule['content']}"
-        
+
         # 发送给Fay
-        logger.info(f"[DEBUG] 准备发送消息给Fay: {message}")
         self.send_to_fay(message, schedule['uid'])
-        
-        # 标记任务已执行
+
+        # 标记任务已执行（用于本次调度周期）
         self.task_threads[schedule_id] = "executed"
-        
-        # 如果是非重复任务，直接删除
+
+        # 根据重复规则处理状态
         if schedule['repeat_rule'] == '0000000':
-            logger.info(f"[DEBUG] 单次任务执行完成，直接删除: ID {schedule_id}")
-            result = self.delete_schedule(schedule['id'])
-            logger.info(f"[DEBUG] 删除结果: {result}")
-            if not result.get('success'):
-                logger.error(f"[ERROR] 删除任务失败: {result.get('message')}")
+            # 单次任务：执行后标记为 completed
+            logger.info(f"单次任务执行完成，标记为completed: ID {schedule_id}")
+            self.update_schedule(schedule_id, status='completed')
         else:
-            logger.info(f"[DEBUG] 重复任务，保持active状态: ID {schedule_id}")
-        # 注意：重复任务的下次调度会在下一次schedule_loop中自动处理
+            # 重复任务：不变更状态，下次调度循环会自动计算下次执行时间
+            logger.info(f"重复任务执行完成，保持active状态: ID {schedule_id}")
     
     def schedule_task(self, schedule: Dict[str, Any], execute_time: datetime.datetime):
         """调度任务执行"""
@@ -992,7 +1010,7 @@ async def handle_list_tools() -> List[Tool]:
     return [
         Tool(
             name="add_schedule",
-            description="添加新的日程安排",
+            description="添加新的日程安排。单次任务在最近的该时间执行后标记完成；重复任务按规则持续执行。",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -1001,16 +1019,16 @@ async def handle_list_tools() -> List[Tool]:
                         "description": "日程标题"
                     },
                     "content": {
-                        "type": "string", 
+                        "type": "string",
                         "description": "日程详细内容"
                     },
                     "schedule_time": {
                         "type": "string",
-                        "description": "执行时间，格式: YYYY-MM-DD HH:MM 或 HH:MM（默认今天）"
+                        "description": "执行时间，格式: HH:MM（如 09:30）。单次任务在最近的该时间点执行，重复任务按规则在对应日期的该时间执行"
                     },
                     "repeat_rule": {
                         "type": "string",
-                        "description": "重复规则，7位数字，每位代表周一到周日(1=重复,0=不重复)，默认'0000000'",
+                        "description": "重复规则，7位数字，每位代表周一到周日(1=重复,0=不重复)。'0000000'=单次执行，'1111111'=每天，'1111100'=工作日",
                         "default": "0000000"
                     },
                     "uid": {
@@ -1042,7 +1060,7 @@ async def handle_list_tools() -> List[Tool]:
         ),
         Tool(
             name="update_schedule",
-            description="更新日程信息",
+            description="更新日程信息。修改已完成的日程时间会自动重新激活。",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -1060,11 +1078,11 @@ async def handle_list_tools() -> List[Tool]:
                     },
                     "schedule_time": {
                         "type": "string",
-                        "description": "新的执行时间，格式: YYYY-MM-DD HH:MM"
+                        "description": "新的执行时间，格式: HH:MM"
                     },
                     "repeat_rule": {
                         "type": "string",
-                        "description": "新的重复规则"
+                        "description": "新的重复规则，7位数字"
                     },
                     "status": {
                         "type": "string",

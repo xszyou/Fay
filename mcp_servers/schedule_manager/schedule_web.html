@@ -474,11 +474,6 @@
                         <input type="text" class="filter-input" id="searchInput" placeholder="搜索标题或内容..." oninput="filterSchedules()">
                     </div>
 
-                    <div class="filter-group">
-                        <label>日期范围</label>
-                        <input type="date" class="filter-input" id="dateFrom" onchange="filterSchedules()">
-                        <input type="date" class="filter-input" id="dateTo" onchange="filterSchedules()" style="margin-top: 8px;">
-                    </div>
                 </div>
             </div>
 
@@ -513,7 +508,8 @@
 
                 <div class="form-group">
                     <label class="form-label">执行时间 *</label>
-                    <input type="datetime-local" id="scheduleTime" class="form-input" required>
+                    <input type="time" id="scheduleTime" class="form-input" required>
+                    <small style="color: #999; margin-top: 8px; display: block;">单次任务在最近的该时间执行，重复任务在对应日期的该时间执行</small>
                 </div>
 
                 <div class="form-group">
@@ -610,20 +606,16 @@
             }
 
             container.innerHTML = schedulesToRender.map(schedule => {
-                const scheduleDate = new Date(schedule.schedule_time);
-                const today = new Date();
-                const isToday = scheduleDate.toDateString() === today.toDateString();
                 const isCompleted = schedule.status === 'completed';
-                
                 const repeatText = getRepeatText(schedule.repeat_rule);
-                
+
                 return `
-                    <div class="schedule-card ${isToday ? 'today' : ''} ${isCompleted ? 'completed' : ''}" 
+                    <div class="schedule-card ${isCompleted ? 'completed' : ''}"
                          onclick="editSchedule(${schedule.id})">
                         <div class="card-header">
                             <div>
                                 <div class="card-title">${schedule.title}</div>
-                                <div class="card-time">${formatDateTime(schedule.schedule_time)}</div>
+                                <div class="card-time">⏰ ${schedule.schedule_time}</div>
                             </div>
                             <div class="card-status status-${schedule.status}">
                                 ${schedule.status === 'active' ? '活跃' : '已完成'}
@@ -633,7 +625,7 @@
                         <div class="card-repeat">${repeatText}</div>
                         <div class="card-actions" onclick="event.stopPropagation()">
                             <button class="btn btn-edit" onclick="editSchedule(${schedule.id})">编辑</button>
-                            ${schedule.status === 'active' && schedule.repeat_rule === '0000000' ? 
+                            ${schedule.status === 'active' && schedule.repeat_rule === '0000000' ?
                                 `<button class="btn btn-complete" onclick="completeSchedule(${schedule.id})">完成</button>` : ''
                             }
                             <button class="btn btn-delete" onclick="deleteSchedule(${schedule.id})">删除</button>
@@ -647,8 +639,6 @@
         function filterSchedules() {
             const statusFilter = document.getElementById('statusFilter').value;
             const searchInput = document.getElementById('searchInput').value.toLowerCase();
-            const dateFrom = document.getElementById('dateFrom').value;
-            const dateTo = document.getElementById('dateTo').value;
 
             let filtered = schedules.filter(schedule => {
                 // 状态筛选
@@ -657,18 +647,9 @@
                 }
 
                 // 搜索筛选
-                if (searchInput && 
-                    !schedule.title.toLowerCase().includes(searchInput) && 
+                if (searchInput &&
+                    !schedule.title.toLowerCase().includes(searchInput) &&
                     !schedule.content.toLowerCase().includes(searchInput)) {
-                    return false;
-                }
-
-                // 日期范围筛选
-                const scheduleDate = new Date(schedule.schedule_time);
-                if (dateFrom && scheduleDate < new Date(dateFrom)) {
-                    return false;
-                }
-                if (dateTo && scheduleDate > new Date(dateTo + ' 23:59:59')) {
                     return false;
                 }
 
@@ -702,16 +683,10 @@
             document.getElementById('scheduleId').value = schedule.id;
             document.getElementById('scheduleTitle').value = schedule.title;
             document.getElementById('scheduleContent').value = schedule.content;
-            
-            // 格式化时间为datetime-local格式
-            const date = new Date(schedule.schedule_time);
-            const formattedDate = date.getFullYear() + '-' + 
-                String(date.getMonth() + 1).padStart(2, '0') + '-' + 
-                String(date.getDate()).padStart(2, '0') + 'T' + 
-                String(date.getHours()).padStart(2, '0') + ':' + 
-                String(date.getMinutes()).padStart(2, '0');
-            document.getElementById('scheduleTime').value = formattedDate;
-            
+
+            // 时间格式为 HH:MM，直接设置
+            document.getElementById('scheduleTime').value = schedule.schedule_time;
+
             // 设置重复日期
             document.querySelectorAll('.day-btn').forEach((btn, index) => {
                 if (schedule.repeat_rule[index] === '1') {
@@ -720,7 +695,7 @@
                     btn.classList.remove('active');
                 }
             });
-            
+
             currentEditId = id;
             document.getElementById('scheduleModal').style.display = 'block';
         }
@@ -731,7 +706,7 @@
             const title = document.getElementById('scheduleTitle').value;
             const content = document.getElementById('scheduleContent').value;
             const scheduleTime = document.getElementById('scheduleTime').value;
-            
+
             // 获取重复规则
             let repeatRule = '0000000';
             document.querySelectorAll('.day-btn').forEach((btn, index) => {
@@ -743,7 +718,7 @@
             const scheduleData = {
                 title,
                 content,
-                schedule_time: scheduleTime.replace('T', ' '),
+                schedule_time: scheduleTime,  // 已经是 HH:MM 格式
                 repeat_rule: repeatRule
             };
 
@@ -850,16 +825,6 @@
         // 切换重复日期
         function toggleDay(btn) {
             btn.classList.toggle('active');
-        }
-
-        // 格式化日期时间
-        function formatDateTime(dateTimeStr) {
-            const date = new Date(dateTimeStr);
-            return date.getFullYear() + '-' + 
-                String(date.getMonth() + 1).padStart(2, '0') + '-' + 
-                String(date.getDate()).padStart(2, '0') + ' ' + 
-                String(date.getHours()).padStart(2, '0') + ':' + 
-                String(date.getMinutes()).padStart(2, '0');
         }
 
         // 获取重复规则文本
