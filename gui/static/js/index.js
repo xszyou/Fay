@@ -336,6 +336,7 @@ new Vue({
         remote_audio: false
       },
       systemStatusTimer: null,
+      audioConfigTimer: null,
       addUserDialogVisible: false,
       newUsername: '',
       extraInfoDialogVisible: false,
@@ -353,12 +354,13 @@ new Vue({
     // 消息列表变化时的监听（保留用于其他扩展）
   },
   created() {
-    this.initFayService(); 
+    this.initFayService();
     this.getData();
     this.startUserListTimer();
     this.checkMcpStatus();
     this.startMcpStatusTimer();
     this.startSystemStatusTimer();
+    this.startAudioConfigSyncTimer();
   },
   methods: {
     // 检查系统各组件连接状态
@@ -401,6 +403,38 @@ new Vue({
       this.systemStatusTimer = setInterval(() => {
         this.checkSystemStatus();
       }, 3000);
+    },
+
+    // 同步音频配置（麦克风和扬声器开关状态）
+    syncAudioConfig() {
+      const url = `${this.base_url}/api/get-audio-config`;
+      fetch(url)
+        .then(response => response.json())
+        .then(data => {
+          if (data.mic !== undefined) {
+            this.source_record_enabled = data.mic;
+          }
+          if (data.speaker !== undefined) {
+            this.play_sound_enabled = data.speaker;
+          }
+        })
+        .catch(error => {
+          console.warn('同步音频配置失败:', error);
+        });
+    },
+
+    // 启动音频配置同步定时器（每分钟同步一次）
+    startAudioConfigSyncTimer() {
+      // 立即执行一次
+      this.syncAudioConfig();
+
+      if (this.audioConfigTimer) {
+        clearInterval(this.audioConfigTimer);
+      }
+      // 每60秒同步一次
+      this.audioConfigTimer = setInterval(() => {
+        this.syncAudioConfig();
+      }, 60000);
     },
 
     initFayService() {

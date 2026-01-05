@@ -575,6 +575,20 @@ def api_get_system_status():
     except Exception as e:
         return jsonify({'server': False, 'digital_human': False, 'remote_audio': False, 'error': str(e)}), 500
 
+@__app.route('/api/get-audio-config', methods=['GET'])
+def api_get_audio_config():
+    """获取麦克风和扬声器的配置状态"""
+    try:
+        mic_enabled = config_util.config.get('source', {}).get('record', {}).get('enabled', False)
+        speaker_enabled = config_util.config.get('interact', {}).get('playSound', False)
+
+        return jsonify({
+            'mic': mic_enabled,
+            'speaker': speaker_enabled
+        })
+    except Exception as e:
+        return jsonify({'mic': False, 'speaker': False, 'error': str(e)}), 500
+
 @__app.route('/api/adopt-msg', methods=['POST'])
 def adopt_msg():
     # 采纳消息
