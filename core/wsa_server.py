@@ -203,7 +203,8 @@ class MyServer:
     def add_cmd(self, content):
         if not self.__running:
             return
-        jsonStr = json.dumps(content)
+        # keep unicode (emoji/中文) intact for websocket consumers
+        jsonStr = json.dumps(content, ensure_ascii=False)
         self.__listCmd.append(jsonStr)
         # util.log('命令 {}'.format(content))
 

@@ -1,5 +1,6 @@
 #核心启动模块
 import time
+import os
 import re
 import pyaudio
 import socket
@@ -21,6 +22,10 @@ deviceSocketServer = None
 DeviceInputListenerDict = {}
 ngrok = None
 socket_service_instance = None
+mcp_sse_server = None
+mcp_sse_thread = None
+# 是否启用内置 MCP SSE 服务器（默认关闭，需显式开启以避免端口/代理问题）
+mcp_sse_enabled = True
 
 # 延迟导入fay_core
 def get_fay_core():
@@ -287,9 +292,25 @@ def stop():
     global ngrok
     global socket_service_instance
     global deviceSocketServer
+    global mcp_sse_server
+    global mcp_sse_thread
 
     util.log(1, '正在关闭服务...')
     __running = False
+
+    # 关闭 MCP SSE 服务
+    try:
+        if mcp_sse_server is not None:
+            util.log(1, '正在关闭MCP SSE服务器...')
+            try:
+                mcp_sse_server.should_exit = True
+            except Exception:
+                pass
+        if mcp_sse_thread is not None and mcp_sse_thread.is_alive():
+            mcp_sse_thread.join(timeout=2)
+        util.log(1, 'MCP SSE服务器已关闭')
+    except Exception as e:
+        util.log(1, f'MCP SSE服务器关闭异常: {e}')
     
     # 断开所有MCP服务连接
     util.log(1, '正在断开所有MCP服务连接...')
@@ -338,6 +359,8 @@ def start():
     global recorderListener
     global __running
     global socket_service_instance
+    global mcp_sse_server
+    global mcp_sse_thread
     
     util.log(1, '开启服务...')
     __running = True
@@ -375,6 +398,26 @@ def start():
     #启动自动播报服务
     util.log(1,'启动自动播报服务...')
     MyThread(target=start_auto_play_service).start()
+
+    # 启动 MCP SSE 服务（需显式开启）
+    if mcp_sse_enabled:
+        try:
+            from faymcp import mcp_server as fay_mcp_server
+            import uvicorn
+            util.log(1, f"MCP SSE服务器启动中: http://{fay_mcp_server.HOST}:{fay_mcp_server.PORT}{fay_mcp_server.SSE_PATH}")
+            config = uvicorn.Config(
+                app=fay_mcp_server.app,
+                host=fay_mcp_server.HOST,
+                port=fay_mcp_server.PORT,
+                log_level="info"
+            )
+            mcp_sse_server = uvicorn.Server(config)
+            mcp_sse_thread = MyThread(target=mcp_sse_server.run, daemon=True)
+            mcp_sse_thread.start()
+        except Exception as e:
+            util.log(1, f"MCP SSE服务器启动异常: {e}")
+    else:
+        util.log(1, 'MCP SSE服务器默认未开启，设 FAY_MCP_SSE_ENABLE=1 可启用')
         
     util.log(1, '服务启动完成!')
     
