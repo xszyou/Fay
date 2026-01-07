@@ -1211,6 +1211,365 @@ def list_runnable_prestart_tools():
             "prestart_tools": []
         }), 500
 
+
+def _apply_question_placeholder(params: Dict[str, Any], question: str) -> Dict[str, Any]:
+    """
+    替换参数中的 {{question}} 占位符
+    :param params: 参数字典
+    :param question: 用户问题
+    :return: 替换后的参数字典
+    """
+    if not params or not isinstance(params, dict):
+        return params or {}
+
+    result = {}
+    for key, value in params.items():
+        if isinstance(value, str):
+            result[key] = value.replace("{{question}}", question)
+        elif isinstance(value, dict):
+            result[key] = _apply_question_placeholder(value, question)
+        elif isinstance(value, list):
+            result[key] = [
+                item.replace("{{question}}", question) if isinstance(item, str) else item
+                for item in value
+            ]
+        else:
+            result[key] = value
+    return result
+
+
+def _ensure_server_connected(server_id: int) -> tuple:
+    """
+    确保服务器已连接，如未连接则临时连接
+    :param server_id: 服务器ID
+    :return: (是否成功, 是否是临时连接, 服务器对象或错误信息)
+    """
+    global mcp_servers
+
+    # 查找服务器
+    server = None
+    for s in mcp_servers:
+        if s['id'] == server_id:
+            server = s
+            break
+
+    if not server:
+        return False, False, "服务器不存在"
+
+    # 检查是否已在线
+    if server.get('status') == 'online' and get_mcp_client(server_id):
+        return True, False, server
+
+    # 尝试连接服务器
+    try:
+        success, updated_server, tools = connect_to_real_mcp(server)
+        if success:
+            # 更新服务器列表中的信息
+            for i, s in enumerate(mcp_servers):
+                if s['id'] == server_id:
+                    mcp_servers[i] = updated_server
+                    break
+            save_mcp_servers(mcp_servers)
+            return True, True, updated_server
+        else:
+            return False, False, "连接服务器失败"
+    except Exception as e:
+        return False, False, f"连接服务器失败: {str(e)}"
+
+
+# API路由 - 调用单个预启动工具（自动连接服务器）
+@app.route('/api/mcp/servers/<int:server_id>/prestart/<string:tool_name>/call', methods=['POST'])
+def call_prestart_tool(server_id, tool_name):
+    """
+    调用单个预启动工具，如果服务器未连接会自动临时连接
+    :param server_id: 服务器ID
+    :param tool_name: 工具名称
+    请求参数:
+        - params: 工具参数（可选）
+        - question: 用户问题，用于替换{{question}}占位符（可选）
+        - keep_connection: 是否保持连接（默认True）
+    """
+    try:
+        data = request.json or {}
+        params = data.get('params', {})
+        question = data.get('question', '')
+        keep_connection = data.get('keep_connection', True)
+
+        # 获取预启动工具配置
+        prestart_config = prestart_registry.get_server_map(server_id)
+        tool_config = prestart_config.get(tool_name, {})
+
+        # 如果有配置的默认参数，与传入的参数合并
+        if tool_config:
+            default_params = tool_config.get('params', {})
+            if default_params:
+                merged_params = dict(default_params)
+                merged_params.update(params)
+                params = merged_params
+
+        # 替换占位符
+        if question:
+            params = _apply_question_placeholder(params, question)
+
+        # 确保服务器已连接
+        success, is_temp_connection, server_or_error = _ensure_server_connected(server_id)
+        if not success:
+            return jsonify({
+                "success": False,
+                "error": server_or_error
+            }), 500
+
+        # 调用工具（跳过启用状态检查）
+        call_success, result = call_mcp_tool(server_id, tool_name, params, skip_enabled_check=True)
+
+        # 如果是临时连接且不需要保持，断开连接
+        if is_temp_connection and not keep_connection:
+            try:
+                client = get_mcp_client(server_id)
+                if client:
+                    client.disconnect()
+                    del mcp_clients[server_id]
+                    tool_registry.mark_all_unavailable(server_id)
+                    # 更新服务器状态
+                    for s in mcp_servers:
+                        if s['id'] == server_id:
+                            s['status'] = 'offline'
+                            break
+                    save_mcp_servers(mcp_servers)
+            except Exception as e:
+                util.log(1, f"断开临时连接失败: {e}")
+
+        if call_success:
+            # 处理结果
+            try:
+                def serialize_object(obj):
+                    if obj is None:
+                        return None
+                    if isinstance(obj, (str, int, float, bool)):
+                        return obj
+                    if isinstance(obj, dict):
+                        return {k: serialize_object(v) for k, v in obj.items()}
+                    if isinstance(obj, (list, tuple)):
+                        return [serialize_object(item) for item in obj]
+                    if hasattr(obj, '__dict__'):
+                        return {k: serialize_object(v) for k, v in vars(obj).items()}
+                    return str(obj)
+
+                serialized_result = serialize_object(result)
+                return jsonify({
+                    "success": True,
+                    "result": serialized_result,
+                    "server_id": server_id,
+                    "tool": tool_name,
+                    "was_temp_connection": is_temp_connection
+                })
+            except Exception:
+                return jsonify({
+                    "success": True,
+                    "result": str(result),
+                    "server_id": server_id,
+                    "tool": tool_name,
+                    "was_temp_connection": is_temp_connection
+                })
+        else:
+            return jsonify({
+                "success": False,
+                "error": result,
+                "server_id": server_id,
+                "tool": tool_name
+            }), 500
+
+    except Exception as e:
+        util.log(1, f"调用预启动工具失败: {e}")
+        return jsonify({
+            "success": False,
+            "error": f"调用预启动工具失败: {str(e)}"
+        }), 500
+
+
+# API路由 - 批量调用所有预启动工具（自动连接服务器）
+@app.route('/api/mcp/prestart/call', methods=['POST'])
+def call_all_prestart_tools():
+    """
+    批量调用所有配置的预启动工具，如果服务器未连接会自动临时连接
+    请求参数:
+        - question: 用户问题，用于替换{{question}}占位符（必填）
+        - keep_connection: 是否保持连接（默认True）
+        - server_ids: 指定要调用的服务器ID列表（可选，为空则调用所有）
+        - tool_names: 指定要调用的工具名称列表（可选，为空则调用所有）
+    """
+    global mcp_servers
+
+    try:
+        data = request.json or {}
+        question = data.get('question', '')
+        keep_connection = data.get('keep_connection', True)
+        filter_server_ids = data.get('server_ids', [])
+        filter_tool_names = data.get('tool_names', [])
+
+        if not question:
+            return jsonify({
+                "success": False,
+                "error": "缺少必填参数: question"
+            }), 400
+
+        # 获取所有预启动工具配置
+        configs = prestart_registry.get_all()
+        if not configs:
+            return jsonify({
+                "success": True,
+                "results": [],
+                "message": "没有配置预启动工具"
+            })
+
+        results: List[Dict[str, Any]] = []
+        temp_connected_servers: List[int] = []
+
+        for server_id, tool_map in configs.items():
+            # 过滤服务器
+            if filter_server_ids and server_id not in filter_server_ids:
+                continue
+
+            if not tool_map:
+                continue
+
+            # 查找服务器信息
+            server = None
+            for s in mcp_servers:
+                if s['id'] == server_id:
+                    server = s
+                    break
+
+            if not server:
+                continue
+
+            # 确保服务器已连接
+            success, is_temp_connection, server_or_error = _ensure_server_connected(server_id)
+            if not success:
+                for tool_name in tool_map.keys():
+                    if filter_tool_names and tool_name not in filter_tool_names:
+                        continue
+                    results.append({
+                        "server_id": server_id,
+                        "server_name": server.get("name", f"Server {server_id}"),
+                        "tool": tool_name,
+                        "success": False,
+                        "error": server_or_error
+                    })
+                continue
+
+            if is_temp_connection:
+                temp_connected_servers.append(server_id)
+
+            # 调用该服务器上的所有预启动工具
+            for tool_name, cfg in tool_map.items():
+                # 过滤工具
+                if filter_tool_names and tool_name not in filter_tool_names:
+                    continue
+
+                params = cfg.get("params", {}) if isinstance(cfg, dict) else {}
+                include_history = cfg.get("include_history", True) if isinstance(cfg, dict) else True
+                allow_function_call = cfg.get("allow_function_call", False) if isinstance(cfg, dict) else False
+
+                # 替换占位符
+                try:
+                    filled_params = _apply_question_placeholder(params, question)
+                except Exception:
+                    filled_params = params or {}
+
+                # 调用工具
+                try:
+                    call_success, result = call_mcp_tool(server_id, tool_name, filled_params, skip_enabled_check=True)
+
+                    if call_success:
+                        def serialize_object(obj):
+                            if obj is None:
+                                return None
+                            if isinstance(obj, (str, int, float, bool)):
+                                return obj
+                            if isinstance(obj, dict):
+                                return {k: serialize_object(v) for k, v in obj.items()}
+                            if isinstance(obj, (list, tuple)):
+                                return [serialize_object(item) for item in obj]
+                            if hasattr(obj, '__dict__'):
+                                return {k: serialize_object(v) for k, v in vars(obj).items()}
+                            return str(obj)
+
+                        serialized_result = serialize_object(result)
+
+                        text_content = ""
+                        if isinstance(serialized_result, list):
+                            for item in serialized_result:
+                                if isinstance(item, dict) and 'text' in item:
+                                    text_content += item['text'] + "\n"
+                                elif isinstance(item, str):
+                                    text_content += item + "\n"
+                        elif isinstance(serialized_result, dict) and 'text' in serialized_result:
+                            text_content = serialized_result['text']
+                        elif isinstance(serialized_result, str):
+                            text_content = serialized_result
+                        else:
+                            text_content = str(serialized_result)
+
+                        results.append({
+                            "server_id": server_id,
+                            "server_name": server.get("name", f"Server {server_id}"),
+                            "tool": tool_name,
+                            "success": True,
+                            "result": serialized_result,
+                            "text": text_content.strip(),
+                            "include_history": include_history,
+                            "allow_function_call": allow_function_call
+                        })
+                    else:
+                        results.append({
+                            "server_id": server_id,
+                            "server_name": server.get("name", f"Server {server_id}"),
+                            "tool": tool_name,
+                            "success": False,
+                            "error": result
+                        })
+                except Exception as e:
+                    results.append({
+                        "server_id": server_id,
+                        "server_name": server.get("name", f"Server {server_id}"),
+                        "tool": tool_name,
+                        "success": False,
+                        "error": str(e)
+                    })
+
+        if not keep_connection and temp_connected_servers:
+            for server_id in temp_connected_servers:
+                try:
+                    client = get_mcp_client(server_id)
+                    if client:
+                        client.disconnect()
+                        del mcp_clients[server_id]
+                        tool_registry.mark_all_unavailable(server_id)
+                        for s in mcp_servers:
+                            if s['id'] == server_id:
+                                s['status'] = 'offline'
+                                break
+                        save_mcp_servers(mcp_servers)
+                except Exception as e:
+                    util.log(1, f"断开临时连接失败 (server_id={server_id}): {e}")
+
+        return jsonify({
+            "success": True,
+            "results": results,
+            "total": len(results),
+            "successful": sum(1 for r in results if r.get("success")),
+            "failed": sum(1 for r in results if not r.get("success")),
+            "temp_connected_servers": temp_connected_servers
+        })
+
+    except Exception as e:
+        util.log(1, f"批量调用预启动工具失败: {e}")
+        return jsonify({
+            "success": False,
+            "error": f"批量调用预启动工具失败: {str(e)}"
+        }), 500
+
 # 启动连接检查
 def start_connection_check():
     """
