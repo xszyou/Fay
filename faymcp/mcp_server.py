@@ -60,6 +60,7 @@ SERVER_NAME = "fay_broadcast"
 
 DEFAULT_API_URL = os.environ.get("FAY_BROADCAST_API", "http://127.0.0.1:5000/transparent-pass")
 DEFAULT_USER = os.environ.get("FAY_BROADCAST_USER", "User")
+DEFAULT_SPEAKER = os.environ.get("FAY_BROADCAST_SPEAKER", "\u5e7f\u64ad\u6d88\u606f")
 REQUEST_TIMEOUT = float(os.environ.get("FAY_BROADCAST_TIMEOUT", "10"))
 
 HOST = os.environ.get("FAY_MCP_SSE_HOST", "0.0.0.0")
@@ -91,6 +92,10 @@ TOOLS: list[Tool] = [
                 "text": {"type": "string", "description": "要广播的文本（audio_url为空时必填）"},
                 "audio_url": {"type": "string", "description": "可选音频 URL"},
                 "user": {"type": "string", "description": "目标用户名，默认 FAY_BROADCAST_USER 或 User"},
+                "speaker": {
+                    "type": "string",
+                    "description": "\u5e7f\u64ad\u4eba\u663e\u793a\u540d\uff0c\u8f93\u51fa\u4e3a\"{speaker}\u8bf4\uff1a{text}\"",
+                },
             },
             "required": [],
         },
@@ -109,11 +114,12 @@ async def list_tools() -> list[Tool]:
     return TOOLS + aggregated
 
 
-def _parse_arguments(arguments: Dict[str, Any]) -> Tuple[str, str, str]:
+def _parse_arguments(arguments: Dict[str, Any]) -> Tuple[str, str, str, str]:
     text = str(arguments.get("text", "") or "").strip()
     audio_url = str(arguments.get("audio_url", "") or "").strip()
     user = str(arguments.get("user", "") or "").strip() or DEFAULT_USER
-    return text, audio_url, user
+    speaker = str(arguments.get("speaker", "") or "").strip() or DEFAULT_SPEAKER
+    return text, audio_url, user, speaker
 
 
 def _build_aggregated_tools() -> List[Tool]:
@@ -187,13 +193,13 @@ async def _send_broadcast(payload: Dict[str, Any]) -> Tuple[bool, str]:
 async def call_tool(name: str, arguments: Dict[str, Any]) -> list[TextContent]:
     # 本地广播
     if name == "broadcast_message":
-        text, audio_url, user = _parse_arguments(arguments or {})
+        text, audio_url, user, speaker = _parse_arguments(arguments or {})
         if not text and not audio_url:
             return [_text_content("Either 'text' or 'audio_url' must be provided.")]
 
         payload: Dict[str, Any] = {"user": user}
         if text:
-            payload["text"] = text
+            payload["text"] = f"{speaker}\u8bf4\uff1a{text}"
         if audio_url:
             payload["audio"] = audio_url
 
