@@ -78,6 +78,7 @@ class FeiFei:
         self.think_mode_users = {}  # 使用字典存储每个用户的think模式状态
         self.think_time_users = {} #使用字典存储每个用户的think开始时间
         self.user_conv_map = {} #存储用户对话id及句子流序号，key为(username, conversation_id)
+        self.pending_isfirst = {}  # 存储因prestart被过滤而延迟的isfirst标记，key为username
     
     def __remove_emojis(self, text):
         """
@@ -308,7 +309,7 @@ class FeiFei:
                 return None
                 
             # 检查是否是 prestart 内容（不应该影响 thinking 状态）
-            is_prestart_content = text and '<prestart>' in text and '</prestart>' in text
+            is_prestart_content = self.__has_prestart(text)
 
             # 流式文本拼接存库
             content_id = 0
@@ -660,7 +661,7 @@ class FeiFei:
             #面板播放
             config_util.load_config()
             # 检查是否是 prestart 内容
-            is_prestart = text and '<prestart>' in text and '</prestart>' in text
+            is_prestart = self.__has_prestart(text)
             if config_util.config["interact"]["playSound"]:
                 # prestart 内容不应该进入播放队列，避免触发 Normal 状态
                 if not is_prestart:
@@ -728,9 +729,17 @@ class FeiFei:
         if not text:
             return text
         import re
-        # 移除 <prestart>...</prestart> 标签及其内容
-        cleaned = re.sub(r'<prestart>[\s\S]*?</prestart>', '', text, flags=re.IGNORECASE)
+        # 移除 <prestart ...>...</prestart> 标签及其内容（支持属性）
+        cleaned = re.sub(r'<prestart[^>]*>[\s\S]*?</prestart>', '', text, flags=re.IGNORECASE)
         return cleaned.strip()
+
+    def __has_prestart(self, text):
+        """
+        判断文本中是否包含 prestart 标签（支持属性）
+        """
+        if not text:
+            return False
+        return re.search(r'<prestart[^>]*>[\s\S]*?</prestart>', text, flags=re.IGNORECASE) is not None
 
     def __send_panel_message(self, text, username, uid, content_id=None, type=None):
         """
@@ -746,7 +755,7 @@ class FeiFei:
 
         # 检查是否是 prestart 内容，prestart 内容不应该更新日志区消息
         # 因为这会覆盖掉"思考中..."的状态显示
-        is_prestart = text and '<prestart>' in text and '</prestart>' in text
+        is_prestart = self.__has_prestart(text)
 
         # gui日志区消息（prestart 内容跳过，保持"思考中..."状态）
         if not is_prestart:
@@ -781,9 +790,16 @@ class FeiFei:
         cleaned_text = self.__remove_prestart_tags(text) if text else ""
         full_text = self.__remove_emojis(cleaned_text.replace("*", "")) if cleaned_text else ""
 
-        # 如果文本为空且不是结束标记，则不发送
+        # 如果文本为空且不是结束标记，则不发送，但需保留 is_first
         if not full_text and not is_end:
+            if is_first:
+                self.pending_isfirst[username] = True
             return
+
+        # 检查是否有延迟的 is_first 需要应用
+        if self.pending_isfirst.get(username, False):
+            is_first = True
+            self.pending_isfirst[username] = False
 
         if wsa_server.get_instance().is_connected(username):
             content = {
