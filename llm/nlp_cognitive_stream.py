@@ -108,6 +108,7 @@ class AgentState(TypedDict, total=False):
     status: Literal["planning", "needs_tool", "completed", "failed"]
     final_response: Optional[str]
     final_messages: Optional[List[SystemMessage | HumanMessage]]
+    _response_streamed: Optional[bool]
     planner_preview: Optional[str]
     audit_log: List[str]
     context: Dict[str, Any]
@@ -750,6 +751,32 @@ def _call_planner_llm(
 
         in_message_mode = False
         message_buffer = ""
+        message_closed = False
+        escape_next = False
+
+        def _stream_message_text(text: str) -> None:
+            nonlocal message_buffer, message_closed, escape_next
+            if not text or message_closed:
+                return
+            out_parts = []
+            for ch in text:
+                if escape_next:
+                    escape_next = False
+                    message_buffer += ch
+                    out_parts.append(ch)
+                    continue
+                if ch == "\\":
+                    escape_next = True
+                    message_buffer += ch
+                    out_parts.append(ch)
+                    continue
+                if ch == '"':
+                    message_closed = True
+                    break
+                message_buffer += ch
+                out_parts.append(ch)
+            if out_parts:
+                stream_callback("".join(out_parts))
 
         for chunk in llm.stream(messages):
             chunk_text = ""
@@ -776,14 +803,11 @@ def _call_planner_llm(
                         # 提取 message 开始后的内容
                         message_start = check_text[len(prefix):]
                         if message_start:
-                            message_buffer = message_start
-                            # 流式输出（排除结尾的 "} 如果有的话）
-                            stream_callback(message_start)
+                            _stream_message_text(message_start)
                         break
             else:
                 # 已经在 message 模式，直接流式输出新增内容
-                message_buffer += chunk_text
-                stream_callback(chunk_text)
+                _stream_message_text(chunk_text)
 
         # 处理完整响应
         trimmed = _remove_think_from_text(accumulated.strip())
