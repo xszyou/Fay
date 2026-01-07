@@ -149,7 +149,7 @@ def _build_aggregated_tools() -> List[Tool]:
 
 async def _send_broadcast(payload: Dict[str, Any]) -> Tuple[bool, str]:
     def _post() -> Tuple[bool, str]:
-        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        body = json.dumps(payload, ensure_ascii=True).encode("utf-8")
         resp = requests.post(
             DEFAULT_API_URL,
             data=body,
