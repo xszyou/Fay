@@ -1,6 +1,7 @@
 import http.client
 import urllib.parse
 import json
+import ssl
 from aliyunsdkcore.client import AcsClient
 from aliyunsdkcore.request import CommonRequest
 from core.authorize_tb import Authorize_Tb
@@ -8,6 +9,11 @@ import time
 from utils import util, config_util
 from utils import config_util as cfg
 import wave
+
+# 创建不验证SSL证书的上下文（用于服务器环境证书问题）
+_ssl_context = ssl.create_default_context()
+_ssl_context.check_hostname = False
+_ssl_context.verify_mode = ssl.CERT_NONE
 
 class Speech:
     def __init__(self):
@@ -63,7 +69,8 @@ class Speech:
             __client = AcsClient(
                 self.key_ali_nls_key_id,
                 self.key_ali_nls_key_secret,
-                "cn-shanghai"
+                "cn-shanghai",
+                verify=False  # 禁用SSL证书验证
             )
 
             __request = CommonRequest()
@@ -98,7 +105,7 @@ class Speech:
                 # 设置HTTPS Body。
                 body = {'appkey': self.ali_nls_app_key, 'token': self.token,'speech_rate':0, 'text': text, 'format': 'mp3', 'sample_rate': 16000, 'voice': config_util.config["attribute"]["voice"]}
                 body = json.dumps(body)
-                conn = http.client.HTTPSConnection(host)
+                conn = http.client.HTTPSConnection(host, context=_ssl_context)
                 conn.request(method='POST', url=url, body=body, headers=httpHeaders)
                 # 处理服务端返回的响应。
                 response = conn.getresponse()
