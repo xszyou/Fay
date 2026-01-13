@@ -68,7 +68,7 @@ PORT = int(os.environ.get("FAY_MCP_SSE_PORT", "8765"))
 SSE_PATH = os.environ.get("FAY_MCP_SSE_PATH", "/sse")
 MSG_PATH = os.environ.get("FAY_MCP_MSG_PATH", "/messages")
 
-server = Server(SERVER_NAME)
+server = None  # Removed global singleton
 sse_transport = SseServerTransport(MSG_PATH)
 
 # 聚合工具索引：namespaced_tool_name -> (server_id, tool_name)
@@ -103,8 +103,7 @@ TOOLS: list[Tool] = [
 ]
 
 
-@server.list_tools()
-async def list_tools() -> list[Tool]:
+async def _handle_list_tools() -> list[Tool]:
     # 本地广播工具 + Fay 当前在线 MCP 工具的聚合视图（namespaced）
     aggregated = []
     try:
@@ -189,8 +188,7 @@ async def _send_broadcast(payload: Dict[str, Any]) -> Tuple[bool, str]:
         return False, f"{type(e).__name__}: {e}"
 
 
-@server.call_tool()
-async def call_tool(name: str, arguments: Dict[str, Any]) -> list[TextContent]:
+async def _handle_call_tool(name: str, arguments: Dict[str, Any]) -> list[TextContent]:
     # 本地广播
     if name == "broadcast_message":
         text, audio_url, user, speaker = _parse_arguments(arguments or {})
@@ -214,7 +212,7 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> list[TextContent]:
 
     server_id, tool_name = target
     try:
-        success, result = mcp_service.call_mcp_tool(server_id, tool_name, arguments or {})
+        success, result = await asyncio.to_thread(mcp_service.call_mcp_tool, server_id, tool_name, arguments or {})
         if not success:
             return [_text_content(f"error: {result}")]
         return _normalize_result(result)
@@ -256,8 +254,15 @@ def _normalize_result(result: Any) -> List[TextContent]:
 
 
 async def sse_endpoint(request):
+    # 为每个连接创建新的 Server 实例以支持并发
+    local_server = Server(SERVER_NAME)
+    
+    # 注册工具处理程序
+    local_server.list_tools()(_handle_list_tools)
+    local_server.call_tool()(_handle_call_tool)
+
     async with sse_transport.connect_sse(request.scope, request.receive, request._send) as (read_stream, write_stream):
-        await server.run(read_stream, write_stream, server.create_initialization_options())
+        await local_server.run(read_stream, write_stream, local_server.create_initialization_options())
     # 客户端断开时返回空响应，避免 NoneType 问题
     return Response()
 
