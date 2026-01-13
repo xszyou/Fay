@@ -90,6 +90,27 @@ def __get_device_list():
         print(f"Error getting device list: {e}")
         return []
 
+def _as_bool(value):
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    if isinstance(value, (int, float)):
+        return value != 0
+    if isinstance(value, str):
+        return value.strip().lower() in ("1", "true", "yes", "y", "on")
+    return False
+
+def _build_llm_url(base_url: str) -> str:
+    if not base_url:
+        return ""
+    url = base_url.rstrip("/")
+    if url.endswith("/chat/completions"):
+        return url
+    if url.endswith("/v1"):
+        return url + "/chat/completions"
+    return url + "/v1/chat/completions"
+
 @__app.route('/api/submit', methods=['post'])
 def api_submit():
     data = request.values.get('data')
@@ -292,19 +313,23 @@ def api_get_Msg():
     try:
         data = request.form.get('data')
         if data is None:
-            data = request.get_json()
+            data = request.get_json(silent=True) or {}
         else:
             data = json.loads(data)
-        uid = member_db.new_instance().find_user(data["username"])
+        if not isinstance(data, dict):
+            data = {}
+        username = data.get("username")
         limit = data.get("limit", 30)  # 默认每页30条
         offset = data.get("offset", 0)  # 默认从0开始
         contentdb = content_db.new_instance()
-        if uid == 0:
-            return json.dumps({'list': [], 'total': 0, 'hasMore': False})
-        else:
-            # 获取总数用于判断是否还有更多
-            total = contentdb.get_message_count(uid)
-            list = contentdb.get_list('all', 'desc', limit, uid, offset)
+        uid = 0
+        if username:
+            uid = member_db.new_instance().find_user(username)
+            if uid == 0:
+                return json.dumps({'list': [], 'total': 0, 'hasMore': False})
+        # 获取总数用于判断是否还有更多
+        total = contentdb.get_message_count(uid)
+        list = contentdb.get_list('all', 'desc', limit, uid, offset)
         relist = []
         i = len(list) - 1
         while i >= 0:
@@ -330,6 +355,56 @@ def api_send_v1_chat_completions():
     if not data:
         return jsonify({'error': '未提供数据'})
     try:
+        model = data.get('model', 'fay')
+        if model == 'llm':
+            try:
+                config_util.load_config()
+                llm_url = _build_llm_url(config_util.gpt_base_url)
+                api_key = config_util.key_gpt_api_key
+                model_engine = config_util.gpt_model_engine
+            except Exception as exc:
+                return jsonify({'error': f'LLM config load failed: {exc}'}), 500
+
+            if not llm_url:
+                return jsonify({'error': 'LLM base_url is not configured'}), 500
+
+            payload = dict(data)
+            if payload.get('model') == 'llm' and model_engine:
+                payload['model'] = model_engine
+
+            stream_requested = _as_bool(payload.get('stream', False))
+            headers = {'Content-Type': 'application/json'}
+            if api_key:
+                headers['Authorization'] = f'Bearer {api_key}'
+
+            try:
+                if stream_requested:
+                    resp = requests.post(llm_url, headers=headers, json=payload, stream=True)
+
+                    def generate():
+                        try:
+                            for line in resp.iter_lines(decode_unicode=True):
+                                if line is None:
+                                    continue
+                                yield f"{line}\n"
+                        finally:
+                            resp.close()
+
+                    return Response(
+                        generate(),
+                        status=resp.status_code,
+                        mimetype=resp.headers.get("Content-Type", "text/event-stream"),
+                    )
+
+                resp = requests.post(llm_url, headers=headers, json=payload, timeout=60)
+                return Response(
+                    resp.content,
+                    status=resp.status_code,
+                    content_type=resp.headers.get("Content-Type", "application/json"),
+                )
+            except Exception as exc:
+                return jsonify({'error': f'LLM request failed: {exc}'}), 500
+
         last_content = ""
         if 'messages' in data and data['messages']:
             last_message = data['messages'][-1]
@@ -341,10 +416,65 @@ def api_send_v1_chat_completions():
             last_content = 'No messages found'
             username = 'User'
 
-        model = data.get('model', 'fay')
         observation = data.get('observation', '')
         # 检查请求中是否指定了流式传输
         stream_requested = data.get('stream', False)
+        no_reply = _as_bool(data.get('no_reply', data.get('noReply', False)))
+        if no_reply:
+            interact = Interact("text", 1, {'user': username, 'msg': last_content, 'observation': str(observation), 'stream': bool(stream_requested), 'no_reply': True})
+            util.printInfo(1, username, '[text chat no_reply]{}'.format(interact.data["msg"]), time.time())
+            fay_booter.feiFei.on_interact(interact)
+            if stream_requested or model == 'fay-streaming':
+                def generate():
+                    message = {
+                        "id": "faystreaming-" + str(uuid.uuid4()),
+                        "object": "chat.completion.chunk",
+                        "created": int(time.time()),
+                        "model": model,
+                        "choices": [
+                            {
+                                "delta": {
+                                    "content": ""
+                                },
+                                "index": 0,
+                                "finish_reason": "stop"
+                            }
+                        ],
+                        "usage": {
+                            "prompt_tokens": len(last_content),
+                            "completion_tokens": 0,
+                            "total_tokens": len(last_content)
+                        },
+                        "system_fingerprint": "",
+                        "no_reply": True
+                    }
+                    yield f"data: {json.dumps(message)}\n\n"
+                    yield 'data: [DONE]\n\n'
+                return Response(generate(), mimetype='text/event-stream')
+            return jsonify({
+                "id": "fay-" + str(uuid.uuid4()),
+                "object": "chat.completion",
+                "created": int(time.time()),
+                "model": model,
+                "choices": [
+                    {
+                        "index": 0,
+                        "message": {
+                            "role": "assistant",
+                            "content": ""
+                        },
+                        "logprobs": "",
+                        "finish_reason": "stop"
+                    }
+                ],
+                "usage": {
+                    "prompt_tokens": len(last_content),
+                    "completion_tokens": 0,
+                    "total_tokens": len(last_content)
+                },
+                "system_fingerprint": "",
+                "no_reply": True
+            })
         if stream_requested or model == 'fay-streaming':
             interact = Interact("text", 1, {'user': username, 'msg': last_content, 'observation': str(observation), 'stream':True})
             util.printInfo(1, username, '[文字沟通接口(流式)]{}'.format(interact.data["msg"]), time.time())

@@ -1860,6 +1860,9 @@ def question(content, username, observation=None):
             if len(messages_buffer) > 60:
                 del messages_buffer[:-60]
 
+        def append_to_buffer(role: str, text_value: str) -> None:
+            append_to_buffer_multi(role, text_value, "")
+
         for record in history_records:
             msg_type, msg_text, msg_username = record
             if not msg_text:
