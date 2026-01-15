@@ -60,6 +60,12 @@ embedding_api_model = None
 embedding_api_base_url = None
 embedding_api_key = None
 
+# 避免重复加载配置中心导致日志刷屏
+_last_loaded_project_id = None
+_last_loaded_config = None
+_last_loaded_from_api = False  # 表示上次加载来自配置中心（含缓存）
+_warned_public_project_ids = set()
+
 # config server中心配置，system.conf与config.json存在时不会使用配置中心
 CONFIG_SERVER = {
     'BASE_URL': 'http://1.12.69.110:5500',  # 默认API服务器地址
@@ -67,6 +73,12 @@ CONFIG_SERVER = {
     'PROJECT_ID': 'd19f7b0a-2b8a-4503-8c0d-1a587b90eb69'   # 项目ID，需要在使用前设置
 }
 
+def _refresh_config_center():
+    env_project_id = os.getenv('FAY_CONFIG_CENTER_ID')
+    if env_project_id:
+        CONFIG_SERVER['PROJECT_ID'] = env_project_id
+
+_refresh_config_center()
 
 def load_config_from_api(project_id=None):
     global CONFIG_SERVER
@@ -147,7 +159,7 @@ def load_config_from_api(project_id=None):
     return None
 
 @synchronized
-def load_config():
+def load_config(force_reload=False):
     """
     加载配置文件，如果本地文件不存在则直接使用API加载
     
@@ -190,34 +202,126 @@ def load_config():
     global CONFIG_SERVER
     global system_conf_path
     global config_json_path
+    global _last_loaded_project_id
+    global _last_loaded_config
+    global _last_loaded_from_api
+
+    _refresh_config_center()
+
+    env_project_id = os.getenv('FAY_CONFIG_CENTER_ID')
+    using_config_center = bool(env_project_id)
+    if (
+        env_project_id
+        and not force_reload
+        and _last_loaded_config is not None
+        and _last_loaded_project_id == env_project_id
+        and _last_loaded_from_api
+    ):
+        return _last_loaded_config
+
+    default_system_conf_path = os.path.join(os.getcwd(), 'system.conf')
+    default_config_json_path = os.path.join(os.getcwd(), 'config.json')
+    cache_system_conf_path = os.path.join(os.getcwd(), 'cache_data', 'system.conf')
+    cache_config_json_path = os.path.join(os.getcwd(), 'cache_data', 'config.json')
 
     # 构建system.conf和config.json的完整路径
-    if system_conf_path is None or config_json_path is None:
-        system_conf_path = os.path.join(os.getcwd(), 'system.conf')
-        config_json_path = os.path.join(os.getcwd(), 'config.json')
-    
-    sys_conf_exists = os.path.exists(system_conf_path)
-    config_json_exists = os.path.exists(config_json_path)
-    
-    # 如果任一本地文件不存在，直接尝试从API加载
-    if not sys_conf_exists or not config_json_exists:
-        
-        # 使用提取的项目ID或全局项目ID
-        util.log(1, f"本地配置文件不完整（{system_conf_path if not sys_conf_exists else ''}{'和' if not sys_conf_exists and not config_json_exists else ''}{config_json_path if not config_json_exists else ''}不存在），尝试从API加载配置...")
+    if using_config_center:
+        system_conf_path = cache_system_conf_path
+        config_json_path = cache_config_json_path
+    else:
+        if (
+            system_conf_path is None
+            or config_json_path is None
+            or system_conf_path == cache_system_conf_path
+            or config_json_path == cache_config_json_path
+        ):
+            system_conf_path = default_system_conf_path
+            config_json_path = default_config_json_path
+
+    forced_loaded = False
+    loaded_from_api = False
+    api_attempted = False
+    if using_config_center:
+        util.log(1, f"检测到配置中心参数，优先加载项目配置: {CONFIG_SERVER['PROJECT_ID']}")
         api_config = load_config_from_api(CONFIG_SERVER['PROJECT_ID'])
-        
+        api_attempted = True
         if api_config:
             util.log(1, "成功从配置中心加载配置")
             system_config = api_config['system_config']
             config = api_config['config']
+            loaded_from_api = True
 
             # 缓存API配置到本地文件
-            system_conf_path = os.path.join(os.getcwd(), 'cache_data', 'system.conf')
-            config_json_path = os.path.join(os.getcwd(), 'cache_data', 'config.json')
+            system_conf_path = cache_system_conf_path
+            config_json_path = cache_config_json_path
             save_api_config_to_local(api_config, system_conf_path, config_json_path)
+            forced_loaded = True
 
-            if CONFIG_SERVER['PROJECT_ID'] == 'd19f7b0a-2b8a-4503-8c0d-1a587b90eb69':
+            if (
+                CONFIG_SERVER['PROJECT_ID'] == 'd19f7b0a-2b8a-4503-8c0d-1a587b90eb69'
+                and CONFIG_SERVER['PROJECT_ID'] not in _warned_public_project_ids
+            ):
+                _warned_public_project_ids.add(CONFIG_SERVER['PROJECT_ID'])
                 print("\033[1;33;41m警告：你正在使用社区公共配置,请尽快更换！\033[0m")
+        else:
+            util.log(2, "配置中心加载失败，尝试使用缓存配置")
+
+    sys_conf_exists = os.path.exists(system_conf_path)
+    config_json_exists = os.path.exists(config_json_path)
+    
+    # 如果任一本地文件不存在，直接尝试从API加载
+    if (not sys_conf_exists or not config_json_exists) and not forced_loaded:
+        if using_config_center:
+            if not api_attempted:
+                util.log(1, "配置中心缓存缺失，尝试从配置中心加载配置...")
+                api_config = load_config_from_api(CONFIG_SERVER['PROJECT_ID'])
+                api_attempted = True
+                if api_config:
+                    util.log(1, "成功从配置中心加载配置")
+                    system_config = api_config['system_config']
+                    config = api_config['config']
+                    loaded_from_api = True
+
+                    # 缓存API配置到本地文件
+                    system_conf_path = cache_system_conf_path
+                    config_json_path = cache_config_json_path
+                    save_api_config_to_local(api_config, system_conf_path, config_json_path)
+
+                    if (
+                        CONFIG_SERVER['PROJECT_ID'] == 'd19f7b0a-2b8a-4503-8c0d-1a587b90eb69'
+                        and CONFIG_SERVER['PROJECT_ID'] not in _warned_public_project_ids
+                    ):
+                        _warned_public_project_ids.add(CONFIG_SERVER['PROJECT_ID'])
+                        print("\033[1;33;41m警告：你正在使用社区公共配置,请尽快更换！\033[0m")
+        else:
+            # 使用提取的项目ID或全局项目ID
+            util.log(1, f"本地配置文件不完整（{system_conf_path if not sys_conf_exists else ''}{'和' if not sys_conf_exists and not config_json_exists else ''}{config_json_path if not config_json_exists else ''}不存在），尝试从API加载配置...")
+            api_config = load_config_from_api(CONFIG_SERVER['PROJECT_ID'])
+
+            if api_config:
+                util.log(1, "成功从配置中心加载配置")
+                system_config = api_config['system_config']
+                config = api_config['config']
+                loaded_from_api = True
+
+                # 缓存API配置到本地文件
+                system_conf_path = cache_system_conf_path
+                config_json_path = cache_config_json_path
+                save_api_config_to_local(api_config, system_conf_path, config_json_path)
+
+                if (
+                    CONFIG_SERVER['PROJECT_ID'] == 'd19f7b0a-2b8a-4503-8c0d-1a587b90eb69'
+                    and CONFIG_SERVER['PROJECT_ID'] not in _warned_public_project_ids
+                ):
+                    _warned_public_project_ids.add(CONFIG_SERVER['PROJECT_ID'])
+                    print("\033[1;33;41m警告：你正在使用社区公共配置,请尽快更换！\033[0m")
+
+    sys_conf_exists = os.path.exists(system_conf_path)
+    config_json_exists = os.path.exists(config_json_path)
+    if using_config_center and (not sys_conf_exists or not config_json_exists):
+        if _last_loaded_config is not None and _last_loaded_from_api:
+            util.log(2, "配置中心缓存不可用，继续使用内存中的配置")
+            return _last_loaded_config
     # 如果本地文件存在，从本地文件加载
     # 加载system.conf
     system_config = ConfigParser()
@@ -312,8 +416,12 @@ def load_config():
         'embedding_api_base_url': embedding_api_base_url,
         'embedding_api_key': embedding_api_key,
 
-        'source': 'local'  # 标记配置来源
+        'source': 'api' if using_config_center else 'local'  # 标记配置来源
     }
+
+    _last_loaded_project_id = CONFIG_SERVER['PROJECT_ID'] if using_config_center else None
+    _last_loaded_config = config_dict
+    _last_loaded_from_api = using_config_center
     
     return config_dict
 

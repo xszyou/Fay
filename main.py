@@ -1,7 +1,18 @@
 #入口文件main
 import os
-os.environ['PATH'] += os.pathsep + os.path.join(os.getcwd(), "test", "ovr_lipsync", "ffmpeg", "bin")
 import sys
+
+os.environ['PATH'] += os.pathsep + os.path.join(os.getcwd(), "test", "ovr_lipsync", "ffmpeg", "bin")
+
+def _preload_config_center(argv):
+    for i, arg in enumerate(argv):
+        if arg in ("-config_center", "--config_center"):
+            if i + 1 < len(argv):
+                os.environ["FAY_CONFIG_CENTER_ID"] = argv[i + 1]
+            break
+
+_preload_config_center(sys.argv[1:])
+
 import time
 import psutil
 import re
@@ -249,8 +260,12 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description="start自启动")
     parser.add_argument('command', nargs='?', default='', help="start")
+    parser.add_argument('-config_center', '--config_center', dest='config_center', default=None, help="配置中心项目ID")
 
     parsed_args = parser.parse_args()
+    if parsed_args.config_center:
+        os.environ["FAY_CONFIG_CENTER_ID"] = parsed_args.config_center
+        config_util.CONFIG_SERVER['PROJECT_ID'] = parsed_args.config_center
     if parsed_args.command.lower() == 'start':
         MyThread(target=fay_booter.start).start()
 

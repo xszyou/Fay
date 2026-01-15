@@ -319,7 +319,9 @@ def _remove_think_from_text(text: str) -> str:
     if not text:
         return text
     import re
-    return re.sub(r'<think>[\s\S]*?</think>', '', text, flags=re.IGNORECASE).strip()
+    cleaned = re.sub(r'<think>[\s\S]*?</think>', '', text, flags=re.IGNORECASE)
+    cleaned = re.sub(r'</?think>', '', cleaned, flags=re.IGNORECASE)
+    return cleaned.strip()
 
 
 def _format_conversation_block(conversation: List[Dict], username: str = "User") -> str:
@@ -438,21 +440,34 @@ def _run_prestart_tools(user_question: str) -> List[Dict[str, Any]]:
     return results
 
 
-def _truncate_history(history: List[ToolResult], limit: int = 6) -> str:
+def _truncate_history(
+    history: List[ToolResult],
+    limit: Optional[int] = None,
+    output_limit: Optional[int] = None,
+) -> str:
     if not history:
         return "（暂无）"
     lines: List[str] = []
-    for item in history[-limit:]:
+    selected = history if limit is None else history[-limit:]
+    for item in selected:
         call = item.get("call", {})
         name = call.get("name", "未知工具")
         attempt = item.get("attempt", 0)
         success = item.get("success", False)
         status = "成功" if success else "失败"
         lines.append(f"- {name} 第 {attempt} 次 → {status}")
-        if item.get("output"):
-            lines.append("  输出：" + _truncate_text(item["output"], 200))
-        if item.get("error"):
-            lines.append("  错误：" + _truncate_text(item["error"], 200))
+        output = item.get("output")
+        if output is not None:
+            output_text = str(output)
+            if output_limit is not None:
+                output_text = _truncate_text(output_text, output_limit)
+            lines.append("  输出：" + output_text)
+        error = item.get("error")
+        if error is not None:
+            error_text = str(error)
+            if output_limit is not None:
+                error_text = _truncate_text(error_text, output_limit)
+            lines.append("  错误：" + error_text)
     return "\n".join(lines)
 
 
@@ -2007,10 +2022,17 @@ def question(content, username, observation=None):
 
         def planner_stream_callback(chunk_text: str) -> None:
             """规划器流式回调，将 message 内容实时输出"""
-            nonlocal accumulated_text, full_response_text, is_first_sentence
+            nonlocal accumulated_text, full_response_text, is_first_sentence, is_agent_think_start
             if not chunk_text:
                 return
             planner_stream_buffer["text"] += chunk_text
+            if planner_stream_buffer["first_chunk"]:
+                planner_stream_buffer["first_chunk"] = False
+                if is_agent_think_start:
+                    closing = "</think>"
+                    accumulated_text += closing
+                    full_response_text += closing
+                    is_agent_think_start = False
             # 使用 stream_response_chunks 的逻辑进行分句流式输出
             accumulated_text += chunk_text
             full_response_text += chunk_text
@@ -2496,7 +2518,19 @@ def save_agent_memory():
                             if not hasattr(node, 'node_id') or not hasattr(node, 'content'):
                                 util.log(1, f"发现无效节点(缺少必要属性)，跳过")
                                 continue
-                                
+                            raw_content = node.content if isinstance(node.content, str) else str(node.content)
+                            cleaned_content = _remove_think_from_text(raw_content)
+                            if cleaned_content != raw_content:
+                                old_content = raw_content
+                                node.content = cleaned_content
+                                if (
+                                    agent.memory_stream.embeddings is not None
+                                    and old_content in agent.memory_stream.embeddings
+                                    and cleaned_content not in agent.memory_stream.embeddings
+                                ):
+                                    agent.memory_stream.embeddings[cleaned_content] = agent.memory_stream.embeddings[old_content]
+                            else:
+                                node.content = raw_content
                             valid_nodes.append(node)
                         
                         # 更新seq_nodes为有效节点列表
@@ -2504,6 +2538,13 @@ def save_agent_memory():
                         
                         # 重建id_to_node字典
                         agent.memory_stream.id_to_node = {node.node_id: node for node in valid_nodes if hasattr(node, 'node_id')}
+                        if agent.memory_stream.embeddings is not None:
+                            kept_contents = {node.content for node in valid_nodes if hasattr(node, 'content')}
+                            agent.memory_stream.embeddings = {
+                                key: value
+                                for key, value in agent.memory_stream.embeddings.items()
+                                if key in kept_contents
+                            }
                     except Exception as e:
                         util.log(1, f"检查记忆完整性时出错: {str(e)}")
                     

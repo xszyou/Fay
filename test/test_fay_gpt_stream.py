@@ -8,7 +8,7 @@ def test_gpt(prompt, username="张三", observation="", no_reply=False):
         'Authorization': f'Bearer YOUR_API_KEY',  # 如果您的接口需要身份验证
     }
     data = {
-        'model': 'fay-streaming',
+        'model': 'fay-streaming', #model为llm时，会直接透传到上游的llm输出，fay不作任何处理、记录
         'messages': [
             {'role': username, 'content': prompt}
         ],
@@ -47,7 +47,8 @@ def test_gpt(prompt, username="张三", observation="", no_reply=False):
                     if choices:
                         delta = choices[0].get('delta', {})
                         content = delta.get('content', '')
-                        print(content, end='', flush=True)
+                        if content:
+                            print(content, end='', flush=True)
                 except json.JSONDecodeError:
                     print(f"\n无法解析的 JSON 数据：{line}")
             else:
@@ -90,7 +91,7 @@ if __name__ == "__main__":
     print("=" * 60)
     print("示例1：张三的对话（带观察数据）")
     print("=" * 60)
-    test_gpt("你好，今天天气不错啊", username="张三", observation=OBSERVATION_SAMPLES["张三"])
+    test_gpt("你好，今天天气不错啊", username="user", observation=OBSERVATION_SAMPLES["张三"])
 
     print("\n")
 

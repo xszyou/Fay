@@ -276,6 +276,8 @@ class StreamManager:
                     fei.think_mode_users[uid_tmp] = False
                     if uid_tmp in getattr(fei, 'think_time_users', {}):
                         del fei.think_time_users[uid_tmp]
+                    if uid_tmp in getattr(fei, 'think_display_state', {}):
+                        del fei.think_display_state[uid_tmp]
         except Exception:
             pass
         

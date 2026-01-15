@@ -76,7 +76,9 @@ class FeiFei:
         self.timer = None
         self.sound_query = Queue()
         self.think_mode_users = {}  # 使用字典存储每个用户的think模式状态
-        self.think_time_users = {} #使用字典存储每个用户的think开始时间
+        self.think_time_users = {} #使用字典存储每个用户的think开始时间
+        self.think_display_state = {}
+        self.think_display_limit = 400
         self.user_conv_map = {} #存储用户对话id及句子流序号，key为(username, conversation_id)
         self.pending_isfirst = {}  # 存储因prestart被过滤而延迟的isfirst标记，key为username
     
@@ -331,7 +333,9 @@ class FeiFei:
                     if uid is not None and not is_prestart_content:
                         self.think_mode_users[uid] = False
                         if uid in self.think_time_users:
-                            del self.think_time_users[uid]
+                            del self.think_time_users[uid]                        if uid in self.think_display_state:
+                            del self.think_display_state[uid]
+
                 except Exception:
                     pass
                 # 如果没有 conversation_id，生成一个新的
@@ -748,6 +752,177 @@ class FeiFei:
             return False
         return re.search(r'<prestart[^>]*>[\s\S]*?</prestart>', text, flags=re.IGNORECASE) is not None
 
+
+    def __truncate_think_for_panel(self, text, uid, username):
+
+        if not text or not isinstance(text, str):
+
+            return text
+
+        key = uid if uid is not None else username
+
+        state = self.think_display_state.get(key)
+
+        if state is None:
+
+            state = {"in_think": False, "in_tool_output": False, "tool_count": 0, "tool_truncated": False}
+
+            self.think_display_state[key] = state
+
+        if not state["in_think"] and "<think>" not in text and "</think>" not in text:
+
+            return text
+
+        tool_output_regex = re.compile(r"\[TOOL\]\s*(?:Output|\u8f93\u51fa)[:\uff1a]", re.IGNORECASE)
+
+        section_regex = re.compile(r"(?i)(^|[\r\n])(\[(?:TOOL|PLAN)\])")
+
+        out = []
+
+        i = 0
+
+        while i < len(text):
+
+            if not state["in_think"]:
+
+                idx = text.find("<think>", i)
+
+                if idx == -1:
+
+                    out.append(text[i:])
+
+                    break
+
+                out.append(text[i:idx + len("<think>")])
+
+                state["in_think"] = True
+
+                i = idx + len("<think>")
+
+                continue
+
+            if not state["in_tool_output"]:
+
+                think_end = text.find("</think>", i)
+
+                tool_match = tool_output_regex.search(text, i)
+
+                next_pos = None
+
+                next_kind = None
+
+                if tool_match:
+
+                    next_pos = tool_match.start()
+
+                    next_kind = "tool"
+
+                if think_end != -1 and (next_pos is None or think_end < next_pos):
+
+                    next_pos = think_end
+
+                    next_kind = "think_end"
+
+                if next_pos is None:
+
+                    out.append(text[i:])
+
+                    break
+
+                if next_pos > i:
+
+                    out.append(text[i:next_pos])
+
+                if next_kind == "think_end":
+
+                    out.append("</think>")
+
+                    state["in_think"] = False
+
+                    state["in_tool_output"] = False
+
+                    state["tool_count"] = 0
+
+                    state["tool_truncated"] = False
+
+                    i = next_pos + len("</think>")
+
+                else:
+
+                    marker_end = tool_match.end()
+
+                    out.append(text[next_pos:marker_end])
+
+                    state["in_tool_output"] = True
+
+                    state["tool_count"] = 0
+
+                    state["tool_truncated"] = False
+
+                    i = marker_end
+
+                continue
+
+            think_end = text.find("</think>", i)
+
+            section_match = section_regex.search(text, i)
+
+            end_pos = None
+
+            if section_match:
+
+                end_pos = section_match.start(2)
+
+            if think_end != -1 and (end_pos is None or think_end < end_pos):
+
+                end_pos = think_end
+
+            segment = text[i:] if end_pos is None else text[i:end_pos]
+
+            if segment:
+
+                if state["tool_truncated"]:
+
+                    pass
+
+                else:
+
+                    remaining = self.think_display_limit - state["tool_count"]
+
+                    if remaining <= 0:
+
+                        out.append("...")
+
+                        state["tool_truncated"] = True
+
+                    elif len(segment) <= remaining:
+
+                        out.append(segment)
+
+                        state["tool_count"] += len(segment)
+
+                    else:
+
+                        out.append(segment[:remaining] + "...")
+
+                        state["tool_count"] += remaining
+
+                        state["tool_truncated"] = True
+
+            if end_pos is None:
+
+                break
+
+            state["in_tool_output"] = False
+
+            state["tool_count"] = 0
+
+            state["tool_truncated"] = False
+
+            i = end_pos
+
+        return "".join(out)
+
     def __send_panel_message(self, text, username, uid, content_id=None, type=None):
         """
         发送消息到Web面板
@@ -762,12 +937,13 @@ class FeiFei:
 
         # 检查是否是 prestart 内容，prestart 内容不应该更新日志区消息
         # 因为这会覆盖掉"思考中..."的状态显示
-        is_prestart = self.__has_prestart(text)
+        is_prestart = self.__has_prestart(text)        display_text = self.__truncate_think_for_panel(text, uid, username)
+
 
         # gui日志区消息（prestart 内容跳过，保持"思考中..."状态）
         if not is_prestart:
             wsa_server.get_web_instance().add_cmd({
-                "panelMsg": text,
+                "panelMsg": display_text,
                 "Username": username
             })
         
@@ -776,7 +952,7 @@ class FeiFei:
             wsa_server.get_web_instance().add_cmd({
                 "panelReply": {
                     "type": "fay",
-                    "content": text,
+                    "content": display_text,
                     "username": username,
                     "uid": uid,
                     "id": content_id,

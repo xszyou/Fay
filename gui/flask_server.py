@@ -383,24 +383,30 @@ def api_send_v1_chat_completions():
 
                     def generate():
                         try:
-                            for line in resp.iter_lines(decode_unicode=True):
-                                if line is None:
+                            for chunk in resp.iter_content(chunk_size=8192):
+                                if not chunk:
                                     continue
-                                yield f"{line}\n"
+                                yield chunk
                         finally:
                             resp.close()
 
+                    content_type = resp.headers.get("Content-Type", "text/event-stream")
+                    if "charset=" not in content_type.lower():
+                        content_type = f"{content_type}; charset=utf-8"
                     return Response(
                         generate(),
                         status=resp.status_code,
-                        mimetype=resp.headers.get("Content-Type", "text/event-stream"),
+                        content_type=content_type,
                     )
 
                 resp = requests.post(llm_url, headers=headers, json=payload, timeout=60)
+                content_type = resp.headers.get("Content-Type", "application/json")
+                if "charset=" not in content_type.lower():
+                    content_type = f"{content_type}; charset=utf-8"
                 return Response(
                     resp.content,
                     status=resp.status_code,
-                    content_type=resp.headers.get("Content-Type", "application/json"),
+                    content_type=content_type,
                 )
             except Exception as exc:
                 return jsonify({'error': f'LLM request failed: {exc}'}), 500

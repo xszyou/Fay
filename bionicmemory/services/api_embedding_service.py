@@ -1,4 +1,5 @@
 import logging
+import re
 import requests
 from typing import List, Optional
 import threading
@@ -23,6 +24,13 @@ logger = get_logger(__name__)
 
 if not CONFIG_UTIL_AVAILABLE:
     logger.warning("无法导入 config_util，将使用环境变量配置")
+
+def _sanitize_text(text: str) -> str:
+    if not isinstance(text, str) or not text:
+        return text
+    cleaned = re.sub(r'<think>[\s\S]*?</think>', '', text, flags=re.IGNORECASE)
+    cleaned = re.sub(r'</?think>', '', cleaned, flags=re.IGNORECASE)
+    return cleaned
 
 class ApiEmbeddingService:
     """API Embedding服务 - 单例模式，调用 OpenAI 兼容的 API"""
@@ -116,6 +124,7 @@ class ApiEmbeddingService:
         """编码单个文本（带重试机制）"""
         import time
 
+        text = _sanitize_text(text)
         last_error = None
         for attempt in range(self.max_retries + 1):
             try:
@@ -172,6 +181,7 @@ class ApiEmbeddingService:
     def encode_texts(self, texts: List[str]) -> List[List[float]]:
         """批量编码文本"""
         try:
+            texts = [_sanitize_text(text) for text in texts]
             # 调用 API 进行批量编码
             url = f"{self.api_base_url}/embeddings"
             headers = {
