@@ -79,20 +79,20 @@
 pip install -r requirements.txt
 ```
 
-### **配置**
-+ 依照说明修改 `./system.conf` 文件(默认运行将自动使用公共配置)
 
-### **启动**
-启动Fay控制器
+### **快速启动**
+本地
 ```shell
-python main.py
+python main.py start -config_center d19f7b0a-2b8a-4503-8c0d-1a587b90eb69
 ```
-
-
-
-## **镜像快速启动**
-
+镜像
 https://www.compshare.cn/images/compshareImage-1cft3sk9gvta?ytag=GPU_fay
+
+### **个性化配置**
++ 根目录system.conf.bak 重命名为system.conf，并配置里面的内容
+
+### **管理页面**
+浏览器访问 http://127.0.0.1:5000
 
 ## **高级玩法**
 
