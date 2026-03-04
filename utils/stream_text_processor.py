@@ -1,4 +1,5 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
+import re
 import time
 from utils import util
 from core import stream_manager
@@ -27,6 +28,20 @@ class StreamTextProcessor:
         self.max_cache_size = max_cache_size
         # 常用中英文分句标点（UTF-8）
         self.punctuation_marks = ["，", "。", "；", "：", "、", "！", "？", ".", "!", "?", "\n"]
+        self.punctuation_mark_set = set(self.punctuation_marks)
+        self.url_regex_list = [
+            re.compile(
+                r"(?i)\b(?:https?://|ftp://|file://|www\.)[^\s\u3002\uff01\uff1f\u3001\uff0c\uff1b\uff1a<>'\"\[\]\(\)\{\}]+"
+            ),
+            re.compile(
+                r"(?i)\b[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
+                r"(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+"
+                r"(?::\d{2,5})?"
+                r"(?:/[^\s\u3002\uff01\uff1f\u3001\uff0c\uff1b\uff1a<>'\"\[\]\(\)\{\}]*)?"
+                r"(?:\?[^\s\u3002\uff01\uff1f\u3001\uff0c\uff1b\uff1a<>'\"\[\]\(\)\{\}]*)?"
+                r"(?:#[^\s\u3002\uff01\uff1f\u3001\uff0c\uff1b\uff1a<>'\"\[\]\(\)\{\}]*)?"
+            ),
+        ]
 
     def process_stream_text(self, text, username, is_qa=False, session_type="stream"):
         """
@@ -87,7 +102,7 @@ class StreamTextProcessor:
 
             # 动态缓存大小检查
             if len(accumulated_text) > self.max_cache_size:
-                util.log(1, f"处理过程中缓存溢出，强制发送剩余文本")
+                util.log(1, "处理过程中缓存溢出，强制发送剩余文本")
                 break
 
             iteration_count += 1
@@ -178,19 +193,94 @@ class StreamTextProcessor:
         """
         try:
             indices = []
-            for punct in self.punctuation_marks:
-                try:
-                    index = text.find(punct)
-                    if index != -1:
-                        indices.append(index)
-                except Exception as e:
-                    util.log(1, f"查找标点符号 '{punct}' 时出错: {str(e)}")
+            url_spans = self._find_url_spans(text)
+            for index, ch in enumerate(text):
+                if ch not in self.punctuation_mark_set:
                     continue
-
-            return sorted([i for i in indices if i != -1])
+                if self._is_in_spans(index, url_spans):
+                    continue
+                if ch == "." and self._is_protected_dot(text, index):
+                    continue
+                indices.append(index)
+            return indices
         except Exception as e:
             util.log(1, f"查找标点符号时出错: {str(e)}")
             return []
+
+    def _find_url_spans(self, text):
+        spans = []
+        for regex in self.url_regex_list:
+            for match in regex.finditer(text):
+                start, end = match.span()
+                if end > start:
+                    spans.append((start, end))
+        if not spans:
+            return []
+        spans.sort(key=lambda item: item[0])
+        merged = [spans[0]]
+        for start, end in spans[1:]:
+            last_start, last_end = merged[-1]
+            if start <= last_end:
+                merged[-1] = (last_start, max(last_end, end))
+            else:
+                merged.append((start, end))
+        return merged
+
+    @staticmethod
+    def _is_in_spans(index, spans):
+        for start, end in spans:
+            if start <= index < end:
+                return True
+            if index < start:
+                break
+        return False
+
+    def _is_protected_dot(self, text, index):
+        """
+        判断英文句点是否位于不应截断的 token 内（如版本号、URL、域名等）。
+        """
+        try:
+            prev_char = text[index - 1] if index > 0 else ""
+            next_char = text[index + 1] if (index + 1) < len(text) else ""
+
+            # 数字点位：1.2 / 3.14 / 192.168.1.1
+            if prev_char.isdigit() and next_char.isdigit():
+                return True
+
+            token = self._extract_token_around(text, index).lower()
+            if not token:
+                return False
+
+            # URL 写法
+            if "://" in token or token.startswith("www."):
+                return True
+
+            # 版本号写法：v1.2.3 / 1.2.3
+            if re.match(r"^[a-z]*\d+\.\d+(\.\d+)*[a-z]*$", token):
+                return True
+
+            # 域名/主机名（可带路径）
+            if re.match(r"^[a-z0-9-]+(\.[a-z0-9-]+)+(/\S*)?$", token):
+                return True
+
+            return False
+        except Exception:
+            return False
+
+    def _extract_token_around(self, text, index):
+        """
+        提取句点所在连续 token（按空白与中英文标点分隔）。
+        """
+        separators = set(" \t\r\n\"'()[]{}<>,!?;:" + "\uFF0C\u3002\uFF01\uFF1F\uFF1B\uFF1A\u3001")
+        left = index
+        right = index + 1
+
+        while left > 0 and text[left - 1] not in separators:
+            left -= 1
+        while right < len(text) and text[right] not in separators:
+            right += 1
+
+        return text[left:right]
 
     def _send_fallback_text(self, text, username, state_manager, conversation_id):
         """

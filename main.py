@@ -2,7 +2,13 @@
 import os
 import sys
 
-os.environ['PATH'] += os.pathsep + os.path.join(os.getcwd(), "test", "ovr_lipsync", "ffmpeg", "bin")
+def _resolve_runtime_dir():
+    if hasattr(sys, "_MEIPASS"):
+        return os.path.abspath(sys._MEIPASS)
+    return os.path.abspath(os.path.dirname(__file__))
+
+_RUNTIME_DIR = _resolve_runtime_dir()
+os.environ['PATH'] += os.pathsep + os.path.join(_RUNTIME_DIR, "test", "ovr_lipsync", "ffmpeg", "bin")
 
 def _preload_config_center(argv):
     for i, arg in enumerate(argv):

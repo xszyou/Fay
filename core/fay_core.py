@@ -32,6 +32,8 @@ import re  # 添加正则表达式模块用于过滤表情符号
 
 
 import uuid
+import hashlib
+from urllib.parse import urlparse, urljoin
 
 
 
@@ -142,7 +144,15 @@ if platform.system() == "Windows":
     import sys
 
 
-    sys.path.append("test/ovr_lipsync")
+    _fay_runtime_dir = os.path.abspath(os.path.dirname(__file__))
+    if hasattr(sys, "_MEIPASS"):
+        _fay_runtime_dir = os.path.abspath(sys._MEIPASS)
+    else:
+        _fay_runtime_dir = os.path.abspath(os.path.join(_fay_runtime_dir, ".."))
+
+    _lipsync_dir = os.path.join(_fay_runtime_dir, "test", "ovr_lipsync")
+    if _lipsync_dir not in map(os.path.abspath, sys.path):
+        sys.path.insert(0, _lipsync_dir)
 
 
     from test_olipsync import LipSyncGenerator
@@ -238,6 +248,14 @@ class FeiFei:
         self.user_conv_map = {} #存储用户对话id及句子流序号，key为(username, conversation_id)
 
         self.pending_isfirst = {}  # 存储因prestart被过滤而延迟的isfirst标记，key为username
+        self.tts_cache = {}
+        self.tts_cache_limit = 1000
+        self.tts_cache_lock = threading.Lock()
+        self.user_audio_conv_map = {}  # 仅用于音频片段的连续序号（避免文本序号空洞导致乱序/缺包）
+        self.human_audio_order_map = {}
+        self.human_audio_order_lock = threading.Lock()
+        self.human_audio_reorder_wait_seconds = 0.2
+        self.human_audio_first_wait_seconds = 1.2
 
     
 
@@ -888,12 +906,162 @@ class FeiFei:
 
         return sayType
 
+    def __build_tts_cache_key(self, text, style):
+        tts_module = str(getattr(cfg, "tts_module", "") or "")
+        style_str = str(style or "")
+        voice_name = ""
+        try:
+            voice_name = str(config_util.config.get("attribute", {}).get("voice", "") or "")
+        except Exception:
+            voice_name = ""
+        if tts_module == "volcano":
+            try:
+                volcano_voice = str(getattr(cfg, "volcano_tts_voice_type", "") or "")
+                if volcano_voice:
+                    voice_name = volcano_voice
+            except Exception:
+                pass
+        raw = f"{tts_module}|{voice_name}|{style_str}|{text}"
+        return hashlib.sha1(raw.encode("utf-8")).hexdigest()
 
+    def __get_tts_cache(self, key):
+        with self.tts_cache_lock:
+            file_url = self.tts_cache.get(key)
+        if not file_url:
+            return None
+        if os.path.exists(file_url):
+            return file_url
+        with self.tts_cache_lock:
+            if key in self.tts_cache:
+                del self.tts_cache[key]
+        return None
 
+    def __set_tts_cache(self, key, file_url):
+        if not file_url:
+            return
+        with self.tts_cache_lock:
+            self.tts_cache[key] = file_url
+            while len(self.tts_cache) > self.tts_cache_limit:
+                try:
+                    self.tts_cache.pop(next(iter(self.tts_cache)))
+                except Exception:
+                    break
 
+    def __send_human_audio_ordered(self, content, username, conversation_id, conversation_msg_no, is_end=False):
+        now = time.time()
+        sent_messages = []
+        data = content.get("Data", {}) if isinstance(content, dict) else {}
+        has_audio_payload = bool(data.get("Value")) or bool(data.get("HttpValue"))
+        is_end_marker_only = bool(is_end or data.get("IsEnd", 0)) and (not has_audio_payload)
 
-    # 合成声音
+        seq = None
+        try:
+            if conversation_msg_no is not None:
+                seq = int(conversation_msg_no)
+        except Exception:
+            seq = None
 
+        # Fallback to direct send for legacy paths without sequence metadata.
+        if (not conversation_id) or (seq is None):
+            if is_end_marker_only:
+                return 0
+            wsa_server.get_instance().add_cmd(content)
+            return 1
+
+        key = (username or "User", conversation_id)
+        with self.human_audio_order_lock:
+            state = self.human_audio_order_map.get(key)
+            if state is None:
+                state = {
+                    "next_seq": None,
+                    "buffer": {},
+                    "last_progress_time": now,
+                    "first_wait_start": now,
+                    "start_known": False,
+                    "end_seq": None,
+                    "pending_end_seq": None,
+                }
+                self.human_audio_order_map[key] = state
+
+            next_seq = state.get("next_seq")
+            if (next_seq is not None) and (seq < next_seq):
+                return 0
+
+            def _mark_buffer_end(target_seq):
+                existed = state["buffer"].get(target_seq)
+                if isinstance(existed, dict):
+                    existed_data = existed.get("Data", {})
+                    if isinstance(existed_data, dict):
+                        existed_data["IsEnd"] = 1
+                    return True
+                return False
+
+            if is_end_marker_only:
+                target_seq = None
+                if seq in state["buffer"]:
+                    target_seq = seq
+                elif (seq - 1) in state["buffer"]:
+                    target_seq = seq - 1
+                elif state["buffer"]:
+                    target_seq = max(state["buffer"].keys())
+
+                if (target_seq is not None) and _mark_buffer_end(target_seq):
+                    end_seq = state.get("end_seq")
+                    state["end_seq"] = target_seq if end_seq is None else max(end_seq, target_seq)
+                    state["pending_end_seq"] = None
+                else:
+                    state["pending_end_seq"] = seq
+            else:
+                if seq in state["buffer"]:
+                    return 0
+                state["buffer"][seq] = content
+
+                pending_end_seq = state.get("pending_end_seq")
+                if pending_end_seq is not None:
+                    if (seq == pending_end_seq) or (seq == pending_end_seq - 1):
+                        if _mark_buffer_end(seq):
+                            end_seq = state.get("end_seq")
+                            state["end_seq"] = seq if end_seq is None else max(end_seq, seq)
+                            state["pending_end_seq"] = None
+
+                if is_end:
+                    end_seq = state.get("end_seq")
+                    state["end_seq"] = seq if end_seq is None else max(end_seq, seq)
+
+            is_first_flag = bool(data.get("IsFirst", 0))
+            if (not state["start_known"]) and is_first_flag:
+                state["start_known"] = True
+                state["next_seq"] = seq
+                state["last_progress_time"] = now
+            elif (not state["start_known"]) and (seq == 0):
+                state["start_known"] = True
+                state["next_seq"] = 0
+                state["last_progress_time"] = now
+            elif (not state["start_known"]):
+                first_elapsed = now - state.get("first_wait_start", now)
+                if (first_elapsed >= self.human_audio_first_wait_seconds) and (0 in state["buffer"]):
+                    state["start_known"] = True
+                    state["next_seq"] = 0
+                    state["last_progress_time"] = now
+
+            def _flush_contiguous():
+                flush_count = 0
+                while (state["next_seq"] is not None) and (state["next_seq"] in state["buffer"]):
+                    sent_messages.append(state["buffer"].pop(state["next_seq"]))
+                    state["next_seq"] += 1
+                    state["last_progress_time"] = now
+                    flush_count += 1
+                return flush_count
+
+            _flush_contiguous()
+
+            end_seq = state.get("end_seq")
+            if (end_seq is not None) and (state.get("next_seq") is not None) and (state["next_seq"] > end_seq) and (not state["buffer"]):
+                self.human_audio_order_map.pop(key, None)
+
+        for message in sent_messages:
+            wsa_server.get_instance().add_cmd(message)
+        return len(sent_messages)
 
     def say(self, interact, text, type = ""):
 
@@ -1101,6 +1269,8 @@ class FeiFei:
 
 
                             conv_info = info
+                            conv = info.get("conversation_id", c)
+                            conv_map_key = (username, conv)
 
 
                             util.log(1, f"警告：使用备用会话 ({u}, {c}) 的 content_id={content_id}，原 key=({username}, {conv})")
@@ -1156,6 +1326,23 @@ class FeiFei:
 
 
 
+
+            # 固化当前会话序号，避免异步音频线程读取时会话映射已被清理而回落为0
+            current_conv_info = self.user_conv_map.get(conv_map_key, {})
+            if (not current_conv_info) and (not conv):
+                for (u, c), info in list(self.user_conv_map.items()):
+                    if u == username and info.get("conversation_id", ""):
+                        current_conv_info = info
+                        conv = info.get("conversation_id", c)
+                        conv_map_key = (username, conv)
+                        break
+            if current_conv_info:
+                interact.data["conversation_id"] = current_conv_info.get("conversation_id", conv)
+                interact.data["conversation_msg_no"] = current_conv_info.get("conversation_msg_no", 0)
+            else:
+                if conv:
+                    interact.data["conversation_id"] = conv
+                interact.data["conversation_msg_no"] = interact.data.get("conversation_msg_no", 0)
 
             # 会话结束时清理 user_conv_map 中的对应条目，避免内存泄漏
 
@@ -1394,7 +1581,15 @@ class FeiFei:
                         tm = time.time()
 
 
-                        result = self.sp.to_sample(filtered_text, self.__get_mood_voice())
+                        mood_voice = self.__get_mood_voice()
+                        cache_key = self.__build_tts_cache_key(filtered_text, mood_voice)
+                        cache_result = self.__get_tts_cache(cache_key)
+                        if cache_result is not None:
+                            result = cache_result
+                            util.printInfo(1, interact.data.get('user'), 'TTS cache hit')
+                        else:
+                            result = self.sp.to_sample(filtered_text, mood_voice)
+                            self.__set_tts_cache(cache_key, result)
 
 
                         # 合成完成后再次检查会话是否仍有效，避免继续输出旧会话结果
@@ -1438,6 +1633,21 @@ class FeiFei:
 
 
 
+
+            # 为数字人音频单独维护连续序号，避免 conversation_msg_no 因无音频片段产生空洞
+            audio_conv_id = interact.data.get("conversation_id", "") or ""
+            audio_conv_key = (username, audio_conv_id)
+            audio_msg_no = None
+            if result is not None:
+                audio_msg_no = self.user_audio_conv_map.get(audio_conv_key, -1) + 1
+                self.user_audio_conv_map[audio_conv_key] = audio_msg_no
+            elif is_end:
+                audio_msg_no = self.user_audio_conv_map.get(audio_conv_key, None)
+                if audio_conv_key in self.user_audio_conv_map:
+                    del self.user_audio_conv_map[audio_conv_key]
+            interact.data["audio_conversation_msg_no"] = audio_msg_no
+            if is_end and audio_conv_key in self.user_audio_conv_map:
+                del self.user_audio_conv_map[audio_conv_key]
 
             if result is not None or is_first or is_end:
 
@@ -1489,6 +1699,25 @@ class FeiFei:
 
             # 发送HTTP GET请求以获取WAV文件内容
 
+
+            if url is None:
+                return None
+
+            url = str(url).strip()
+            if not url:
+                return None
+
+            if os.path.isfile(url):
+                return url
+
+            parsed_url = urlparse(url)
+            if not parsed_url.scheme:
+                if url.startswith('//'):
+                    url = 'http:' + url
+                else:
+                    base_url = str(getattr(cfg, "fay_url", "") or "").strip()
+                    if base_url:
+                        url = urljoin(base_url.rstrip('/') + '/', url.lstrip('/'))
 
             response = requests.get(url, stream=True)
 
@@ -1949,7 +2178,7 @@ class FeiFei:
             #发送音频给数字人接口
 
 
-            if file_url is not None and wsa_server.get_instance().get_client_output(interact.data.get("user")):
+            if wsa_server.get_instance().get_client_output(interact.data.get("user")):
 
 
                 # 使用 (username, conversation_id) 作为 key 获取会话信息
@@ -1962,45 +2191,99 @@ class FeiFei:
 
 
                 audio_conv_info = self.user_conv_map.get((audio_username, audio_conv_id), {})
+                msg_no_from_interact = interact.data.get("audio_conversation_msg_no", None)
+                conv_id_for_send = audio_conv_id if audio_conv_id else audio_conv_info.get("conversation_id", "")
+                if msg_no_from_interact is None:
+                    fallback_no = interact.data.get("conversation_msg_no", None)
+                    if fallback_no is None:
+                        conv_msg_no_for_send = audio_conv_info.get("conversation_msg_no", 0)
+                    else:
+                        conv_msg_no_for_send = fallback_no
+                else:
+                    conv_msg_no_for_send = msg_no_from_interact
+
+                if file_url is not None:
 
 
-                content = {'Topic': 'human', 'Data': {'Key': 'audio', 'Value': os.path.abspath(file_url), 'HttpValue': f'{cfg.fay_url}/audio/' + os.path.basename(file_url),  'Text': text, 'Time': audio_length, 'Type': interact.interleaver, 'IsFirst': 1 if interact.data.get("isfirst", False) else 0,  'IsEnd': 1 if interact.data.get("isend", False) else 0, 'CONV_ID' : audio_conv_info.get("conversation_id", ""), 'CONV_MSG_NO' : audio_conv_info.get("conversation_msg_no", 0)  }, 'Username' : interact.data.get('user'), 'robot': f'{cfg.fay_url}/robot/Speaking.jpg'}
+                    content = {'Topic': 'human', 'Data': {'Key': 'audio', 'Value': os.path.abspath(file_url), 'HttpValue': f'{cfg.fay_url}/audio/' + os.path.basename(file_url),  'Text': text, 'Time': audio_length, 'Type': interact.interleaver, 'IsFirst': 1 if interact.data.get("isfirst", False) else 0,  'IsEnd': 1 if interact.data.get("isend", False) else 0, 'CONV_ID' : conv_id_for_send, 'CONV_MSG_NO' : conv_msg_no_for_send  }, 'Username' : interact.data.get('user'), 'robot': f'{cfg.fay_url}/robot/Speaking.jpg'}
 
 
-                #计算lips
+                    #计算lips
 
 
-                if platform.system() == "Windows":
+                    if platform.system() == "Windows":
 
 
+                        try:
+
+
+                            lip_sync_generator = LipSyncGenerator()
+
+
+                            viseme_list = lip_sync_generator.generate_visemes(os.path.abspath(file_url))
+
+
+                            consolidated_visemes = lip_sync_generator.consolidate_visemes(viseme_list)
+
+
+                            content["Data"]["Lips"] = consolidated_visemes
+
+
+                        except Exception as e:
+
+
+                            print(e)
+
+
+                            util.printInfo(1, interact.data.get("user"),  "唇型数据生成失败")
+
+
+                    sent_count = self.__send_human_audio_ordered(
+                        content,
+                        audio_username,
+                        conv_id_for_send,
+                        conv_msg_no_for_send,
+                        is_end=bool(interact.data.get("isend", False)),
+                    )
+                    if sent_count > 0:
+                        util.printInfo(1, interact.data.get("user"), "digital human audio sent")
+                    else:
+                        util.printInfo(1, interact.data.get("user"), "digital human audio queued")
+                elif bool(interact.data.get("isend", False)):
+                    # 没有音频文件时，也要给数字人发送结束标记，避免客户端一直等待
+                    end_target_seq = conv_msg_no_for_send
                     try:
-
-
-                        lip_sync_generator = LipSyncGenerator()
-
-
-                        viseme_list = lip_sync_generator.generate_visemes(os.path.abspath(file_url))
-
-
-                        consolidated_visemes = lip_sync_generator.consolidate_visemes(viseme_list)
-
-
-                        content["Data"]["Lips"] = consolidated_visemes
-
-
-                    except Exception as e:
-
-
-                        print(e)
-
-
-                        util.printInfo(1, interact.data.get("user"),  "唇型数据生成失败")
-
-
-                wsa_server.get_instance().add_cmd(content)
-
-
-                util.printInfo(1, interact.data.get("user"),  "数字人接口发送音频数据成功")
+                        end_target_seq = int(conv_msg_no_for_send)
+                    except Exception:
+                        end_target_seq = conv_msg_no_for_send
+                    end_content = {
+                        'Topic': 'human',
+                        'Data': {
+                            'Key': 'audio',
+                            'Value': '',
+                            'HttpValue': '',
+                            'Text': text,
+                            'Time': 0,
+                            'Type': interact.interleaver,
+                            'IsFirst': 1 if interact.data.get("isfirst", False) else 0,
+                            'IsEnd': 1,
+                            'CONV_ID': conv_id_for_send,
+                            'CONV_MSG_NO': end_target_seq
+                        },
+                        'Username': interact.data.get('user'),
+                        'robot': f'{cfg.fay_url}/robot/Speaking.jpg'
+                    }
+                    sent_count = self.__send_human_audio_ordered(
+                        end_content,
+                        audio_username,
+                        conv_id_for_send,
+                        end_target_seq,
+                        is_end=True,
+                    )
+                    if sent_count > 0:
+                        util.printInfo(1, interact.data.get("user"), "digital human audio end sent")
+                    else:
+                        util.printInfo(1, interact.data.get("user"), "digital human audio end queued")
 
 
 

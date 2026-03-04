@@ -278,7 +278,7 @@ def load_config(force_reload=False):
     root_config_json_exists = os.path.exists(default_config_json_path)
     root_config_complete = root_system_conf_exists and root_config_json_exists
 
-    # 构建system.conf和config.json的完整路径
+    # 构建system.conf和config.json相关路径.
     config_center_fallback = False
     if using_config_center:
         system_conf_path = cache_system_conf_path
@@ -322,10 +322,15 @@ def load_config(force_reload=False):
             if config_center_fallback:
                 _bootstrap_loaded_from_api = True
 
-            # 缓存API配置到本地文件
+            # 将配置中心配置缓存到本地文件.
             system_conf_path = cache_system_conf_path
             config_json_path = cache_config_json_path
-            save_api_config_to_local(api_config, system_conf_path, config_json_path)
+            save_api_config_to_local(
+                api_config,
+                system_conf_path,
+                config_json_path,
+                save_config_json=not os.path.exists(config_json_path)
+            )
             forced_loaded = True
 
             _warn_public_config_once()
@@ -350,15 +355,20 @@ def load_config(force_reload=False):
                     if config_center_fallback:
                         _bootstrap_loaded_from_api = True
 
-                    # 缓存API配置到本地文件
+                    # 将配置中心配置缓存到本地文件.
                     system_conf_path = cache_system_conf_path
                     config_json_path = cache_config_json_path
-                    save_api_config_to_local(api_config, system_conf_path, config_json_path)
+                    save_api_config_to_local(
+                        api_config,
+                        system_conf_path,
+                        config_json_path,
+                        save_config_json=not os.path.exists(config_json_path)
+                    )
 
                     _warn_public_config_once()
         else:
-            # 使用提取的项目ID或全局项目ID
-            util.log(1, f"本地配置文件不完整（{system_conf_path if not sys_conf_exists else ''}{'和' if not sys_conf_exists and not config_json_exists else ''}{config_json_path if not config_json_exists else ''}不存在），尝试从API加载配置...")
+            # 使用项目配置或全局项目配置作为回退来源.
+            util.log(1, f"本地配置文件不完整，尝试从API加载配置...")
             api_config = load_config_from_api(CONFIG_SERVER['PROJECT_ID'])
 
             if api_config:
@@ -367,10 +377,15 @@ def load_config(force_reload=False):
                 config = api_config['config']
                 loaded_from_api = True
 
-                # 缓存API配置到本地文件
+                # 将配置中心配置缓存到本地文件.
                 system_conf_path = cache_system_conf_path
                 config_json_path = cache_config_json_path
-                save_api_config_to_local(api_config, system_conf_path, config_json_path)
+                save_api_config_to_local(
+                    api_config,
+                    system_conf_path,
+                    config_json_path,
+                    save_config_json=not os.path.exists(config_json_path)
+                )
 
                 _warn_public_config_once()
 
@@ -497,31 +512,33 @@ def load_config(force_reload=False):
     
     return config_dict
 
-def save_api_config_to_local(api_config, system_conf_path, config_json_path):
+def save_api_config_to_local(api_config, system_conf_path, config_json_path, save_config_json=True):
     """
-    将API加载的配置保存到本地文件
+    Persist API config to local files.
     
     Args:
-        api_config: API加载的配置字典
-        system_conf_path: system.conf文件路径
-        config_json_path: config.json文件路径
+        api_config: API response dict.
+        system_conf_path: Path to system.conf.
+        config_json_path: Path to config.json.
+        save_config_json: Whether to write config.json.
     """
     try:
-        # 确保目录存在
+    # 确保目录存在.
         os.makedirs(os.path.dirname(system_conf_path), exist_ok=True)
         os.makedirs(os.path.dirname(config_json_path), exist_ok=True)
         
-        # 保存system.conf
+        # 始终刷新 system.conf.
         with open(system_conf_path, 'w', encoding='utf-8') as f:
             api_config['system_config'].write(f)
         
-        # 保存config.json
-        with codecs.open(config_json_path, 'w', encoding='utf-8') as f:
-            json.dump(api_config['config'], f, ensure_ascii=False, indent=4)
+        # 默认只在首次下载时保存config.json.
+        if save_config_json:
+            with codecs.open(config_json_path, 'w', encoding='utf-8') as f:
+                json.dump(api_config['config'], f, ensure_ascii=False, indent=4)
             
         util.log(1, f"已将配置中心配置缓存到本地文件: {system_conf_path} 和 {config_json_path}")
     except Exception as e:
-        util.log(2, f"保存配置中心配置缓存到本地文件时出错: {str(e)}")
+        util.log(2, f"保存配置中心配置到本地文件时出错: {str(e)}")
 
 @synchronized
 def save_config(config_data):

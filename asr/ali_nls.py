@@ -22,31 +22,42 @@ _token = ''
 
 def __post_token():
     global _token
-    __client = AcsClient(
-        cfg.key_ali_nls_key_id,
-        cfg.key_ali_nls_key_secret,
-        "cn-shanghai"
-    )
+    if not cfg.key_ali_nls_key_id or not cfg.key_ali_nls_key_secret:
+        util.log(2, "AliNLS 凭据未配置，跳过 token 刷新。")
+        return False
 
-    __request = CommonRequest()
-    __request.set_method('POST')
-    __request.set_domain('nls-meta.cn-shanghai.aliyuncs.com')
-    __request.set_version('2019-02-28')
-    __request.set_action_name('CreateToken')
-    info = json.loads(__client.do_action_with_exception(__request))
-    _token = info['Token']['Id']
-    authorize = Authorize_Tb()
-    authorize_info = authorize.find_by_userid(cfg.key_ali_nls_key_id)
-    if authorize_info is not None:
-       authorize.update_by_userid(cfg.key_ali_nls_key_id, _token, info['Token']['ExpireTime']*1000)
-    else:
-       authorize.add(cfg.key_ali_nls_key_id, _token, info['Token']['ExpireTime']*1000) 
+    try:
+        __client = AcsClient(
+            cfg.key_ali_nls_key_id,
+            cfg.key_ali_nls_key_secret,
+            "cn-shanghai"
+        )
+
+        __request = CommonRequest()
+        __request.set_method('POST')
+        __request.set_domain('nls-meta.cn-shanghai.aliyuncs.com')
+        __request.set_version('2019-02-28')
+        __request.set_action_name('CreateToken')
+        info = json.loads(__client.do_action_with_exception(__request))
+        _token = info['Token']['Id']
+        authorize = Authorize_Tb()
+        authorize_info = authorize.find_by_userid(cfg.key_ali_nls_key_id)
+        if authorize_info is not None:
+            authorize.update_by_userid(cfg.key_ali_nls_key_id, _token, info['Token']['ExpireTime']*1000)
+        else:
+            authorize.add(cfg.key_ali_nls_key_id, _token, info['Token']['ExpireTime']*1000)
+        util.log(1, "AliNLS token刷新成功")
+        return True
+    except Exception as e:
+        util.log(2, f"AliNLS token刷新失败: {str(e)}")
+        return False
 
 def __runnable():
     while __running:
-        __post_token()
-        time.sleep(60 * 60 * 12)
-
+        if __post_token():
+            time.sleep(60 * 60 * 12)
+        else:
+            time.sleep(60)
 
 def start():
     MyThread(target=__runnable).start()
@@ -148,6 +159,11 @@ class ALiNls:
         thread.start_new_thread(run, ())
 
     def __connect(self):
+        if not _token:
+            util.log(2, "AliNLS token为空，本次语音识别连接跳过")
+            self.started = True
+            return
+
         self.finalResults = ""
         self.done = False
         with self.lock:

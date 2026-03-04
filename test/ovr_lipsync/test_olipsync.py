@@ -1,7 +1,11 @@
 import subprocess
 import time
 import os
-os.environ['PATH'] += os.pathsep + os.path.join(os.getcwd(), "test", "ovr_lipsync", "ffmpeg", "bin")
+import sys
+_RUNTIME_DIR = os.path.abspath(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+if hasattr(sys, "_MEIPASS"):
+    _RUNTIME_DIR = os.path.abspath(sys._MEIPASS)
+os.environ['PATH'] += os.pathsep + os.path.join(_RUNTIME_DIR, "test", "ovr_lipsync", "ffmpeg", "bin")
 from pydub import AudioSegment
 import json
 
@@ -17,7 +21,7 @@ class LipSyncGenerator:
           "kk", "CH", "SS", "nn", "RR",
           "aa", "E", "ih", "oh", "ou"]
         self.viseme = []
-        self.exe_path = os.path.join(os.getcwd(), "test", "ovr_lipsync", "ovr_lipsync_exe", "ProcessWAV.exe")
+        self.exe_path = os.path.join(_RUNTIME_DIR, "test", "ovr_lipsync", "ovr_lipsync_exe", "ProcessWAV.exe")
 
     def run_exe_and_get_output(self, arguments):
         process = subprocess.Popen([self.exe_path] + arguments, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)

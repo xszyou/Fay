@@ -85,23 +85,26 @@ def _text_content(text: str) -> TextContent:
 TOOLS: list[Tool] = [
     Tool(
         name="broadcast_message",
-        description="通过 Fay 的 /transparent-pass 广播文本/音频（SSE 服务器）。",
+        description="通过 Fay 的 /transparent-pass 透传文本/音频。",
         inputSchema={
             "type": "object",
             "properties": {
                 "text": {"type": "string", "description": "要广播的文本（audio_url为空时必填）"},
                 "audio_url": {"type": "string", "description": "可选音频 URL"},
-                "user": {"type": "string", "description": "目标用户名，默认 FAY_BROADCAST_USER 或 User"},
+                "user": {"type": "string", "description": "用户标识名称，默认 FAY_BROADCAST_USER 或 User"},
                 "speaker": {
                     "type": "string",
-                    "description": "\u5e7f\u64ad\u4eba\u663e\u793a\u540d\uff0c\u8f93\u51fa\u4e3a\"{speaker}\u8bf4\uff1a{text}\"",
+                    "description": "发言人显示名，输出为\"{speaker}说：{text}\"",
                 },
+                "queue": {"type": "boolean", "description": "是否走队列播放，默认 false"},
+                "queue_playback": {"type": "boolean", "description": "兼容参数，等同 queue"},
+                "enqueue": {"type": "boolean", "description": "兼容参数，等同 queue"},
+                "mode": {"type": "string", "description": "兼容参数，值为 queue 时启用队列播放"},
             },
             "required": [],
         },
     )
 ]
-
 
 async def _handle_list_tools() -> list[Tool]:
     # 本地广播工具 + Fay 当前在线 MCP 工具的聚合视图（namespaced）
@@ -113,14 +116,38 @@ async def _handle_list_tools() -> list[Tool]:
     return TOOLS + aggregated
 
 
-def _parse_arguments(arguments: Dict[str, Any]) -> Tuple[str, str, str, str]:
+
+def _as_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    if isinstance(value, (int, float)):
+        return value != 0
+    if isinstance(value, str):
+        v = value.strip().lower()
+        if v == "":
+            return False
+        return v in {"1", "true", "yes", "on", "y", "queue"}
+    return bool(value)
+
+
+def _parse_arguments(arguments: Dict[str, Any]) -> Tuple[str, str, str, str, bool]:
     text = str(arguments.get("text", "") or "").strip()
     audio_url = str(arguments.get("audio_url", "") or "").strip()
     user = str(arguments.get("user", "") or "").strip() or DEFAULT_USER
     speaker = str(arguments.get("speaker", "") or "").strip() or DEFAULT_SPEAKER
-    return text, audio_url, user, speaker
-
-
+    if "queue" in arguments:
+        queue = _as_bool(arguments.get("queue"))
+    elif "queue_playback" in arguments:
+        queue = _as_bool(arguments.get("queue_playback"))
+    elif "enqueue" in arguments:
+        queue = _as_bool(arguments.get("enqueue"))
+    elif "mode" in arguments:
+        queue = str(arguments.get("mode", "") or "").strip().lower() == "queue"
+    else:
+        queue = False
+    return text, audio_url, user, speaker, queue
 def _build_aggregated_tools() -> List[Tool]:
     """
     将 Fay 已连接的 MCP 工具聚合，对外暴露为 namespaced 名称：
@@ -171,9 +198,9 @@ async def _send_broadcast(payload: Dict[str, Any]) -> Tuple[bool, str]:
                 msg = data.get("message") or data.get("msg") or ""
                 code = data.get("code")
                 if isinstance(code, int) and code >= 400:
-                    return False, msg or f"Broadcast failed with code {code}"
-                return True, msg or "Broadcast sent via Fay."
-            return True, "Broadcast sent via Fay."
+                    return False, msg or f"透传失败，HTTP码 {code}"
+                return True, msg or "已发送透传请求。"
+            return True, "已发送透传请求。"
 
         err_detail = ""
         if isinstance(data, dict):
@@ -191,24 +218,27 @@ async def _send_broadcast(payload: Dict[str, Any]) -> Tuple[bool, str]:
 async def _handle_call_tool(name: str, arguments: Dict[str, Any]) -> list[TextContent]:
     # 本地广播
     if name == "broadcast_message":
-        text, audio_url, user, speaker = _parse_arguments(arguments or {})
+        text, audio_url, user, speaker, queue = _parse_arguments(arguments or {})
         if not text and not audio_url:
-            return [_text_content("Either 'text' or 'audio_url' must be provided.")]
+            return [_text_content("text 或 audio_url 至少需提供一个。")]
 
         payload: Dict[str, Any] = {"user": user}
         if text:
             payload["text"] = f"{speaker}\u8bf4\uff1a{text}"
         if audio_url:
             payload["audio"] = audio_url
+        if queue:
+            payload["queue"] = True
+            payload["queue_playback"] = True
+            payload["mode"] = "queue"
 
         ok, message = await _send_broadcast(payload)
-        prefix = "success" if ok else "error"
+        prefix = "成功" if ok else "失败"
         return [_text_content(f"{prefix}: {message}")]
 
-    # 聚合的远端 MCP 工具
     target = _aggregated_index.get(name)
     if not target:
-        return [_text_content(f"Unknown tool: {name}")]
+        return [_text_content(f"未知工具: {name}")]
 
     server_id, tool_name = target
     try:

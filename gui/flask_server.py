@@ -12,6 +12,15 @@ import datetime
 import pytz
 import logging
 import uuid
+from urllib.parse import urlparse, urljoin
+try:
+    from langchain_openai import ChatOpenAI
+    from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
+except Exception:
+    ChatOpenAI = None
+    HumanMessage = None
+    SystemMessage = None
+    AIMessage = None
 
 import fay_booter
 from tts import tts_voice
@@ -112,6 +121,62 @@ def _build_llm_url(base_url: str) -> str:
     return url + "/v1/chat/completions"
 
 
+def _normalize_openai_content(content):
+    if content is None:
+        return ""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for item in content:
+            if isinstance(item, dict):
+                text = item.get("text")
+                if text is not None:
+                    parts.append(str(text))
+                    continue
+                if "content" in item:
+                    parts.append(_normalize_openai_content(item.get("content")))
+                    continue
+            parts.append(str(item))
+        return "".join(parts)
+    if isinstance(content, dict):
+        if "text" in content:
+            return _normalize_openai_content(content.get("text"))
+        if "content" in content:
+            return _normalize_openai_content(content.get("content"))
+    return str(content)
+
+
+def _build_langchain_messages(messages):
+    normalized = []
+    if isinstance(messages, str):
+        normalized.append(HumanMessage(content=messages))
+        return normalized
+    if not isinstance(messages, list):
+        return normalized
+    for msg in messages:
+        if not isinstance(msg, dict):
+            continue
+        role = str(msg.get("role", "user")).strip().lower()
+        content = _normalize_openai_content(msg.get("content"))
+        if content is None:
+            content = ""
+        if role == "system":
+            normalized.append(SystemMessage(content=content))
+        elif role == "assistant":
+            normalized.append(AIMessage(content=content))
+        else:
+            normalized.append(HumanMessage(content=content))
+    return normalized
+
+
+def _safe_text_from_chunk(chunk):
+    if chunk is None:
+        return ""
+    value = getattr(chunk, "content", "")
+    return _normalize_openai_content(value)
+
+
 
 def _build_embedding_url(base_url: str) -> str:
     if not base_url:
@@ -126,6 +191,17 @@ def _build_embedding_url(base_url: str) -> str:
     if url.endswith("/v1"):
         return url + "/embeddings"
     return url + "/v1/embeddings"
+
+
+def _build_langchain_base_url(base_url: str) -> str:
+    if not base_url:
+        return ""
+    url = base_url.rstrip("/")
+    if url.endswith("/v1/chat/completions"):
+        return url[:-len("/chat/completions")]
+    if url.endswith("/chat/completions"):
+        return url[:-len("/chat/completions")]
+    return url
 
 @__app.route('/api/submit', methods=['post'])
 def api_submit():
@@ -373,57 +449,107 @@ def api_send_v1_chat_completions():
     try:
         model = data.get('model', 'fay')
         if model == 'llm':
+            if ChatOpenAI is None or HumanMessage is None:
+                return jsonify({'error': 'langchain_openai or langchain_core is not available'}), 500
             try:
                 config_util.load_config()
-                llm_url = _build_llm_url(config_util.gpt_base_url)
                 api_key = config_util.key_gpt_api_key
                 model_engine = config_util.gpt_model_engine
+                base_url = _build_langchain_base_url(config_util.gpt_base_url)
             except Exception as exc:
                 return jsonify({'error': f'LLM config load failed: {exc}'}), 500
 
-            if not llm_url:
+            if not base_url:
                 return jsonify({'error': 'LLM base_url is not configured'}), 500
 
             payload = dict(data)
-            if payload.get('model') == 'llm' and model_engine:
-                payload['model'] = model_engine
-
             stream_requested = _as_bool(payload.get('stream', False))
-            headers = {'Content-Type': 'application/json'}
-            if api_key:
-                headers['Authorization'] = f'Bearer {api_key}'
+            model_name = model_engine or payload.get('model')
+            lc_messages = _build_langchain_messages(payload.get('messages', []))
+            if not lc_messages:
+                return jsonify({'error': 'messages is required'}), 400
+
+            llm_kwargs = {
+                "model": model_name,
+                "base_url": base_url,
+                "api_key": api_key,
+                "streaming": bool(stream_requested),
+            }
+            if payload.get("temperature") is not None:
+                llm_kwargs["temperature"] = payload.get("temperature")
+            if payload.get("max_tokens") is not None:
+                llm_kwargs["max_tokens"] = payload.get("max_tokens")
+            model_kwargs = {}
+            if payload.get("top_p") is not None:
+                model_kwargs["top_p"] = payload.get("top_p")
+            if model_kwargs:
+                llm_kwargs["model_kwargs"] = model_kwargs
 
             try:
+                llm_client = ChatOpenAI(**llm_kwargs)
+                run_cfg = {
+                    "tags": ["fay", "api", "model-llm"],
+                    "metadata": {"entrypoint": "api_send_v1_chat_completions", "model_alias": "llm"},
+                }
                 if stream_requested:
-                    resp = requests.post(llm_url, headers=headers, json=payload, stream=True)
-
+                    stream_id = "chatcmpl-" + str(uuid.uuid4())
                     def generate():
                         try:
-                            for chunk in resp.iter_content(chunk_size=8192):
-                                if not chunk:
+                            for chunk in llm_client.stream(lc_messages, config=run_cfg):
+                                text_piece = _safe_text_from_chunk(chunk)
+                                if text_piece is None or text_piece == "":
                                     continue
-                                yield chunk
+                                message = {
+                                    "id": stream_id,
+                                    "object": "chat.completion.chunk",
+                                    "created": int(time.time()),
+                                    "model": model_name,
+                                    "choices": [
+                                        {
+                                            "delta": {"content": text_piece},
+                                            "index": 0,
+                                            "finish_reason": None
+                                        }
+                                    ]
+                                }
+                                yield f"data: {json.dumps(message, ensure_ascii=False)}\n\n"
+                            final_message = {
+                                "id": stream_id,
+                                "object": "chat.completion.chunk",
+                                "created": int(time.time()),
+                                "model": model_name,
+                                "choices": [
+                                    {
+                                        "delta": {},
+                                        "index": 0,
+                                        "finish_reason": "stop"
+                                    }
+                                ]
+                            }
+                            yield f"data: {json.dumps(final_message, ensure_ascii=False)}\n\n"
+                            yield "data: [DONE]\n\n"
                         finally:
-                            resp.close()
+                            pass
+                    return Response(generate(), content_type="text/event-stream; charset=utf-8")
 
-                    content_type = resp.headers.get("Content-Type", "text/event-stream")
-                    if "charset=" not in content_type.lower():
-                        content_type = f"{content_type}; charset=utf-8"
-                    return Response(
-                        generate(),
-                        status=resp.status_code,
-                        content_type=content_type,
-                    )
-
-                resp = requests.post(llm_url, headers=headers, json=payload, timeout=60)
-                content_type = resp.headers.get("Content-Type", "application/json")
-                if "charset=" not in content_type.lower():
-                    content_type = f"{content_type}; charset=utf-8"
-                return Response(
-                    resp.content,
-                    status=resp.status_code,
-                    content_type=content_type,
-                )
+                ai_resp = llm_client.invoke(lc_messages, config=run_cfg)
+                answer_text = _normalize_openai_content(getattr(ai_resp, "content", ""))
+                return jsonify({
+                    "id": "chatcmpl-" + str(uuid.uuid4()),
+                    "object": "chat.completion",
+                    "created": int(time.time()),
+                    "model": model_name,
+                    "choices": [
+                        {
+                            "index": 0,
+                            "message": {
+                                "role": "assistant",
+                                "content": answer_text
+                            },
+                            "finish_reason": "stop"
+                        }
+                    ]
+                })
             except Exception as exc:
                 return jsonify({'error': f'LLM request failed: {exc}'}), 500
 
@@ -1104,26 +1230,92 @@ def transparent_pass():
     try:
         data = request.form.get('data')
         if data is None:
-            data = request.get_json()
+            data = request.get_json(silent=True) or {}
         else:
             data = json.loads(data)
+
+        if isinstance(data, dict):
+            nested_data = data.get('data')
+            if isinstance(nested_data, dict):
+                data = nested_data
+            elif isinstance(nested_data, str):
+                nested_data = nested_data.strip()
+                if nested_data:
+                    try:
+                        data = json.loads(nested_data)
+                    except Exception:
+                        pass
+
+        if not isinstance(data, dict):
+            data = {}
+
         username = data.get('user', 'User')
         response_text = data.get('text', None)
         audio_url = data.get('audio', None)
-        if response_text or audio_url:
-            # 新消息到达，立即中断该用户之前的所有处理（文本流+音频队列）
-            util.printInfo(1, username, f'[API中断] 新消息到达，完整中断用户 {username} 之前的所有处理')
-            util.printInfo(1, username, f'[API中断] 用户 {username} 的文本流和音频队列已清空，准备处理新消息')
-            interact = Interact('transparent_pass', 2, {'user': username, 'text': response_text, 'audio': audio_url, 'isend':True, 'isfirst':True})
-            util.printInfo(1, username, '透传播放：{}，{}'.format(response_text, audio_url), time.time())
-            success = fay_booter.feiFei.on_interact(interact)
-            if (success == 'success'):
-                return jsonify({'code': 200, 'message' : '成功'})
-        return jsonify({'code': 500, 'message' : '未知原因出错'})
-    except Exception as e:
-        return jsonify({'code': 500, 'message': f'出错: {e}'}), 500
+        if isinstance(audio_url, str):
+            audio_url = audio_url.strip()
+            if audio_url:
+                parsed_audio = urlparse(audio_url)
+                if not parsed_audio.scheme:
+                    if audio_url.startswith('//'):
+                        audio_url = 'http:' + audio_url
+                    else:
+                        base_url = ''
+                        origin = (request.headers.get('Origin') or '').strip()
+                        referer = (request.headers.get('Referer') or '').strip()
+                        if origin:
+                            parsed_origin = urlparse(origin)
+                            if parsed_origin.scheme and parsed_origin.netloc:
+                                base_url = f'{parsed_origin.scheme}://{parsed_origin.netloc}/'
+                        if (not base_url) and referer:
+                            parsed_referer = urlparse(referer)
+                            if parsed_referer.scheme and parsed_referer.netloc:
+                                base_url = f'{parsed_referer.scheme}://{parsed_referer.netloc}/'
+                        if not base_url:
+                            base_url = request.host_url
+                        audio_url = urljoin(base_url, audio_url)
+            else:
+                audio_url = None
 
-# 清除记忆API
+        queue_mode = _as_bool(data.get('queue', False))
+        if not queue_mode:
+            queue_mode = _as_bool(data.get('queue_playback', data.get('enqueue', False)))
+        if not queue_mode:
+            queue_mode = str(data.get('mode', '')).strip().lower() == 'queue'
+        if not queue_mode:
+            queue_mode = _as_bool(data.get('qutue', False))
+
+        if response_text or audio_url:
+            if queue_mode:
+                interact = Interact('transparent_pass', 2, {
+                    'user': username,
+                    'text': response_text,
+                    'audio': audio_url,
+                    'isend': True,
+                    'isfirst': True,
+                    'no_reply': True,
+                    'queue': True,
+                    'queue_playback': True
+                })
+            else:
+                util.printInfo(1, username, f'[\u0041\u0050\u0049\u4e2d\u65ad] \u65b0\u6d88\u606f\u5230\u8fbe\uff0c\u5b8c\u6574\u4e2d\u65ad\u7528\u6237 {username} \u4e4b\u524d\u7684\u6240\u6709\u5904\u7406')
+                util.printInfo(1, username, f'[\u0041\u0050\u0049\u4e2d\u65ad] \u7528\u6237 {username} \u7684\u6587\u672c\u6d41\u548c\u97f3\u9891\u961f\u5217\u5df2\u6e05\u7a7a\uff0c\u51c6\u5907\u5904\u7406\u65b0\u6d88\u606f')
+                interact = Interact('transparent_pass', 2, {
+                    'user': username,
+                    'text': response_text,
+                    'audio': audio_url,
+                    'isend': True,
+                    'isfirst': True
+                })
+
+            util.printInfo(1, username, '\u900f\u4f20\u64ad\u653e\uff1a{},{}'.format(response_text, audio_url), time.time())
+            success = fay_booter.feiFei.on_interact(interact)
+            if success == 'success':
+                return jsonify({'code': 200, 'message': '\u6210\u529f'})
+
+        return jsonify({'code': 500, 'message': '\u672a\u77e5\u539f\u56e0\u51fa\u9519'})
+    except Exception as e:
+        return jsonify({'code': 500, 'message': f'\u51fa\u9519: {e}'}), 500
 @__app.route('/api/clear-memory', methods=['POST'])
 def api_clear_memory():
     try:

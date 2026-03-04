@@ -238,7 +238,8 @@ class LongShortTermMemorySystem:
             logger.info(f"[仿生记忆] _prepare_document_data: embedding生成完成, 类型={type(embedding)}")
         except Exception as e:
             logger.error(f"生成embedding失败: {e}")
-            embedding = []
+            # 返回None而不是空列表，让调用方知道这是一个失败的情况
+            embedding = None
         
         # 准备元数据
         current_time = datetime.now().isoformat()
@@ -398,12 +399,15 @@ class LongShortTermMemorySystem:
                         embedding_list = embedding.tolist()
                     else:
                         embedding_list = embedding
-                    # 检查长度
+                    # 检查长度和维度
                     if len(embedding_list) > 0:
                         embeddings_param = [embedding_list]
+                        logger.debug(f"添加embedding到长期记忆: doc_id={doc_id}, 维度={len(embedding_list)}")
                     else:
+                        logger.warning(f"⚠️  Embedding为空列表: doc_id={doc_id}")
                         embeddings_param = None
                 else:
+                    logger.warning(f"⚠️  Embedding为None: doc_id={doc_id}, 将不包含向量信息")
                     embeddings_param = None
                 
                 self.chroma_service.add_documents(
@@ -1045,6 +1049,16 @@ class LongShortTermMemorySystem:
                 user_content, SourceType.USER, user_id
             )
             logger.info(f"[仿生记忆] 步骤1完成: doc_id={doc_id}, user_embedding类型={type(user_embedding)}")
+            
+            # 检查embedding是否生成成功
+            if user_embedding is None:
+                logger.warning("[仿生记忆] embedding生成失败，跳过记忆检索，使用默认响应")
+                return {
+                    "system_prompt": "你是一个智能助手。由于技术问题，暂时无法访问历史记忆，但我会尽力帮助你。",
+                    "retrieved_memories": [],
+                    "user_doc_id": None,
+                    "assistant_doc_id": None
+                }
             
             # 使用用户embedding进行检索
             logger.info("[仿生记忆] 步骤2: 使用用户embedding进行检索")
