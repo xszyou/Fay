@@ -127,6 +127,10 @@ aibote(windows cpu克隆人)：https://qqk9ntwbcit.feishu.cn/wiki/ULaywzVRti0HXW
 
 ![](readme/gzh.jpg)
 
+**微信交流群**
+
+![](readme/wechat.png)
+
 
 ## **致谢**
 
