@@ -119,6 +119,10 @@ https://qqk9ntwbcit.feishu.cn/wiki/Mcw3wbA3RiNZzwkexz6cnKCsnhh
 
 ![](readme/gzh.png)
 
+**微信交流群**
+
+![](readme/wechat.png)
+
 
 ## **致谢**
 
