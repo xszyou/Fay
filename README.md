@@ -103,21 +103,13 @@ https://www.compshare.cn/images/compshareImage-1cft3sk9gvta?ytag=GPU_fay
 
 
 ### ***使用数字人（非必须）***
+https://qqk9ntwbcit.feishu.cn/wiki/GHevwqxwfiX4hCk8yJCcoJ54nqg
 
-ue: https://github.com/xszyou/fay-ue5
-
-unity：https://qqk9ntwbcit.feishu.cn/wiki/Se9xw04hUiss00kb2Lmci1BVnM9
-
-metahuman-stream（2d）：https://qqk9ntwbcit.feishu.cn/wiki/Ik1kwO9X5iilnGkFwRhcnmtvn3e
-
-duix（android)：https://qqk9ntwbcit.feishu.cn/wiki/Ik1kwO9X5iilnGkFwRhcnmtvn3e()
-
-aibote(windows cpu克隆人)：https://qqk9ntwbcit.feishu.cn/wiki/ULaywzVRti0HXWkhCzacoSPAnIg
 
 
 
 ### ***集成到自家产品（非必须）***
-接口：https://qqk9ntwbcit.feishu.cn/wiki/Mcw3wbA3RiNZzwkexz6cnKCsnhh
+https://qqk9ntwbcit.feishu.cn/wiki/Mcw3wbA3RiNZzwkexz6cnKCsnhh
 
 
 
@@ -125,7 +117,7 @@ aibote(windows cpu克隆人)：https://qqk9ntwbcit.feishu.cn/wiki/ULaywzVRti0HXW
 
 **交流群及资料教程**关注公众号 **fay数字人**（**请先star本仓库**）
 
-![](readme/gzh.jpg)
+![](readme/gzh.png)
 
 
 ## **致谢**

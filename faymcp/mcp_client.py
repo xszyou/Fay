@@ -27,6 +27,111 @@ except Exception:
 logger = logging.getLogger(__name__)
 
 
+def _runtime_root_dir() -> str:
+    if getattr(sys, "frozen", False):
+        return os.path.abspath(os.path.dirname(sys.executable))
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
+
+def _normalize_rel_path(path_value: Optional[str]) -> str:
+    return str(path_value or "").replace("\\", "/").strip().lower()
+
+
+def _path_matches(path_value: Optional[str], expected_suffix: str) -> bool:
+    normalized = _normalize_rel_path(path_value)
+    suffix = _normalize_rel_path(expected_suffix)
+    if not normalized or not suffix:
+        return False
+    return normalized == suffix or normalized.endswith("/" + suffix)
+
+
+def _is_python_command(command: Any) -> bool:
+    command_text = str(command or "").strip().lower()
+    if not command_text:
+        return False
+    if command_text in {"python", "python.exe", "pythonw", "pythonw.exe"}:
+        return True
+    return os.path.basename(command_text) in {"python", "python.exe", "pythonw", "pythonw.exe"}
+
+
+def _resolve_existing_path(path_value: Optional[str], *base_dirs: Optional[str]) -> Optional[str]:
+    if not isinstance(path_value, str) or not path_value.strip():
+        return None
+    candidate = path_value.strip()
+    if os.path.isabs(candidate):
+        return candidate if os.path.exists(candidate) else None
+    for base_dir in base_dirs:
+        if not base_dir:
+            continue
+        abs_path = os.path.abspath(os.path.join(base_dir, candidate))
+        if os.path.exists(abs_path):
+            return abs_path
+    return None
+
+
+_PACKAGED_STDIO_SERVERS = [
+    {
+        "script": "test/mcp_stdio_example.py",
+        "cwd": "",
+        "exe_relpath": os.path.join("mcp_bin", "mcp_stdio_example", "mcp_stdio_example.exe"),
+    },
+    {
+        "script": "mcp_servers/schedule_manager/server.py",
+        "cwd": "mcp_servers/schedule_manager",
+        "exe_relpath": os.path.join("mcp_bin", "schedule_manager_mcp", "schedule_manager_mcp.exe"),
+    },
+    {
+        "script": "mcp_servers/logseq/server.py",
+        "cwd": "mcp_servers/logseq",
+        "exe_relpath": os.path.join("mcp_bin", "logseq_mcp", "logseq_mcp.exe"),
+    },
+    {
+        "script": "mcp_servers/yueshen_rag/server.py",
+        "cwd": "mcp_servers/yueshen_rag",
+        "exe_relpath": os.path.join("mcp_bin", "yueshen_rag_mcp", "yueshen_rag_mcp.exe"),
+    },
+    {
+        "script": "mcp_servers/window_capture/server.py",
+        "cwd": "mcp_servers/window_capture",
+        "exe_relpath": os.path.join("mcp_bin", "window_capture_mcp", "window_capture_mcp.exe"),
+    },
+    {
+        "script": "mcp_servers/mcp-todo-server/server.py",
+        "cwd": "mcp_servers/mcp-todo-server",
+        "exe_relpath": os.path.join("mcp_bin", "todo_server_mcp", "todo_server_mcp.exe"),
+    },
+    {
+        "script": "mcp_servers/elderly_mcp/server.py",
+        "cwd": "mcp_servers/elderly_mcp",
+        "exe_relpath": os.path.join("mcp_bin", "elderly_mcp_server", "elderly_mcp_server.exe"),
+    },
+]
+
+
+def _resolve_packaged_stdio_binary(
+    runtime_root: str, command: Any, args: List[Any], cwd: Optional[str]
+) -> Optional[Tuple[str, List[Any], str]]:
+    if not getattr(sys, "frozen", False):
+        return None
+
+    arg_paths = [str(arg) for arg in args if isinstance(arg, str) and arg and not str(arg).startswith("-")]
+    command_text = str(command or "")
+    for target in _PACKAGED_STDIO_SERVERS:
+        matched = any(_path_matches(arg, target["script"]) for arg in arg_paths)
+        if not matched and target["cwd"] and _path_matches(cwd, target["cwd"]):
+            if not arg_paths or any(os.path.basename(arg).lower() == "server.py" for arg in arg_paths):
+                matched = True
+        if not matched and _path_matches(command_text, target["exe_relpath"]):
+            matched = True
+        if not matched:
+            continue
+
+        exe_path = os.path.join(runtime_root, target["exe_relpath"])
+        if os.path.exists(exe_path):
+            return exe_path, [], os.path.dirname(exe_path)
+    return None
+
+
 def _is_awaitable(obj: Any) -> bool:
     try:
         return inspect.isawaitable(obj)
@@ -84,6 +189,7 @@ class McpClient:
         self._disconnect_event: Optional[asyncio.Event] = None
         self._connect_ready_future: Optional[asyncio.Future] = None
         self._last_error: Optional[str] = None
+        self._resolved_stdio_config: Optional[Dict[str, Any]] = None
 
         # tool availability cache
         self.tools_refresh_interval = max(int(tools_refresh_interval), 5)
@@ -268,6 +374,36 @@ class McpClient:
         if self.server_id is not None:
             tool_registry.mark_all_unavailable(self.server_id)
 
+    def _resolve_stdio_launch_config(self) -> Dict[str, Any]:
+        cfg = self.stdio_config or {}
+        runtime_root = _runtime_root_dir()
+        command = cfg.get("command") or sys.executable
+        args = list(cfg.get("args") or [])
+        env = cfg.get("env") or None
+        cwd = cfg.get("cwd") or None
+        if cwd and not os.path.isabs(cwd):
+            cwd = os.path.abspath(os.path.join(runtime_root, cwd))
+
+        packaged_launch = _resolve_packaged_stdio_binary(runtime_root, command, args, cwd)
+        if packaged_launch is not None:
+            command, args, cwd = packaged_launch
+        else:
+            if _is_python_command(command):
+                command = sys.executable
+            else:
+                resolved_command = _resolve_existing_path(command, cwd, runtime_root)
+                if resolved_command:
+                    command = resolved_command
+
+        resolved_cfg = {
+            "command": command,
+            "args": args,
+            "env": env,
+            "cwd": cwd,
+        }
+        self._resolved_stdio_config = resolved_cfg
+        return resolved_cfg
+
     async def _connect_async(self) -> Tuple[bool, Any]:
         if self.connected and self.session:
             return True, self.get_cached_tools()
@@ -318,16 +454,11 @@ class McpClient:
                         if not ready_future.done():
                             ready_future.set_result((False, message))
                         return
-                    cfg = self.stdio_config or {}
+                    cfg = self._resolve_stdio_launch_config()
                     command = cfg.get("command") or sys.executable
-                    if str(command).lower() == "python":
-                        command = sys.executable
                     args = list(cfg.get("args") or [])
                     env = cfg.get("env") or None
                     cwd = cfg.get("cwd") or None
-                    if cwd and not os.path.isabs(cwd):
-                        repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-                        cwd = os.path.abspath(os.path.join(repo_root, cwd))
 
                     try:
                         log_dir = os.path.join(os.getcwd(), 'logs')
@@ -389,6 +520,7 @@ class McpClient:
                 except Exception:
                     pass
             self._stdio_errlog_file = None
+            self._resolved_stdio_config = None
             self._stop_refresh_worker()
             self.connected = False
             self.session = None
@@ -449,7 +581,7 @@ class McpClient:
         if self.transport != "stdio":
             return
 
-        cfg = self.stdio_config or {}
+        cfg = self._resolved_stdio_config or self.stdio_config or {}
         command = cfg.get("command") or ""
         args = cfg.get("args") or []
 

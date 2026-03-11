@@ -1,4 +1,4 @@
-#入口文件main
+﻿#入口文件main
 import os
 import sys
 
@@ -10,12 +10,18 @@ def _resolve_runtime_dir():
 _RUNTIME_DIR = _resolve_runtime_dir()
 os.environ['PATH'] += os.pathsep + os.path.join(_RUNTIME_DIR, "test", "ovr_lipsync", "ffmpeg", "bin")
 
-def _preload_config_center(argv):
+def _extract_config_center_id(argv):
     for i, arg in enumerate(argv):
-        if arg in ("-config_center", "--config_center"):
+        if arg in ("-config_center", "--config_center", "-center_config", "--center_config"):
             if i + 1 < len(argv):
-                os.environ["FAY_CONFIG_CENTER_ID"] = argv[i + 1]
+                return argv[i + 1]
             break
+    return None
+
+def _preload_config_center(argv):
+    config_center_id = _extract_config_center_id(argv)
+    if config_center_id:
+        os.environ["FAY_CONFIG_CENTER_ID"] = config_center_id
 
 _preload_config_center(sys.argv[1:])
 
@@ -149,7 +155,12 @@ def __check_and_clear_chroma_db():
     """检查并清除ChromaDB数据库（如果存在清除标记）"""
     try:
         if config_util.config["memory"].get("use_bionic_memory", False):
-            from bionicmemory.core.chroma_service import ChromaService
+            try:
+                from bionicmemory.core.chroma_service import ChromaService
+            except Exception as exc:
+                util.log(1, f"Bionic memory is unavailable, fallback to cognitive mode: {exc}")
+                config_util.config.setdefault("memory", {})["use_bionic_memory"] = False
+                return
 
             if ChromaService.check_and_clear_database_on_startup():
                 util.log(1, "检测到记忆清除标记，已清除ChromaDB数据库")
@@ -249,8 +260,12 @@ if __name__ == '__main__':
 
     #启动mcp service
     util.log(1, '启动mcp service...')
-    from faymcp import mcp_service
-    MyThread(target=mcp_service.start).start()
+    try:
+        from faymcp import mcp_service
+    except Exception as exc:
+        util.log(1, f"MCP service disabled: {exc}")
+    else:
+        MyThread(target=mcp_service.start).start()
 
     #监听控制台
     util.log(1, '注册命令...')
@@ -266,9 +281,15 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description="start自启动")
     parser.add_argument('command', nargs='?', default='', help="start")
-    parser.add_argument('-config_center', '--config_center', dest='config_center', default=None, help="配置中心项目ID")
+    parser.add_argument(
+        '-config_center', '--config_center', '-center_config', '--center_config',
+        dest='config_center', default=None, help="配置中心项目ID"
+    )
 
     parsed_args = parser.parse_args()
+    # Packaged app should behave like "python main.py start" on double-click.
+    if not parsed_args.command and getattr(sys, 'frozen', False):
+        parsed_args.command = 'start'
     if parsed_args.config_center:
         os.environ["FAY_CONFIG_CENTER_ID"] = parsed_args.config_center
         config_util.CONFIG_SERVER['PROJECT_ID'] = parsed_args.config_center
@@ -279,6 +300,7 @@ if __name__ == '__main__':
     #普通模式下启动窗口
     if config_util.start_mode == 'common':    
         app = QApplication(sys.argv)
+        app.setQuitOnLastWindowClosed(False)
         app.setWindowIcon(QtGui.QIcon('icon.png'))
         win = MainWindow()
         time.sleep(1)

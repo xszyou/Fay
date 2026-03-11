@@ -12,7 +12,14 @@ from typing import Any, Callable, Dict, List, Literal, Optional, TypedDict, Tupl
 from collections.abc import Mapping, Sequence
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
-from langgraph.graph import END, START, StateGraph
+try:
+    from langgraph.graph import END, START, StateGraph
+    _LANGGRAPH_AVAILABLE = True
+except Exception:
+    END = None
+    START = None
+    StateGraph = None
+    _LANGGRAPH_AVAILABLE = False
 
 # 新增：本地知识库相关导入
 import re
@@ -1057,6 +1064,8 @@ def _route_decision(state: AgentState) -> str:
 
 
 def _build_workflow_app() -> StateGraph:
+    if not _LANGGRAPH_AVAILABLE:
+        return None
     graph = StateGraph(AgentState)
     graph.add_node("plan_next", _plan_next_action)
     graph.add_node("call_tool", _execute_tool)
@@ -1073,7 +1082,7 @@ def _build_workflow_app() -> StateGraph:
     return graph.compile()
 
 
-_WORKFLOW_APP = _build_workflow_app()
+_WORKFLOW_APP = _build_workflow_app() if _LANGGRAPH_AVAILABLE else None
 
 def get_user_memory_dir(username=None):
     """根据配置决定是否按用户名隔离记忆目录"""
@@ -2021,6 +2030,9 @@ def question(content, username, observation=None):
         spec = _build_workflow_tool_spec(tool_def)
         if spec:
             tool_registry[spec.name] = spec
+    if tool_registry and not _LANGGRAPH_AVAILABLE:
+        util.log(1, "langgraph is unavailable, workflow tools are disabled and the app will use direct LLM mode.")
+        tool_registry = {}
 
     try:
         from utils.stream_state_manager import get_state_manager as _get_state_manager
@@ -2130,6 +2142,8 @@ def question(content, username, observation=None):
 
     def run_workflow(tool_registry: Dict[str, WorkflowToolSpec]) -> bool:
         nonlocal accumulated_text, full_response_text, is_first_sentence, messages_buffer
+        if _WORKFLOW_APP is None:
+            return False
 
         # 创建规划器流式回调，用于实时输出 finish+message 响应
         planner_stream_buffer = {"text": "", "first_chunk": True}

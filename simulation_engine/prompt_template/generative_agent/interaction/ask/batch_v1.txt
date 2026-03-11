@@ -1,0 +1,33 @@
+<commentblockmarker>###</commentblockmarker>
+<Background information about the Character>
+!<INPUT 0>!
+
+<End of background information about the Character>
+=====
+<Questions>
+!<INPUT 1>!
+
+<End of questions>
+
+Task: Based on the character background above, answer each question as the character would. Keep the answers consistent
+with the character description. For each question, provide a short reasoning sentence and then the final response.
+
+Important:
+- For categorical questions, the Response must be one of the listed options.
+- For int or float questions, the Response must stay within the provided range.
+- For open questions, keep the Response concise and stay within the requested character limit.
+- Return valid JSON only.
+
+Output format -- output your response in json, where you provide the following:
+{
+  "1": {
+    "Q": "<repeat the question you are answering>",
+    "Reasoning": "<brief reasoning>",
+    "Response": "<final response>"
+  },
+  "2": {
+    "Q": "<repeat the question you are answering>",
+    "Reasoning": "<brief reasoning>",
+    "Response": "<final response>"
+  }
+}

@@ -377,7 +377,45 @@ class FeiFei:
         return filtered_text
 
 
+    def __normalize_tts_text(self, text):
+        if text is None:
+            return text
+        text = text.replace("\u3000", " ")
+        raw_lines = re.split(r"\r\n|\r|\n+", text)
+        lines = []
+        for line in raw_lines:
+            normalized_line = re.sub(r"\s+", " ", line).strip()
+            normalized_line = re.sub(r"\s+([，。！？；：、,.!?;:])", r"\1", normalized_line)
+            if normalized_line:
+                lines.append(normalized_line)
 
+        if not lines:
+            return ""
+
+        merged_text = lines[0]
+        for next_line in lines[1:]:
+            merged_text += self.__get_tts_line_separator(merged_text, next_line)
+            merged_text += next_line
+
+        return re.sub(r"\s+", " ", merged_text).strip()
+
+
+    def __get_tts_line_separator(self, previous_text, next_text):
+        sentence_endings = ("。", "！", "？", "!", "?", "；", ";", "…")
+        pause_endings = ("，", ",", "、", "：", ":")
+
+        previous_text = previous_text.rstrip()
+        if not previous_text:
+            return ""
+        if previous_text.endswith(sentence_endings) or previous_text.endswith(pause_endings):
+            return ""
+        if self.__contains_cjk(previous_text) or self.__contains_cjk(next_text):
+            return "。"
+        return ". "
+
+
+    def __contains_cjk(self, text):
+        return re.search(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]", text or "") is not None
 
 
     def __process_stream_output(self, text, username, session_type="type2_stream", is_qa=False):
@@ -617,10 +655,28 @@ class FeiFei:
                         if cfg.config["memory"].get("use_bionic_memory", False):
 
 
-                            from llm import nlp_bionicmemory_stream
+                            try:
 
 
-                            text = nlp_bionicmemory_stream.question(interact.data["msg"], username, interact.data.get("observation", None))
+                                from llm import nlp_bionicmemory_stream
+
+
+                                text = nlp_bionicmemory_stream.question(interact.data["msg"], username, interact.data.get("observation", None))
+
+
+                            except Exception as exc:
+
+
+                                util.log(1, f"Bionic memory pipeline unavailable, fallback to cognitive mode: {exc}")
+
+
+                                cfg.config.setdefault("memory", {})["use_bionic_memory"] = False
+
+
+                                from llm import nlp_cognitive_stream
+
+
+                                text = nlp_cognitive_stream.question(interact.data["msg"], username, interact.data.get("observation", None))
 
 
                         else:
@@ -1570,6 +1626,7 @@ class FeiFei:
 
 
                     filtered_text = self.__remove_emojis(tts_text.replace("*", ""))
+                    filtered_text = self.__normalize_tts_text(filtered_text)
 
 
                     if filtered_text is not None and filtered_text.strip() != "":
