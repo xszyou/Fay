@@ -86,6 +86,8 @@ embedding_api_model = None
 embedding_api_base_url = None
 embedding_api_key = None
 
+SYSTEM_CONFIG_ENV_KEY = 'FAY_SYSTEM_CONF_JSON'
+
 # 避免重复加载配置中心导致日志刷屏
 _last_loaded_project_id = None
 _last_loaded_config = None
@@ -128,6 +130,73 @@ def _refresh_config_center():
         CONFIG_SERVER['PROJECT_ID'] = env_project_id
 
 _refresh_config_center()
+
+
+def _config_parser_to_dict(parser):
+    data = {}
+    if parser is None:
+        return data
+    for section in parser.sections():
+        data[section] = {}
+        for key, value in parser.items(section):
+            data[section][key] = value
+    return data
+
+
+def _dict_to_config_parser(data):
+    parser = ConfigParser()
+    if not isinstance(data, dict):
+        return parser
+    for section, items in data.items():
+        if not isinstance(items, dict):
+            continue
+        if not parser.has_section(section):
+            parser.add_section(section)
+        for key, value in items.items():
+            parser.set(section, str(key), '' if value is None else str(value))
+    return parser
+
+
+def _save_system_config_to_env(parser, project_id=None, source='local'):
+    if parser is None:
+        return
+    payload = {
+        'meta': {
+            'project_id': project_id,
+            'source': source,
+        },
+        'sections': _config_parser_to_dict(parser),
+    }
+    try:
+        os.environ[SYSTEM_CONFIG_ENV_KEY] = json.dumps(payload, ensure_ascii=False)
+    except Exception as e:
+        util.log(2, f"save system.conf to env failed: {str(e)}")
+
+
+def _load_system_config_from_env(expected_project_id=None):
+    raw_value = os.getenv(SYSTEM_CONFIG_ENV_KEY)
+    if not raw_value:
+        return None
+
+    try:
+        payload = json.loads(raw_value)
+        meta = {}
+        sections = payload
+        if isinstance(payload, dict) and isinstance(payload.get('sections'), dict):
+            meta = payload.get('meta') or {}
+            sections = payload.get('sections') or {}
+
+        env_project_id = meta.get('project_id')
+        if expected_project_id and env_project_id != expected_project_id:
+            return None
+
+        parser = _dict_to_config_parser(sections)
+        if parser.sections():
+            return parser
+    except Exception as e:
+        util.log(2, f"load system.conf from env failed: {str(e)}")
+
+    return None
 
 def load_config_from_api(project_id=None):
     global CONFIG_SERVER
@@ -261,6 +330,9 @@ def load_config(force_reload=False):
     env_project_id = os.getenv('FAY_CONFIG_CENTER_ID')
     explicit_config_center = bool(env_project_id)
     using_config_center = explicit_config_center
+    env_system_config = None if force_reload else _load_system_config_from_env(
+        expected_project_id=env_project_id if explicit_config_center else None
+    )
     if (
         env_project_id
         and not force_reload
@@ -274,7 +346,7 @@ def load_config(force_reload=False):
     default_config_json_path = os.path.join(os.getcwd(), 'config.json')
     cache_system_conf_path = os.path.join(os.getcwd(), 'cache_data', 'system.conf')
     cache_config_json_path = os.path.join(os.getcwd(), 'cache_data', 'config.json')
-    root_system_conf_exists = os.path.exists(default_system_conf_path)
+    root_system_conf_exists = env_system_config is not None or os.path.exists(default_system_conf_path)
     root_config_json_exists = os.path.exists(default_config_json_path)
     root_config_complete = root_system_conf_exists and root_config_json_exists
 
@@ -294,7 +366,7 @@ def load_config(force_reload=False):
             config_json_path = default_config_json_path
 
         if not root_config_complete:
-            cache_ready = os.path.exists(cache_system_conf_path) and os.path.exists(cache_config_json_path)
+            cache_ready = (env_system_config is not None or os.path.exists(cache_system_conf_path)) and os.path.exists(cache_config_json_path)
             if (not _bootstrap_loaded_from_api) or (not cache_ready):
                 using_config_center = True
                 config_center_fallback = True
@@ -317,6 +389,8 @@ def load_config(force_reload=False):
         if api_config:
             util.log(1, "成功从配置中心加载配置")
             system_config = api_config['system_config']
+            env_system_config = system_config
+            _save_system_config_to_env(system_config, project_id=CONFIG_SERVER['PROJECT_ID'], source='api')
             config = api_config['config']
             loaded_from_api = True
             if config_center_fallback:
@@ -329,7 +403,8 @@ def load_config(force_reload=False):
                 api_config,
                 system_conf_path,
                 config_json_path,
-                save_config_json=not os.path.exists(config_json_path)
+                save_config_json=not os.path.exists(config_json_path),
+                save_system_conf=False
             )
             forced_loaded = True
 
@@ -337,7 +412,7 @@ def load_config(force_reload=False):
         else:
             util.log(2, "配置中心加载失败，尝试使用缓存配置")
 
-    sys_conf_exists = os.path.exists(system_conf_path)
+    sys_conf_exists = env_system_config is not None or os.path.exists(system_conf_path)
     config_json_exists = os.path.exists(config_json_path)
     
     # 如果任一本地文件不存在，直接尝试从API加载
@@ -350,6 +425,8 @@ def load_config(force_reload=False):
                 if api_config:
                     util.log(1, "成功从配置中心加载配置")
                     system_config = api_config['system_config']
+                    env_system_config = system_config
+                    _save_system_config_to_env(system_config, project_id=CONFIG_SERVER['PROJECT_ID'], source='api')
                     config = api_config['config']
                     loaded_from_api = True
                     if config_center_fallback:
@@ -362,7 +439,8 @@ def load_config(force_reload=False):
                         api_config,
                         system_conf_path,
                         config_json_path,
-                        save_config_json=not os.path.exists(config_json_path)
+                        save_config_json=not os.path.exists(config_json_path),
+                        save_system_conf=False
                     )
 
                     _warn_public_config_once()
@@ -374,6 +452,8 @@ def load_config(force_reload=False):
             if api_config:
                 util.log(1, "成功从配置中心加载配置")
                 system_config = api_config['system_config']
+                env_system_config = system_config
+                _save_system_config_to_env(system_config, project_id=CONFIG_SERVER['PROJECT_ID'], source='api')
                 config = api_config['config']
                 loaded_from_api = True
 
@@ -384,19 +464,20 @@ def load_config(force_reload=False):
                     api_config,
                     system_conf_path,
                     config_json_path,
-                    save_config_json=not os.path.exists(config_json_path)
+                    save_config_json=not os.path.exists(config_json_path),
+                    save_system_conf=False
                 )
 
                 _warn_public_config_once()
 
-    sys_conf_exists = os.path.exists(system_conf_path)
+    sys_conf_exists = env_system_config is not None or os.path.exists(system_conf_path)
     config_json_exists = os.path.exists(config_json_path)
     if using_config_center and (not sys_conf_exists or not config_json_exists):
         if _last_loaded_config is not None and _last_loaded_from_api:
             util.log(2, "配置中心缓存不可用，继续使用内存中的配置")
             return _last_loaded_config
     if config_center_fallback and using_config_center and (not sys_conf_exists or not config_json_exists):
-        cache_ready = os.path.exists(cache_system_conf_path) and os.path.exists(cache_config_json_path)
+        cache_ready = (env_system_config is not None or os.path.exists(cache_system_conf_path)) and os.path.exists(cache_config_json_path)
         if cache_ready:
             util.log(2, "配置中心不可用，回退使用缓存配置")
             using_config_center = False
@@ -407,12 +488,24 @@ def load_config(force_reload=False):
             using_config_center = False
             system_conf_path = default_system_conf_path
             config_json_path = default_config_json_path
-        sys_conf_exists = os.path.exists(system_conf_path)
+        sys_conf_exists = env_system_config is not None or os.path.exists(system_conf_path)
         config_json_exists = os.path.exists(config_json_path)
     # 如果本地文件存在，从本地文件加载
     # 加载system.conf
-    system_config = ConfigParser()
-    system_config.read(system_conf_path, encoding='UTF-8')
+    if env_system_config is not None:
+        system_config = env_system_config
+    else:
+        system_config = ConfigParser()
+        if os.path.exists(system_conf_path):
+            system_config.read(system_conf_path, encoding='UTF-8')
+            _save_system_config_to_env(
+                system_config,
+                project_id=CONFIG_SERVER['PROJECT_ID'] if using_config_center else None,
+                source='api' if using_config_center else 'local'
+            )
+
+    if not system_config.has_section('key'):
+        system_config.add_section('key')
     
     # 从system.conf中读取所有配置项
     key_ali_nls_key_id = system_config.get('key', 'ali_nls_key_id', fallback=None)
@@ -456,6 +549,11 @@ def load_config(force_reload=False):
         if not system_config.has_section('key'):
             system_config.add_section('key')
         system_config.set('key', 'fay_url', fay_url)
+        _save_system_config_to_env(
+            system_config,
+            project_id=CONFIG_SERVER['PROJECT_ID'] if using_config_center else None,
+            source='api' if using_config_center else 'local'
+        )
     
     # 读取用户配置
     with codecs.open(config_json_path, encoding='utf-8') as f:
@@ -512,7 +610,7 @@ def load_config(force_reload=False):
     
     return config_dict
 
-def save_api_config_to_local(api_config, system_conf_path, config_json_path, save_config_json=True):
+def save_api_config_to_local(api_config, system_conf_path, config_json_path, save_config_json=True, save_system_conf=False):
     """
     Persist API config to local files.
     
@@ -524,17 +622,26 @@ def save_api_config_to_local(api_config, system_conf_path, config_json_path, sav
     """
     try:
     # 确保目录存在.
-        os.makedirs(os.path.dirname(system_conf_path), exist_ok=True)
+        if save_system_conf and system_conf_path:
+            os.makedirs(os.path.dirname(system_conf_path), exist_ok=True)
         os.makedirs(os.path.dirname(config_json_path), exist_ok=True)
         
         # 始终刷新 system.conf.
-        with open(system_conf_path, 'w', encoding='utf-8') as f:
-            api_config['system_config'].write(f)
+        if save_system_conf and system_conf_path:
+            with open(system_conf_path, 'w', encoding='utf-8') as f:
+                api_config['system_config'].write(f)
         
         # 默认只在首次下载时保存config.json.
         if save_config_json:
             with codecs.open(config_json_path, 'w', encoding='utf-8') as f:
                 json.dump(api_config['config'], f, ensure_ascii=False, indent=4)
+        if save_system_conf and system_conf_path:
+            util.log(1, f"cached config center files to local: {system_conf_path}, {config_json_path}")
+            return
+        if save_config_json:
+            util.log(1, f"cached config center config.json to local: {config_json_path}")
+            return
+        return
             
         util.log(1, f"已将配置中心配置缓存到本地文件: {system_conf_path} 和 {config_json_path}")
     except Exception as e:
