@@ -1,14 +1,44 @@
 import requests
 import json
+import sys
+
+
+def _configure_console_streams():
+    for stream_name in ("stdout", "stderr"):
+        stream = getattr(sys, stream_name, None)
+        if hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8", errors="replace")
+            except (ValueError, OSError):
+                pass
+
+
+def _print_stream_content(text):
+    try:
+        print(text, end="", flush=True)
+    except UnicodeEncodeError:
+        encoding = getattr(sys.stdout, "encoding", None) or "utf-8"
+        safe_text = text.encode(encoding, errors="replace").decode(encoding, errors="replace")
+        print(safe_text, end="", flush=True)
+
+
+def _decode_sse_line(raw_line):
+    if isinstance(raw_line, bytes):
+        return raw_line.decode("utf-8", errors="replace")
+    return raw_line
+
+
+_configure_console_streams()
+
 
 def test_gpt(prompt, username="张三", observation="", no_reply=False):
-    url = 'http://127.0.0.1:5000/v1/chat/completions'  # 替换为您的接口地址
+    url = 'http://192.168.1.18:1234/v1/chat/completions'  # 替换为您的接口地址
     headers = {
         'Content-Type': 'application/json',
-        'Authorization': f'Bearer YOUR_API_KEY',  # 如果您的接口需要身份验证
+        'Authorization': f'Bearer sk-lm-W3h0kb9s:wjTMT85AtBtW4VFLnmyG',  # 如果您的接口需要身份验证
     }
     data = {
-        'model': 'fay-streaming', #model为llm时，会直接透传到上游的llm输出，fay不作任何处理、记录
+        'model': 'qwen/qwen3.5-9b', #model为llm时，会直接透传到上游的llm输出，fay不作任何处理、记录
         'messages': [
             {'role': username, 'content': prompt}
         ],
@@ -31,7 +61,8 @@ def test_gpt(prompt, username="张三", observation="", no_reply=False):
         return
 
     # 处理流式响应
-    for line in response.iter_lines(decode_unicode=True):
+    for raw_line in response.iter_lines(decode_unicode=False):
+        line = _decode_sse_line(raw_line)
         if line:
             if line.strip() == 'data: [DONE]':
                 print("\n流式传输完成")
@@ -48,7 +79,7 @@ def test_gpt(prompt, username="张三", observation="", no_reply=False):
                         delta = choices[0].get('delta', {})
                         content = delta.get('content', '')
                         if content:
-                            print(content, end='', flush=True)
+                            _print_stream_content(content)
                 except json.JSONDecodeError:
                     print(f"\n无法解析的 JSON 数据：{line}")
             else:
@@ -88,18 +119,18 @@ OBSERVATION_SAMPLES = {
 
 if __name__ == "__main__":
     # 示例1：带观察数据的对话
-    print("=" * 60)
-    print("示例1：张三的对话（带观察数据）")
-    print("=" * 60)
-    test_gpt(prompt="", username="user", observation=OBSERVATION_SAMPLES["张三"], no_reply=False)
+    # print("=" * 60)
+    # print("示例1：张三的对话（带观察数据）")
+    # print("=" * 60)
+    # test_gpt(prompt="", username="user", observation=OBSERVATION_SAMPLES["张三"], no_reply=False)
 
-    print("\n")
+    # print("\n")
 
     # 示例2：不带观察数据的对话
-    # print("=" * 60)
-    # print("示例2：普通对话（不带观察数据）")
-    # print("=" * 60)
-    # test_gpt("你好", username="User", observation="")
+    print("=" * 60)
+    print("示例2：普通对话（不带观察数据）")
+    print("=" * 60)
+    test_gpt("你好", username="user", observation="")
 
     # 示例3：李奶奶的对话
     # print("=" * 60)

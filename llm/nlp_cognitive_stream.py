@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 import os
 import json
 import time
@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Literal, Optional, TypedDict, Tuple
 from collections.abc import Mapping, Sequence
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 try:
     from langgraph.graph import END, START, StateGraph
     _LANGGRAPH_AVAILABLE = True
@@ -52,8 +52,7 @@ from scheduler.thread_manager import MyThread
 from core import content_db
 from core import stream_manager
 from core import member_db
-from faymcp import tool_registry as mcp_tool_registry
-from faymcp import prestart_registry
+from faymcp import runtime_bridge as mcp_runtime
 
 # 加载配置
 cfg.load_config()
@@ -72,9 +71,54 @@ memory_cleared = False  # 添加记忆清除标记
 # 新增: 当前会话用户名及按用户获取memory目录的辅助函数
 current_username = None  # 当前会话用户名
 
-def _log_prompt(messages: List[SystemMessage | HumanMessage], tag: str = ""):
+def _log_prompt(messages: List[SystemMessage | HumanMessage | AIMessage], tag: str = ""):
     """No-op placeholder for prompt logging (disabled)."""
     return
+
+
+def _normalize_short_greeting_text(content: Any) -> str:
+    if content is None:
+        return ""
+    text = content if isinstance(content, str) else str(content)
+    text = text.strip().lower()
+    if not text:
+        return ""
+    return re.sub(r"[\s`~!@#$%^&*()\-_=+\[\]{}\\|;:'\",<.>/?，。！？、；：‘’“”（）【】《》…·～]+", "", text)
+
+
+def _is_current_only_turn(content: Any, observation: Any = None) -> bool:
+    normalized = _normalize_short_greeting_text(content)
+    if not normalized or len(normalized) > 8:
+        return False
+
+    short_greetings = {
+        "你好",
+        "您好",
+        "你好呀",
+        "你好啊",
+        "嗨",
+        "嗨嗨",
+        "哈喽",
+        "哈啰",
+        "哈咯",
+        "hello",
+        "hi",
+        "hey",
+        "在吗",
+        "在嘛",
+        "在么",
+        "在不在",
+        "忙吗",
+        "早",
+        "早安",
+        "早上好",
+        "午安",
+        "中午好",
+        "下午好",
+        "晚上好",
+        "晚安",
+    }
+    return normalized in short_greetings
 
 
 llm = ChatOpenAI(
@@ -119,7 +163,7 @@ class AgentState(TypedDict, total=False):
     next_action: Optional[ToolCall]
     status: Literal["planning", "needs_tool", "completed", "failed"]
     final_response: Optional[str]
-    final_messages: Optional[List[SystemMessage | HumanMessage]]
+    final_messages: Optional[List[SystemMessage | HumanMessage | AIMessage]]
     _response_streamed: Optional[bool]
     planner_preview: Optional[str]
     audit_log: List[str]
@@ -399,17 +443,10 @@ def _format_conversation_block(conversation: List[Dict], username: str = "User")
 def _run_prestart_tools(user_question: str) -> List[Dict[str, Any]]:
     """Call configured prestart MCP tools and return a list of result objects."""
     try:
-        resp = requests.get(
-            "http://127.0.0.1:5010/api/mcp/prestart/runnable",
-            timeout=10,
-        )
-        resp.raise_for_status()
-        payload = resp.json()
+        tools = mcp_runtime.list_runnable_prestart_tools()
     except Exception as exc:
         util.log(1, f"获取预启动工具列表失败: {exc}")
         return []
-
-    tools = payload.get("prestart_tools") or []
     if not tools:
         return []
 
@@ -428,19 +465,18 @@ def _run_prestart_tools(user_question: str) -> List[Dict[str, Any]]:
             filled_params = params or {}
 
         try:
-            resp = requests.post(
-                f"http://127.0.0.1:5010/api/mcp/servers/{server_id}/call",
-                json={"method": tool_name, "params": filled_params, "is_prestart": True},
-                timeout=120,
+            success, result = mcp_runtime.call_tool(
+                int(server_id),
+                tool_name,
+                filled_params,
+                skip_enabled_check=True,
             )
-            resp.raise_for_status()
-            data = resp.json()
         except Exception as exc:
             util.log(1, f"预启动工具 {tool_name} 调用异常: {exc}")
             continue
 
-        if data.get("success"):
-            output = _normalize_tool_output(data.get("result"))
+        if success:
+            output = _normalize_tool_output(result)
             if output and output.strip():
                 # 格式化参数显示
                 params_str = ""
@@ -458,7 +494,7 @@ def _run_prestart_tools(user_question: str) -> List[Dict[str, Any]]:
                     "include_history": include_history
                 })
         else:
-            error_msg = data.get("error") or "未知错误"
+            error_msg = str(result) if result is not None else "未知错误"
             util.log(1, f"预启动工具 {tool_name} 执行失败: {error_msg}")
 
     return results
@@ -561,7 +597,16 @@ def _build_workflow_tool_spec(tool_def: Dict[str, Any]) -> Optional[WorkflowTool
     if not tool_def:
         return None
     name = tool_def.get("name")
+    server_id = tool_def.get("server_id")
     if not name:
+        return None
+    if server_id is None:
+        util.log(1, f"工具 {name} 缺少 server_id，跳过该工具")
+        return None
+    try:
+        server_id = int(server_id)
+    except Exception:
+        util.log(1, f"工具 {name} 的 server_id 无效: {server_id}")
         return None
     description = tool_def.get("description") or tool_def.get("summary") or ""
     schema = tool_def.get("inputSchema") or {}
@@ -569,23 +614,16 @@ def _build_workflow_tool_spec(tool_def: Dict[str, Any]) -> Optional[WorkflowTool
 
     def _executor(args: Dict[str, Any], attempt: int) -> Tuple[bool, Optional[str], Optional[str]]:
         try:
-            resp = requests.post(
-                f"http://127.0.0.1:5010/api/mcp/tools/{name}",
-                json=args,
-                timeout=120,
-            )
-            resp.raise_for_status()
-            data = resp.json()
+            success, result = mcp_runtime.call_tool(server_id, name, args)
         except Exception as exc:
             util.log(1, f"调用工具 {name} 异常: {exc}")
             return False, None, str(exc)
 
-        if data.get("success"):
-            result = data.get("result")
+        if success:
             output = _normalize_tool_output(result)
             return True, output, None
 
-        error_msg = data.get("error") or "未知错误"
+        error_msg = str(result) if result is not None else "未知错误"
         util.log(1, f"调用工具 {name} 失败: {error_msg}")
         return False, None, error_msg
 
@@ -604,7 +642,118 @@ def _format_tools_for_prompt(tool_specs: Dict[str, WorkflowToolSpec]) -> str:
     return "\n".join(_format_tool_block(spec) for spec in tool_specs.values())
 
 
-def _build_planner_messages(state: AgentState) -> List[SystemMessage | HumanMessage]:
+def _merge_system_input(*segments: str) -> str:
+    parts = []
+    for segment in segments:
+        if isinstance(segment, str):
+            cleaned = segment.strip()
+            if cleaned:
+                parts.append(cleaned)
+    return "\n\n---\n\n".join(parts)
+
+
+def _format_context_section(title: str, content: Any, empty_placeholder: Optional[str] = None) -> str:
+    cleaned = ""
+    if isinstance(content, str):
+        cleaned = content.strip()
+    elif content is not None:
+        cleaned = str(content).strip()
+    if not cleaned:
+        if empty_placeholder is None:
+            return ""
+        cleaned = empty_placeholder
+    return f"**{title}**\n{cleaned}"
+
+
+def _get_latest_tool_result_text(history: List[ToolResult]) -> str:
+    if not history:
+        return ""
+    for item in reversed(history):
+        if not isinstance(item, dict):
+            continue
+        call = item.get("call", {}) or {}
+        name = call.get("name") or "unknown_tool"
+        args = call.get("args") or {}
+        args_text = json.dumps(args, ensure_ascii=False) if args else "{}"
+        if item.get("success") and item.get("output"):
+            return "\n".join(
+                [
+                    f"工具：{name}",
+                    f"参数：{args_text}",
+                    f"结果：{item.get('output')}",
+                ]
+            )
+        if item.get("error"):
+            return "\n".join(
+                [
+                    f"工具：{name}",
+                    f"参数：{args_text}",
+                    f"错误：{item.get('error')}",
+                ]
+            )
+    return ""
+
+
+def _is_tool_trace_message(content: str) -> bool:
+    if not isinstance(content, str):
+        return False
+    stripped = content.strip()
+    if not stripped:
+        return False
+    return stripped.startswith("[PLAN]") or stripped.startswith("[TOOL]")
+
+
+def _build_dialogue_messages(
+    conversation: List[Dict[str, Any]],
+    username: str,
+    fallback_request: str = "",
+) -> List[HumanMessage | AIMessage]:
+    if not conversation:
+        fallback_text = fallback_request.strip()
+        return [HumanMessage(content=fallback_text)] if fallback_text else []
+
+    user_names = set()
+    for msg in conversation:
+        role = str(msg.get("role", "")).lower()
+        if role not in ("user", "human", "用户"):
+            continue
+        actual_username = msg.get("username", "") or username
+        display_name = "主人" if actual_username == "User" else str(actual_username)
+        user_names.add(display_name)
+    need_user_label = len(user_names) > 1
+
+    messages: List[HumanMessage | AIMessage] = []
+    for msg in conversation:
+        role = str(msg.get("role", "")).lower()
+        content = msg.get("content", "")
+        content = _remove_prestart_from_text(content)
+        content = _remove_think_from_text(content)
+        if not content or not content.strip():
+            continue
+        cleaned = content.strip()
+        if _is_tool_trace_message(cleaned):
+            continue
+
+        if role in ("assistant", "ai", "fay"):
+            messages.append(AIMessage(content=cleaned))
+            continue
+
+        if role in ("user", "human", "用户"):
+            actual_username = msg.get("username", "") or username
+            display_name = "主人" if actual_username == "User" else str(actual_username)
+            human_content = f"{display_name}：{cleaned}" if need_user_label else cleaned
+            messages.append(HumanMessage(content=human_content))
+            continue
+
+        messages.append(HumanMessage(content=f"{msg.get('role', 'unknown')}：{cleaned}"))
+
+    if not messages:
+        fallback_text = fallback_request.strip()
+        return [HumanMessage(content=fallback_text)] if fallback_text else []
+    return messages
+
+
+def _build_planner_messages(state: AgentState) -> List[SystemMessage | HumanMessage | AIMessage]:
     context = state.get("context", {}) or {}
     system_prompt = context.get("system_prompt", "")
     request = state.get("request", "")
@@ -617,80 +766,46 @@ def _build_planner_messages(state: AgentState) -> List[SystemMessage | HumanMess
     prestart_context = context.get("prestart_context", "")
     username = context.get("username", "User")
 
-    # 显示用户名：User 显示为 主人
-    display_username = "主人" if username == "User" else username
-
-    # 生成对话文本，使用代码块包裹每条消息
-    convo_text = _format_conversation_block(conversation, username)
     history_text = _truncate_history(history)
+    latest_tool_result_text = _get_latest_tool_result_text(history)
     tools_text = _format_tools_for_prompt(tool_specs)
-    preview_section = f"\n（规划器预览：{planner_preview}）" if planner_preview else ""
-
-    # 只有当有预启动工具结果时才显示，工具名+参数在外，结果在代码块内
     if prestart_context and prestart_context.strip():
         formatted_items = []
         for item in prestart_context.split("\n\n"):
             item = item.strip()
             if not item:
                 continue
-            # 分离第一行（工具名+参数）和其余内容（结果）
             lines = item.split("\n", 1)
             if len(lines) == 2:
                 header, result = lines
                 formatted_items.append(f"{header}\n```\n{result.strip()}\n```")
             else:
-                # 只有一行，整个放代码块里
                 formatted_items.append(f"```\n{item}\n```")
         wrapped_results = "\n".join(formatted_items)
         prestart_section = f"\n**预启动工具结果**\n{wrapped_results}\n---\n"
     else:
         prestart_section = ""
 
-    user_block = textwrap.dedent(
-        f"""
+    planner_system = _merge_system_input(
+        "你负责规划下一步行动，请严格输出合法 JSON。",
+        "请基于提供的上下文和对话顺序进行判断，不要改写用户原话。",
+        "可用输出格式只有两种："
+        "\n1. {\"action\": \"tool\", \"tool\": \"工具名\", \"args\": {...}}"
+        "\n2. {\"action\": \"finish\", \"message\": \"你的回复内容\"}",
+        system_prompt,
+        _format_context_section("关联记忆", memory_context),
+        _format_context_section("其他观察", observation),
+        _format_context_section("最新工具结果", latest_tool_result_text),
+        _format_context_section("预启动工具结果", prestart_context),
+        _format_context_section("可用工具", tools_text, "（暂无可用工具）"),
+        _format_context_section("历史工具执行", history_text if history_text != "（暂无）" else ""),
+        _format_context_section("规划器预览", planner_preview),
+    )
+    dialogue_messages = _build_dialogue_messages(conversation, username, fallback_request=request)
 
-**提问内容**
-{display_username}：
-```
-{request}
-```
----
-{system_prompt}
----
+    return [SystemMessage(content=planner_system), *dialogue_messages]
 
-**额外观察**
-{observation or '（无补充）'}
----
-
-{memory_context or '（无相关记忆）'}
----
-{prestart_section}
-**可用工具**
-{tools_text}
----
-
-**历史工具执行**
-{history_text}{preview_section}
----
-
-**最近对话**
-{convo_text}
----
-
-请返回 JSON，格式如下：
-- 若需要调用工具：
-    {{"action": "tool", "tool": "工具名", "args": {{...}}}}
-- 若直接回复（需附带回复内容）：
-    {{"action": "finish", "message": "你的回复内容"}}"""
-    ).strip()
-
-    return [
-        SystemMessage(content="你负责规划下一步行动，请严格输出合法 JSON。"),
-        HumanMessage(content=user_block),
-    ]
-
-
-def _build_final_messages(state: AgentState) -> List[SystemMessage | HumanMessage]:
+def _build_final_messages(state: AgentState) -> List[SystemMessage | HumanMessage | AIMessage]:
     context = state.get("context", {}) or {}
     system_prompt = context.get("system_prompt", "")
     request = state.get("request", "")
@@ -701,67 +816,46 @@ def _build_final_messages(state: AgentState) -> List[SystemMessage | HumanMessag
     planner_preview = state.get("planner_preview")
     username = context.get("username", "User")
 
-    # 显示用户名：User 显示为 主人
-    display_username = "主人" if username == "User" else username
-
-    # 生成对话文本，使用代码块包裹每条消息
-    conversation_block = _format_conversation_block(conversation, username)
     history_text = _truncate_history(state.get("tool_results", []))
-    preview_section = f"\n（规划器建议：{planner_preview}）" if planner_preview else ""
-
-    # 只有当有预启动工具结果时才显示，工具名+参数在外，结果在代码块内
+    latest_tool_result_text = _get_latest_tool_result_text(state.get("tool_results", []) or [])
     if prestart_context and prestart_context.strip():
         formatted_items = []
         for item in prestart_context.split("\n\n"):
             item = item.strip()
             if not item:
                 continue
-            # 分离第一行（工具名+参数）和其余内容（结果）
             lines = item.split("\n", 1)
             if len(lines) == 2:
                 header, result = lines
                 formatted_items.append(f"{header}\n```\n{result.strip()}\n```")
             else:
-                # 只有一行，整个放代码块里
                 formatted_items.append(f"```\n{item}\n```")
         wrapped_results = "\n".join(formatted_items)
         prestart_section = f"\n**预启动工具结果**\n{wrapped_results}\n---\n"
     else:
         prestart_section = ""
 
-    user_block = textwrap.dedent(
-        f"""
-**提问内容**
-{display_username}：
-```
-{request}
-```
----
-{system_prompt}
----
+    tool_grounding_instruction = ""
+    if latest_tool_result_text and latest_tool_result_text.strip():
+        tool_grounding_instruction = (
+            "如果已经有成功的工具结果，必须优先依据最新工具结果直接回答用户问题。"
+            "不要忽略工具结果，不要回退成泛化寒暄；如果工具结果不足以完整回答，"
+            "要明确说明已知结果与缺失信息。"
+        )
 
-**关联记忆**
-{memory_context or '（无相关记忆）'}
----
-{prestart_section}
-**其他观察**
-{observation or '（无补充）'}
----
+    final_system = _merge_system_input(
+        system_prompt,
+        tool_grounding_instruction,
+        _format_context_section("关联记忆", memory_context),
+        _format_context_section("最新工具结果", latest_tool_result_text),
+        _format_context_section("预启动工具结果", prestart_context),
+        _format_context_section("其他观察", observation),
+        _format_context_section("工具执行摘要", history_text if history_text != "（暂无）" else ""),
+        _format_context_section("规划器建议", planner_preview),
+    )
+    dialogue_messages = _build_dialogue_messages(conversation, username, fallback_request=request)
 
-**工具执行摘要**
-{history_text}{preview_section}
----
-
-**最近对话**
-{conversation_block}
----"""
-    ).strip()
-
-    return [
-        SystemMessage(content="你是最终回复的口播助手，请用中文自然表达。"),
-        HumanMessage(content=user_block),
-    ]
-
+    return [SystemMessage(content=final_system), *dialogue_messages]
 
 def _call_planner_llm(
     state: AgentState,
@@ -783,12 +877,8 @@ def _call_planner_llm(
     # 如果有流式回调，使用流式模式检测 finish+message
     if stream_callback is not None:
         accumulated = ""
-        finish_message_prefix = '{"action": "finish", "message": "'
-        # 也支持 action 和 message 顺序可能交换的情况
-        alt_prefix_1 = '{"action":"finish","message":"'
-        alt_prefix_2 = '{ "action": "finish", "message": "'
-
         in_message_mode = False
+        in_plaintext_mode = False
         message_buffer = ""
         message_closed = False
         escape_next = False
@@ -831,22 +921,47 @@ def _call_planner_llm(
 
             accumulated += chunk_text
 
-            if not in_message_mode:
+            if not in_message_mode and not in_plaintext_mode:
                 # 移除可能的 think 标签前缀
                 check_text = _remove_think_from_text(accumulated.strip())
+                # 压缩空白，兼容 LLM 返回带换行的 JSON 如 {\n  "action": "finish",...}
+                compact = re.sub(r'\s+', '', check_text[:60])
 
-                # 检测是否已经进入 finish+message 模式
-                for prefix in [finish_message_prefix, alt_prefix_1, alt_prefix_2]:
-                    if check_text.startswith(prefix):
-                        in_message_mode = True
-                        # 提取 message 开始后的内容
-                        message_start = check_text[len(prefix):]
-                        if message_start:
-                            _stream_message_text(message_start)
-                        break
-            else:
+                # 检测是否已经进入 finish+message 模式（用压缩后文本匹配）
+                finish_compact_prefix = '{"action":"finish","message":"'
+                if compact.startswith(finish_compact_prefix):
+                    in_message_mode = True
+                    # 从原始 check_text 中定位 message 值的起始位置
+                    # 找到 "message" 键后第一个引号内的内容
+                    msg_key_pos = check_text.find('"message"')
+                    if msg_key_pos >= 0:
+                        # 跳过 "message" 后的 : 和空白，找到值的起始引号
+                        rest = check_text[msg_key_pos + len('"message"'):]
+                        colon_pos = rest.find(':')
+                        if colon_pos >= 0:
+                            after_colon = rest[colon_pos + 1:].lstrip()
+                            if after_colon.startswith('"'):
+                                message_start = after_colon[1:]  # 跳过起始引号
+                                if message_start:
+                                    _stream_message_text(message_start)
+
+                # 如果不是 finish+message，根据已知 JSON 前缀判断是否为纯文本
+                if not in_message_mode:
+                    if len(check_text) > 3 and not check_text.startswith('{'):
+                        # 不以 { 开头，明确是纯文本
+                        in_plaintext_mode = True
+                        stream_callback(check_text)
+                    elif check_text.startswith('{') and len(compact) > 15:
+                        # 以 { 开头，压缩空白后检查是否匹配已知 JSON action 前缀
+                        if not compact.startswith('{"action"'):
+                            in_plaintext_mode = True
+                            stream_callback(check_text)
+            elif in_message_mode:
                 # 已经在 message 模式，直接流式输出新增内容
                 _stream_message_text(chunk_text)
+            elif in_plaintext_mode:
+                # 纯文本模式，直接流式输出每个 chunk
+                stream_callback(chunk_text)
 
         # 处理完整响应
         trimmed = _remove_think_from_text(accumulated.strip())
@@ -879,11 +994,26 @@ def _call_planner_llm(
                 "_streamed": True
             }
 
-        # 非 finish+message 模式，按原逻辑解析
+        # 纯文本模式：LLM 直接返回了文本内容（非 JSON），作为 finish 直接输出
+        if in_plaintext_mode:
+            return {
+                "action": "finish",
+                "message": trimmed,
+                "_raw": trimmed,
+                "_streamed": True
+            }
+
+        # 非 finish+message 模式，按原逻辑解析（如 tool 调用等 JSON 响应）
         try:
             decision = json.loads(trimmed)
-        except json.JSONDecodeError as exc:
-            raise RuntimeError(f"规划器返回的 JSON 无法解析: {trimmed}") from exc
+        except json.JSONDecodeError:
+            # JSON 解析失败，将整段文本作为直接回复内容
+            return {
+                "action": "finish",
+                "message": trimmed,
+                "_raw": trimmed,
+                "_streamed": False
+            }
         decision.setdefault("_raw", trimmed)
         return decision
 
@@ -897,8 +1027,13 @@ def _call_planner_llm(
     trimmed = _strip_json_code_fence(trimmed)
     try:
         decision = json.loads(trimmed)
-    except json.JSONDecodeError as exc:
-        raise RuntimeError(f"规划器返回的 JSON 无法解析: {trimmed}") from exc
+    except json.JSONDecodeError:
+        # JSON 解析失败，将整段文本作为直接回复内容（LLM 直接返回了文本而非 JSON）
+        return {
+            "action": "finish",
+            "message": trimmed,
+            "_raw": trimmed,
+        }
     decision.setdefault("_raw", trimmed)
     return decision
 
@@ -975,6 +1110,7 @@ def _plan_next_action(state: AgentState) -> AgentState:
     if action in {"finish", "finish_text"}:
         preview = decision.get("message")
         was_streamed = decision.get("_streamed", False)
+        used_tool = bool(history)
         # 如果 finish 带有 message，直接使用，不需要再调用最终 LLM
         if action == "finish" and preview:
             audit_log.append(f"规划器：任务完成，直接输出回复: {preview[:50]}...")
@@ -987,7 +1123,7 @@ def _plan_next_action(state: AgentState) -> AgentState:
                 "context": context,
                 "_response_streamed": was_streamed,  # 标记是否已流式输出
             }
-        # finish_text 或 finish 不带 message，需要调用最终 LLM
+        # finish_text / finish 不带 message，调用最终 LLM 生成回复
         final_messages = _build_final_messages(state)
         audit_log.append("规划器：任务完成，准备调用 LLM 生成最终回复。")
         return {
@@ -1829,7 +1965,8 @@ def question(content, username, observation=None):
         ("反思记忆", "reflection"),
     ]
     memory_context = ""
-    if agent.memory_stream and len(agent.memory_stream.seq_nodes) > 0 and content:
+    skip_memory_retrieve = _is_current_only_turn(content, observation)
+    if agent.memory_stream and len(agent.memory_stream.seq_nodes) > 0 and content and not skip_memory_retrieve:
         current_time_step = get_current_time_step(username)
         query = content.strip() if isinstance(content, str) else str(content)
         max_per_type = 10
@@ -1849,7 +1986,6 @@ def question(content, username, observation=None):
             all_nodes = []
 
         for label, node_type in memory_sections:
-            section_lines = "（无）"
             try:
                 memory_nodes = [n for n in all_nodes if getattr(n, "node_type", "") == node_type][:max_per_type]
                 if memory_nodes:
@@ -1858,14 +1994,13 @@ def question(content, username, observation=None):
                         ts = (getattr(node, "datetime", "") or "").strip()
                         prefix = f"[{ts}] " if ts else ""
                         formatted.append(f"- {prefix}{node.content}")
-                    section_lines = "\n".join(formatted)
+                    section_texts.append(f"**{label}**\n" + "\n".join(formatted))
             except Exception as exc:
                 util.log(1, f"获取{label}时出错: {exc}")
-                section_lines = "（获取失败）"
-            section_texts.append(f"**{label}**\n{section_lines}")
+                section_texts.append(f"**{label}**\n（获取失败）")
         memory_context = "\n".join(section_texts)
     else:
-        memory_context = "\n".join(f"**{label}**\n（无）" for label, _ in memory_sections)
+        memory_context = ""
 
     prestart_context = ""
     prestart_stream_text = ""
@@ -1971,6 +2106,10 @@ def question(content, username, observation=None):
         def append_to_buffer(role: str, text_value: str) -> None:
             if not text_value:
                 return
+            # 清理 think 标签内容，避免泄漏到 LLM 输入
+            text_value = _remove_think_from_text(text_value)
+            if not text_value or not text_value.strip():
+                return
             messages_buffer.append({"role": role, "content": text_value})
             if len(messages_buffer) > 60:
                 del messages_buffer[:-60]
@@ -1993,6 +2132,10 @@ def question(content, username, observation=None):
         # 不隔离：按独立消息存储，保留用户名信息
         def append_to_buffer_multi(role: str, text_value: str, msg_username: str = "") -> None:
             if not text_value:
+                return
+            # 清理 think 标签内容，避免泄漏到 LLM 输入
+            text_value = _remove_think_from_text(text_value)
+            if not text_value or not text_value.strip():
                 return
             messages_buffer.append({"role": role, "content": text_value, "username": msg_username})
             if len(messages_buffer) > 60:
@@ -2018,8 +2161,6 @@ def question(content, username, observation=None):
         ):
             messages_buffer.append({"role": "user", "content": content, "username": username})
 
-    messages = [SystemMessage(content=system_prompt), HumanMessage(content=content)]
-    
     tool_registry: Dict[str, WorkflowToolSpec] = {}
     try:
         mcp_tools = get_mcp_tools()
@@ -2736,13 +2877,10 @@ def save_agent_memory():
 def get_mcp_tools() -> List[Dict[str, Any]]:
     """Fetch all available MCP tools from the registry."""
     try:
-        resp = requests.get("http://127.0.0.1:5010/api/mcp/servers/online/tools", timeout=5)
-        if resp.status_code == 200:
-            data = resp.json()
-            raw_tools = data.get("tools") or []
-            # 只返回启用的工具，预启动工具只要启用也可以被LLM调用
-            filtered = [tool for tool in raw_tools if tool.get("enabled", True)]
-            return filtered
+        raw_tools = mcp_runtime.get_enabled_tools() or []
+        # 只返回启用的工具，预启动工具只要启用也可以被LLM调用
+        filtered = [tool for tool in raw_tools if tool.get("enabled", True)]
+        return filtered
     except Exception as e:
         util.log(1, f"Failed to fetch MCP tools: {e}")
         return []
@@ -2757,3 +2895,4 @@ if __name__ == "__main__":
         print(f"Q: {query}")
         print(f"A: {response}")
         time.sleep(1)
+

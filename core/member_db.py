@@ -41,6 +41,7 @@ class Member_Db:
             c.execute('ALTER TABLE T_Member ADD COLUMN extra_info TEXT DEFAULT ""')
         if 'user_portrait' not in columns:
             c.execute('ALTER TABLE T_Member ADD COLUMN user_portrait TEXT DEFAULT ""')
+        c.execute('INSERT OR IGNORE INTO T_Member (username) VALUES (?)', ('User',))
         conn.commit()
         conn.close()
        

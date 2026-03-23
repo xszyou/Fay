@@ -4,6 +4,8 @@
 import asyncio
 import logging
 import os
+import shutil
+import subprocess
 import sys
 import threading
 import inspect
@@ -25,6 +27,7 @@ except Exception:
     HAS_STDIO = False
 
 logger = logging.getLogger(__name__)
+_PYTHON_VERSION_CACHE: Dict[str, Optional[str]] = {}
 
 
 def _runtime_root_dir() -> str:
@@ -67,6 +70,111 @@ def _resolve_existing_path(path_value: Optional[str], *base_dirs: Optional[str])
         if os.path.exists(abs_path):
             return abs_path
     return None
+
+
+def _resolve_python_command(command: Any) -> Optional[str]:
+    if not isinstance(command, str) or not command.strip():
+        return None
+
+    candidate = command.strip()
+    if os.path.isabs(candidate):
+        return candidate if os.path.exists(candidate) else None
+
+    resolved = shutil.which(candidate)
+    if resolved:
+        return resolved
+
+    base_name = os.path.basename(candidate)
+    if base_name and base_name != candidate:
+        return shutil.which(base_name)
+    return None
+
+
+def _resolve_python_version(command: str) -> Optional[str]:
+    if not isinstance(command, str) or not command.strip():
+        return None
+    cache_key = command.strip()
+    if cache_key in _PYTHON_VERSION_CACHE:
+        return _PYTHON_VERSION_CACHE[cache_key]
+
+    version_text = None
+    try:
+        result = subprocess.run(
+            [cache_key, "-c", "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            version_text = (result.stdout or "").strip() or None
+    except Exception:
+        version_text = None
+
+    _PYTHON_VERSION_CACHE[cache_key] = version_text
+    return version_text
+
+
+def _resolve_stdio_arg_paths(args: List[Any], cwd: Optional[str], runtime_root: str) -> List[Any]:
+    resolved_args: List[Any] = []
+    for arg in args:
+        if isinstance(arg, str) and arg and not arg.startswith("-"):
+            resolved_arg = _resolve_existing_path(arg, cwd, runtime_root)
+            resolved_args.append(resolved_arg or arg)
+        else:
+            resolved_args.append(arg)
+    return resolved_args
+
+
+def _merge_process_env(env: Optional[Dict[str, Any]]) -> Dict[str, str]:
+    merged_env = dict(os.environ)
+    if isinstance(env, dict):
+        for key, value in env.items():
+            if value is None:
+                merged_env.pop(str(key), None)
+            else:
+                merged_env[str(key)] = str(value)
+    return merged_env
+
+
+def _inject_packaged_python_env(
+    env: Optional[Dict[str, Any]], runtime_root: str, command: Any
+) -> Optional[Dict[str, str]]:
+    if not getattr(sys, "frozen", False):
+        return env
+    if not _is_python_command(command):
+        return env
+
+    resolved_python = _resolve_python_command(command)
+    if not resolved_python:
+        return env
+
+    packaged_version = f"{sys.version_info.major}.{sys.version_info.minor}"
+    system_version = _resolve_python_version(resolved_python)
+    if system_version != packaged_version:
+        logger.info(
+            "Skip packaged MCP dependency injection for %s: system Python %s != bundled runtime %s",
+            resolved_python,
+            system_version or "unknown",
+            packaged_version,
+        )
+        return env
+
+    merged_env = _merge_process_env(env)
+    existing_pythonpath = merged_env.get("PYTHONPATH", "")
+    pythonpath_parts = [runtime_root]
+    if existing_pythonpath:
+        pythonpath_parts.append(existing_pythonpath)
+    merged_env["PYTHONPATH"] = os.pathsep.join(pythonpath_parts)
+
+    existing_path = merged_env.get("PATH", "")
+    runtime_root_norm = os.path.normcase(os.path.abspath(runtime_root))
+    path_parts = [part for part in existing_path.split(os.pathsep) if part]
+    if not any(os.path.normcase(os.path.abspath(part)) == runtime_root_norm for part in path_parts):
+        merged_env["PATH"] = runtime_root + (os.pathsep + existing_path if existing_path else "")
+
+    merged_env.setdefault("PYTHONIOENCODING", "utf-8")
+    logger.info("Injected packaged MCP dependencies for system Python: %s", resolved_python)
+    return merged_env
 
 
 _PACKAGED_STDIO_SERVERS = [
@@ -389,11 +497,20 @@ class McpClient:
             command, args, cwd = packaged_launch
         else:
             if _is_python_command(command):
-                command = sys.executable
+                resolved_python = _resolve_python_command(command)
+                if resolved_python:
+                    command = resolved_python
+                elif getattr(sys, "frozen", False):
+                    logger.warning("System Python not found for MCP stdio command: %s", command)
+                else:
+                    command = sys.executable
             else:
                 resolved_command = _resolve_existing_path(command, cwd, runtime_root)
                 if resolved_command:
                     command = resolved_command
+
+        args = _resolve_stdio_arg_paths(args, cwd, runtime_root)
+        env = _inject_packaged_python_env(env, runtime_root, command)
 
         resolved_cfg = {
             "command": command,
@@ -594,8 +711,6 @@ class McpClient:
 
         if not match_pattern:
             return
-
-        import subprocess
 
         try:
             if sys.platform == "win32":
