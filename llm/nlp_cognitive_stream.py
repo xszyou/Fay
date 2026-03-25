@@ -747,10 +747,22 @@ def _build_dialogue_messages(
 
         messages.append(HumanMessage(content=f"{msg.get('role', 'unknown')}：{cleaned}"))
 
-    if not messages:
-        fallback_text = fallback_request.strip()
-        return [HumanMessage(content=fallback_text)] if fallback_text else []
-    return messages
+    if not messages or not any(isinstance(m, HumanMessage) for m in messages):
+        fallback_text = fallback_request.strip() or "你好"
+        messages.append(HumanMessage(content=fallback_text))
+
+    # 规范化消息列表：确保 user/assistant 交替出现，兼容严格的模型模板
+    normalized: List[HumanMessage | AIMessage] = []
+    for m in messages:
+        if normalized and type(normalized[-1]) is type(m):
+            # 合并连续同角色消息
+            normalized[-1] = type(m)(content=normalized[-1].content + "\n" + m.content)
+        else:
+            normalized.append(m)
+    # 确保第一条消息是 HumanMessage（模型模板要求）
+    if normalized and isinstance(normalized[0], AIMessage):
+        normalized.insert(0, HumanMessage(content=fallback_request.strip() or "你好"))
+    return normalized
 
 
 def _build_planner_messages(state: AgentState) -> List[SystemMessage | HumanMessage | AIMessage]:
@@ -802,6 +814,8 @@ def _build_planner_messages(state: AgentState) -> List[SystemMessage | HumanMess
         _format_context_section("规划器预览", planner_preview),
     )
     dialogue_messages = _build_dialogue_messages(conversation, username, fallback_request=request)
+    if not dialogue_messages:
+        dialogue_messages = [HumanMessage(content=request or "你好")]
 
     return [SystemMessage(content=planner_system), *dialogue_messages]
 
@@ -854,6 +868,8 @@ def _build_final_messages(state: AgentState) -> List[SystemMessage | HumanMessag
         _format_context_section("规划器建议", planner_preview),
     )
     dialogue_messages = _build_dialogue_messages(conversation, username, fallback_request=request)
+    if not dialogue_messages:
+        dialogue_messages = [HumanMessage(content=request or "你好")]
 
     return [SystemMessage(content=final_system), *dialogue_messages]
 
@@ -2486,8 +2502,8 @@ def question(content, username, observation=None):
             final_messages = _build_final_messages(summary_state)
             stream_response_chunks(llm.stream(final_messages))
             return True
-        except requests.exceptions.RequestException as exc:
-            util.log(1, f"请求失败: {exc}")
+        except Exception as exc:
+            util.log(1, f"请求失败: {type(exc).__name__}: {exc}")
             error_message = "抱歉，我现在太忙了，休息一会，请稍后再试。"
             write_sentence(error_message, force_first=is_first_sentence)
             is_first_sentence = False
