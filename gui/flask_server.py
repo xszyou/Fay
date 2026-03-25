@@ -1536,11 +1536,9 @@ def run():
     class NullLogHandler:
         def write(self, *args, **kwargs):
             pass
-    server = pywsgi.WSGIServer(
-        ('0.0.0.0', 5000), 
-        __app,
-        log=NullLogHandler()  
-    )
+    logging.getLogger('werkzeug').setLevel(logging.ERROR)
+    from werkzeug.serving import make_server
+    server = make_server('0.0.0.0', 5000, __app, threaded=True)
     server.serve_forever()
 
 def start():
