@@ -2091,13 +2091,21 @@ def question(content, username, observation=None):
 """
 
     # 获取当前对话用户的补充信息
+    display_username = "主人" if username == "User" else username
     try:
         user_extra_info = member_db.new_instance().get_extra_info(username)
         if user_extra_info:
-            display_username = "主人" if username == "User" else username
-            system_prompt += f"**当前对话用户补充信息**\n当前与你对话的用户是「{display_username}」，以下是关于该用户的补充信息：\n{user_extra_info}\n\n"
+            system_prompt += f"**当前对话用户补充信息**\n当前与你对话的用户是「{display_username}」，以下是关于该用户的用户补充信息：\n{user_extra_info}\n\n"
     except Exception as exc:
         util.log(1, f"获取用户补充信息失败: {exc}")
+
+    # 获取用户画像
+    try:
+        user_portrait = member_db.new_instance().get_user_portrait(username)
+        if user_portrait:
+            system_prompt += f"**用户画像**\n以下是通过历史对话分析得到的「{display_username}」的用户画像，可帮助你更好地理解用户：\n{user_portrait}\n\n"
+    except Exception as exc:
+        util.log(1, f"获取用户画像失败: {exc}")
 
     # 根据配置决定是否按用户隔离历史消息
     try:
