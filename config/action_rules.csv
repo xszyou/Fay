@@ -1,0 +1,21 @@
+code,behavior,affect,intensity,priority,sentimentHint,keywords
+greeting.hello,nod,smile,0.35,60,0.4,你好|您好|hello|hi|哈喽
+greeting.welcome,invite,warm,0.78,80,0.9,欢迎光临|欢迎回来|欢迎来到|热烈欢迎|欢迎
+farewell.goodbye,wave,smile,0.62,72,0.2,再见|拜拜|bye|goodbye|下次见
+dialogue.confirm,nod,smile,0.42,58,0.3,是的|对的|没错|当然|收到|明白|了解|可以
+dialogue.reject,reject,serious,0.58,70,-0.6,不是|不对|不行|不可以|不能|no
+dialogue.think,think,neutral,0.44,74,0.0,让我想想|想一想|考虑一下|这个嘛|容我想想
+dialogue.question,question,curious,0.52,55,0.0,为什么|怎么回事|真的吗|是什么|怎么
+dialogue.explain,explain,neutral,0.56,63,0.1,也就是说|换句话说|意思是|其实|具体来说|比如|例如
+dialogue.recommend,recommend,smile,0.63,66,0.5,建议|推荐|你可以试试|最好|我建议
+dialogue.summary,summary,neutral,0.4,57,0.1,总之|综上|所以|最后|总结一下
+guidance.invite,invite,warm,0.74,82,0.7,请进|这边请|跟我来|请坐|往这边
+guidance.wait,wait,neutral,0.26,65,0.0,稍等|等一下|请稍等|稍后|马上
+guidance.remind,remind,neutral,0.48,62,0.1,提醒|记得|别忘了|告诉你
+guidance.warn,warn,serious,0.8,84,-0.4,注意|小心|警告|注意安全
+social.thanks,thanks,warm,0.46,61,0.4,谢谢|感谢|多谢|thank you
+social.apology,apology,sorry,0.6,71,-0.3,抱歉|对不起|不好意思|请原谅
+social.care,care,warm,0.5,64,0.2,还好吗|没事吧|别担心|放心
+emotion.celebrate,celebrate,excited,0.95,92,1.6,太好了|成功|完成了|真棒|厉害
+emotion.surprise,surprise,surprised,0.88,86,1.0,天啊|竟然|不会吧|omg|真的假的
+emotion.sad,sad,sad,0.82,83,-1.2,难过|可惜|遗憾|糟糕|失败了|伤心

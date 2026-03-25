@@ -47,7 +47,7 @@ import numpy as np
 
 from ai_module import baidu_emotion
 
-from core.live2d_action_standard import resolve_action_signal
+from core.action_signal import resolve_action_signal
 
 from core import wsa_server
 

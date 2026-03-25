@@ -195,7 +195,7 @@ class MyServer:
         if self.__server:
             util.log(1, 'server already exist')
             return
-        self.__server = websockets.serve(self.__handler, self.__host, self.__port)
+        self.__server = websockets.serve(self.__handler, self.__host, self.__port, ping_interval=10, ping_timeout=5)
         asyncio.get_event_loop().run_until_complete(self.__server)
         asyncio.get_event_loop().run_forever()
 
