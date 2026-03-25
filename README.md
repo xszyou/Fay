@@ -83,7 +83,7 @@ pip install -r requirements.txt
 ### **快速启动**
 本地
 ```shell
-python main.py start -config_center d19f7b0a-2b8a-4503-8c0d-1a587b90eb69
+python main.py start -config_center d19f7b0a-2b8a-4503-8c0d-1a587b90eb69  #使用公共资源，速度非常慢，建议更换成自己的key
 ```
 镜像
 ```shell
@@ -121,7 +121,7 @@ https://qqk9ntwbcit.feishu.cn/wiki/Mcw3wbA3RiNZzwkexz6cnKCsnhh
 
 **微信交流群**
 
-![](readme/wechat.png)
+![](readme/wechat.jpg)
 
 
 ## **致谢**
