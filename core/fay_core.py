@@ -593,9 +593,9 @@ class FeiFei:
 
 
                     if not no_reply:
-                        content_id = content_db.new_instance().add_content('member','speak',interact.data["msg"], username, uid)
+                        content_id, create_ms = content_db.new_instance().add_content('member','speak',interact.data["msg"], username, uid)
                         if wsa_server.get_web_instance().is_connected(username):
-                            wsa_server.get_web_instance().add_cmd({"panelReply": {"type":"member","content":interact.data["msg"], "username":username, "uid":uid, "id":content_id}, "Username" : username})
+                            wsa_server.get_web_instance().add_cmd({"panelReply": {"type":"member","content":interact.data["msg"], "username":username, "uid":uid, "id":content_id, "timetext": util.ms_to_timetext(create_ms)}, "Username" : username})
 
 
                     
@@ -1226,13 +1226,13 @@ class FeiFei:
                 if text and text.strip():
 
 
-                    content_id = content_db.new_instance().add_content('fay', 'speak', text, username, uid)
+                    content_id, _ = content_db.new_instance().add_content('fay', 'speak', text, username, uid)
 
 
                 else:
 
 
-                    content_id = content_db.new_instance().add_content('fay', 'speak', '', username, uid)
+                    content_id, _ = content_db.new_instance().add_content('fay', 'speak', '', username, uid)
 
 
 
@@ -1336,7 +1336,9 @@ class FeiFei:
                         accumulated_text = existing_content[3] + text
 
 
-                        content_db.new_instance().update_content(content_id, accumulated_text)
+                        update_ms = content_db.new_instance().update_content(content_id, accumulated_text)
+                        if update_ms:
+                            self._last_update_timetext = util.ms_to_timetext(update_ms)
 
 
                 elif content_id == 0 and text and text.strip():
@@ -2514,7 +2516,8 @@ class FeiFei:
         self.write_to_file("./logs", "answer_result.txt", text)
 
 
-        return content_db.new_instance().add_content('fay', 'speak', text, username, uid)
+        content_id, _ = content_db.new_instance().add_content('fay', 'speak', text, username, uid)
+        return content_id
 
 
 
@@ -2839,7 +2842,10 @@ class FeiFei:
                     "id": content_id,
 
 
-                    "is_adopted": type == 'qa'
+                    "is_adopted": type == 'qa',
+
+
+                    "timetext": getattr(self, '_last_update_timetext', None) or util.get_time_ms()
 
 
                 },

@@ -426,7 +426,9 @@ def api_get_Msg():
         i = len(list) - 1
         while i >= 0:
             timezone = pytz.timezone('Asia/Shanghai')
-            timetext = datetime.datetime.fromtimestamp(list[i][3], timezone).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+            ts = list[i][3]
+            ts_sec = ts / 1000 if ts > 9999999999 else ts  # 兼容旧秒级和新毫秒级时间戳
+            timetext = datetime.datetime.fromtimestamp(ts_sec, timezone).strftime('%Y-%m-%d %H:%M:%S.') + f"{int(ts % 1000) if ts > 9999999999 else 0:03d}"
             relist.append(dict(type=list[i][0], way=list[i][1], content=list[i][2], createtime=list[i][3], timetext=timetext, username=list[i][5], id=list[i][6], is_adopted=list[i][7]))
             i -= 1
         if fay_booter.is_running():

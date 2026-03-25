@@ -12,6 +12,20 @@ from utils import config_util
 LOGS_FILE_URL = "logs/log-" + time.strftime("%Y%m%d%H%M%S") + ".log"
 
 
+def get_time_ms():
+    """返回当前时间字符串，格式 YYYY-MM-DD HH:MM:SS.mmm（毫秒级）"""
+    from datetime import datetime
+    now = datetime.now()
+    return now.strftime('%Y-%m-%d %H:%M:%S.') + f"{now.microsecond // 1000:03d}"
+
+
+def ms_to_timetext(ms_timestamp):
+    """将毫秒时间戳转为格式化字符串 YYYY-MM-DD HH:MM:SS.mmm"""
+    from datetime import datetime
+    dt = datetime.fromtimestamp(ms_timestamp / 1000)
+    return dt.strftime('%Y-%m-%d %H:%M:%S.') + f"{ms_timestamp % 1000:03d}"
+
+
 def get_local_ip():
     """
     获取本机IP地址

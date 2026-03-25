@@ -52,40 +52,42 @@ class Content_Db:
         conn = sqlite3.connect("memory/fay.db")
         conn.text_factory = str
         cur = conn.cursor()
+        now_ms = int(time.time() * 1000)
         try:
             cur.execute("INSERT INTO T_Msg (type, way, content, createtime, username, uid) VALUES (?, ?, ?, ?, ?, ?)",
-                        (type, way, content, int(time.time()), username, uid))
+                        (type, way, content, now_ms, username, uid))
             conn.commit()
             last_id = cur.lastrowid
         except Exception as e:
             util.log(1, "请检查参数是否有误: {}".format(e))
             conn.close()
-            return 0
+            return 0, 0
         conn.close()
-        return last_id
+        return last_id, now_ms
 
     # 更新对话内容
     @synchronized
     def update_content(self, msg_id, content):
         """
-        更新指定ID的消息内容
+        更新指定ID的消息内容，同时更新时间为当前时间
         :param msg_id: 消息ID
         :param content: 新的内容
-        :return: 是否更新成功
+        :return: 更新后的毫秒时间戳，失败返回0
         """
         conn = sqlite3.connect("memory/fay.db")
         conn.text_factory = str
         cur = conn.cursor()
+        now_ms = int(time.time() * 1000)
         try:
-            cur.execute("UPDATE T_Msg SET content = ? WHERE id = ?", (content, msg_id))
+            cur.execute("UPDATE T_Msg SET content = ?, createtime = ? WHERE id = ?", (content, now_ms, msg_id))
             conn.commit()
             affected_rows = cur.rowcount
         except Exception as e:
             util.log(1, f"更新消息内容失败: {e}")
             conn.close()
-            return False
+            return 0
         conn.close()
-        return affected_rows > 0
+        return now_ms if affected_rows > 0 else 0
 
     # 根据ID查询对话记录
     @synchronized
@@ -171,7 +173,7 @@ class Content_Db:
             where_uid = f" AND T_Msg.uid = {uid} "
         base_query = f"""
             SELECT T_Msg.type, T_Msg.way, T_Msg.content, T_Msg.createtime,
-                   datetime(T_Msg.createtime, 'unixepoch', 'localtime') AS timetext,
+                   datetime(T_Msg.createtime/1000, 'unixepoch', 'localtime') AS timetext,
                    T_Msg.username,T_Msg.id,
                    CASE WHEN T_Adopted.msg_id IS NOT NULL THEN 1 ELSE 0 END AS is_adopted
             FROM T_Msg
@@ -251,7 +253,7 @@ class Content_Db:
         conn = sqlite3.connect("memory/fay.db")
         cur = conn.cursor()
         cur.execute("""
-            SELECT id, type, way, content, createtime, datetime(createtime, 'unixepoch', 'localtime') AS timetext, username
+            SELECT id, type, way, content, createtime, datetime(createtime/1000, 'unixepoch', 'localtime') AS timetext, username
             FROM T_Msg
             WHERE id < ? AND type != 'fay'
             ORDER BY id DESC
@@ -275,7 +277,7 @@ class Content_Db:
         cur = conn.cursor()
         # 获取当天0点的时间戳
         today = datetime.date.today()
-        today_start = int(datetime.datetime.combine(today, datetime.time.min).timestamp())
+        today_start = int(datetime.datetime.combine(today, datetime.time.min).timestamp() * 1000)
         cur.execute(
             """
             SELECT type, content

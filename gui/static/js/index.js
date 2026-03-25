@@ -244,7 +244,7 @@ class FayInterface {
           const existingMessage = vueInstance.messages[existingMessageIndex];
           // 拼接新内容到现有内容
           existingMessage.content = existingMessage.content + data.panelReply.content;
-          existingMessage.timetext = this.getTime();
+          existingMessage.timetext = data.panelReply.timetext || this.getTime();
 
           // 检测 think 标签状态
           const hasThinkStart = existingMessage.content.includes('<think>');
@@ -267,7 +267,7 @@ class FayInterface {
             username: data.panelReply.username,
             content: data.panelReply.content,
             type: data.panelReply.type,
-            timetext: this.getTime(),
+            timetext: data.panelReply.timetext || this.getTime(),
             is_adopted: data.panelReply.is_adopted ? 1 : 0,
             thinkExpanded: false,
             thinkLoading: false
