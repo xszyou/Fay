@@ -47,6 +47,7 @@ import numpy as np
 
 from ai_module import baidu_emotion
 
+from core.live2d_action_standard import resolve_action_signal
 
 from core import wsa_server
 
@@ -649,43 +650,10 @@ class FeiFei:
 
 
 
-                        # 根据配置动态调用不同的NLP模块
+                        from llm import nlp_cognitive_stream
 
 
-                        if cfg.config["memory"].get("use_bionic_memory", False):
-
-
-                            try:
-
-
-                                from llm import nlp_bionicmemory_stream
-
-
-                                text = nlp_bionicmemory_stream.question(interact.data["msg"], username, interact.data.get("observation", None))
-
-
-                            except Exception as exc:
-
-
-                                util.log(1, f"Bionic memory pipeline unavailable, fallback to cognitive mode: {exc}")
-
-
-                                cfg.config.setdefault("memory", {})["use_bionic_memory"] = False
-
-
-                                from llm import nlp_cognitive_stream
-
-
-                                text = nlp_cognitive_stream.question(interact.data["msg"], username, interact.data.get("observation", None))
-
-
-                        else:
-
-
-                            from llm import nlp_cognitive_stream
-
-
-                            text = nlp_cognitive_stream.question(interact.data["msg"], username, interact.data.get("observation", None))
+                        text = nlp_cognitive_stream.question(interact.data["msg"], username, interact.data.get("observation", None))
 
 
 
@@ -2265,6 +2233,27 @@ class FeiFei:
                     content = {'Topic': 'human', 'Data': {'Key': 'audio', 'Value': os.path.abspath(file_url), 'HttpValue': f'{cfg.fay_url}/audio/' + os.path.basename(file_url),  'Text': text, 'Time': audio_length, 'Type': interact.interleaver, 'IsFirst': 1 if interact.data.get("isfirst", False) else 0,  'IsEnd': 1 if interact.data.get("isend", False) else 0, 'CONV_ID' : conv_id_for_send, 'CONV_MSG_NO' : conv_msg_no_for_send  }, 'Username' : interact.data.get('user'), 'robot': f'{cfg.fay_url}/robot/Speaking.jpg'}
 
 
+                    # 计算 Sentiment
+                    sentiment_value = 0
+                    try:
+                        if cfg.baidu_emotion_api_key and cfg.baidu_emotion_secret_key:
+                            sentiment_value = baidu_emotion.get_sentiment(text)
+                            util.printInfo(1, interact.data.get("user"), f"百度情感分析: {sentiment_value} (文本: {text[:20]}...)")
+                        else:
+                            sentiment_value = self.__analyze_sentiment_by_keywords(text)
+                            util.printInfo(1, interact.data.get("user"), f"关键词情感分析: {sentiment_value} (文本: {text[:20]}...)")
+                    except Exception as sentiment_error:
+                        util.printInfo(1, interact.data.get("user"), f"情感分析失败: {sentiment_error}，使用关键词匹配")
+                        sentiment_value = self.__analyze_sentiment_by_keywords(text)
+
+                    content["Data"]["Sentiment"] = sentiment_value
+
+                    # 计算 Action
+                    action_signal = resolve_action_signal(text)
+                    if action_signal:
+                        content["Data"]["Action"] = action_signal
+                        util.printInfo(1, interact.data.get("user"), f"通用动作触发: {action_signal.get('code')}")
+
                     #计算lips
 
 
@@ -3032,6 +3021,70 @@ class FeiFei:
         util.printInfo(1, username, '({}) {}'.format("llm", text))
 
 
+    def __analyze_sentiment_by_keywords(self, text):
+        """基于关键词的简单情感分析
+        返回: -2 ~ +2 的情感值
+        """
+        # 积极关键词 - 非常积极（+2）
+        very_positive_keywords = [
+            '开心', '高兴', '喜欢', '爱', '太好了', '棒', '优秀', '成功',
+            '快乐', '幸福', '满足', '谢谢', '感谢', '赞', '哈哈', '笑',
+            '太棒了', '厉害', '赢了', '庆祝', '欢呼', '耶', '万岁',
+            '完美', '绝妙', '精彩', '激动', '兴奋', '荣幸', '乐意'
+        ]
+
+        # 积极关键词 - 轻微积极（+1）
+        positive_keywords = [
+            '好', '对', '是', 'yes', '好的', '可以', '没问题', '明白',
+            '当然', '没错', '正确', '同意', '行', '嗯', '哦~', '呀',
+            '呢', '～', '噗嗤', '嘿嘿', '嘻嘻', '哈哈', '呀~', '呢~',
+            '欢迎', '请进', '请', '荣幸', '乐意', '愿意', '想要'
+        ]
+
+        # 消极关键词 - 轻微消极（-1）
+        negative_keywords = [
+            '不好', '差', '错', '糟糕', '失败', '失望', '生气',
+            '不', 'no', '不要', '不行', '不能', '别', '不是',
+            '难过', '烦', '烦人', '讨厌', '唉', '可是', '但是',
+            '不过', '只是', '担心', '害怕', '紧张'
+        ]
+
+        # 消极关键词 - 非常消极（-2）
+        very_negative_keywords = [
+            '难过', '伤心', '痛苦', '悲伤', '哭', '恨',
+            '愤怒', '滚', '完蛋', '绝望', '崩溃', '痛苦',
+            '讨厌死', '恨死', '气死', '烦死', '糟糕透顶'
+        ]
+
+        # 统计匹配的关键词数量
+        very_positive_count = sum(1 for kw in very_positive_keywords if kw in text)
+        positive_count = sum(1 for kw in positive_keywords if kw in text)
+        negative_count = sum(1 for kw in negative_keywords if kw in text)
+        very_negative_count = sum(1 for kw in very_negative_keywords if kw in text)
+
+        # 计算情感值
+        sentiment = (very_positive_count * 2 + positive_count * 1 -
+                     negative_count * 1 - very_negative_count * 2)
+
+        # 限制在 -2 ~ +2 范围内
+        if sentiment > 2:
+            sentiment = 2
+        elif sentiment < -2:
+            sentiment = -2
+
+        # 标点符号和语气分析
+        if '？' in text or '!' in text or '~' in text:
+            sentiment += 0.3
+        if '...' in text or '。。.' in text:
+            sentiment -= 0.3
+
+        # 再次限制范围
+        if sentiment > 2:
+            sentiment = 2
+        elif sentiment < -2:
+            sentiment = -2
+
+        return sentiment
 
 
 

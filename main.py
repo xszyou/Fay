@@ -152,20 +152,8 @@ def __create_memory():
         os.mkdir("./memory")
 
 def __check_and_clear_chroma_db():
-    """检查并清除ChromaDB数据库（如果存在清除标记）"""
-    try:
-        if config_util.config["memory"].get("use_bionic_memory", False):
-            try:
-                from bionicmemory.core.chroma_service import ChromaService
-            except Exception as exc:
-                util.log(1, f"Bionic memory is unavailable, fallback to cognitive mode: {exc}")
-                config_util.config.setdefault("memory", {})["use_bionic_memory"] = False
-                return
-
-            if ChromaService.check_and_clear_database_on_startup():
-                util.log(1, "检测到记忆清除标记，已清除ChromaDB数据库")
-    except Exception as e:
-        util.log(1, f"清理ChromaDB时出错: {e}")
+    """检查并清除ChromaDB数据库（如果存在清除标记）- 已移除仿生记忆，保留函数避免调用处报错"""
+    pass
 
 def kill_process_by_port(port):
     for conn in psutil.net_connections(kind='inet'):

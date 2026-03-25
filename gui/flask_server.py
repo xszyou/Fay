@@ -1323,19 +1323,7 @@ def api_clear_memory():
         success_messages = []
         error_messages = []
 
-        # 1. 清除仿生记忆
-        try:
-            from llm.nlp_bionicmemory_stream import clear_agent_memory as clear_bionic
-            if clear_bionic():
-                success_messages.append("仿生记忆")
-                util.log(1, "仿生记忆已清除")
-            else:
-                error_messages.append("清除仿生记忆失败")
-        except Exception as e:
-            error_messages.append(f"清除仿生记忆时出错: {str(e)}")
-            util.log(1, f"清除仿生记忆时出错: {str(e)}")
-
-        # 2. 清除认知记忆（文件系统）
+        # 清除认知记忆（文件系统）
         try:
             memory_dir = os.path.join(os.getcwd(), "memory")
 
@@ -1392,13 +1380,7 @@ def api_clear_memory():
 @__app.route('/api/start-genagents', methods=['POST'])
 def api_start_genagents():
     try:
-        # 检查是否启用了仿生记忆
         config_util.load_config()
-        if config_util.config["memory"].get("use_bionic_memory", False):
-            return jsonify({
-                'success': False,
-                'message': '仿生记忆模式下不支持人格克隆功能，请在设置中关闭仿生记忆后重试'
-            }), 400
 
         # 只有在数字人启动后才能克隆人格
         if not fay_booter.is_running():

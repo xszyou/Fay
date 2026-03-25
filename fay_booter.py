@@ -321,15 +321,14 @@ def stop():
     except Exception as e:
         util.log(1, f'断开MCP服务连接失败: {str(e)}')
     
-    # 保存代理记忆（仅在未使用仿生记忆时）
-    if not config_util.config["memory"].get("use_bionic_memory", False):
-        util.log(1, '正在保存代理记忆...')
-        try:
-            from llm.nlp_cognitive_stream import save_agent_memory
-            save_agent_memory()
-            util.log(1, '代理记忆保存成功')
-        except Exception as e:
-            util.log(1, f'保存代理记忆失败: {str(e)}')
+    # 保存代理记忆
+    util.log(1, '正在保存代理记忆...')
+    try:
+        from llm.nlp_cognitive_stream import save_agent_memory
+        save_agent_memory()
+        util.log(1, '代理记忆保存成功')
+    except Exception as e:
+        util.log(1, f'保存代理记忆失败: {str(e)}')
     
     if recorderListener is not None:
         util.log(1, '正在关闭录音服务...')
@@ -394,11 +393,9 @@ def start():
     feiFei = get_fay_core().FeiFei()
     feiFei.start()
 
-    #根据配置决定是否初始化认知记忆系统
-    if not config_util.config["memory"].get("use_bionic_memory", False):
-        util.log(1, '初始化定时保存记忆及反思的任务...')
-        from llm.nlp_cognitive_stream import init_memory_scheduler
-        init_memory_scheduler()
+    util.log(1, '初始化定时保存记忆及反思的任务...')
+    from llm.nlp_cognitive_stream import init_memory_scheduler
+    init_memory_scheduler()
 
     #开启录音服务
     record = config_util.config['source']['record']

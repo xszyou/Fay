@@ -69,19 +69,7 @@ def api_clear_memory():
         success_messages = []
         error_messages = []
 
-        # 1. 清除仿生记忆
-        try:
-            from llm.nlp_bionicmemory_stream import clear_agent_memory as clear_bionic
-            if clear_bionic():
-                success_messages.append("仿生记忆")
-                util.log(1, "仿生记忆已清除")
-            else:
-                error_messages.append("清除仿生记忆失败")
-        except Exception as e:
-            error_messages.append(f"清除仿生记忆时出错: {str(e)}")
-            util.log(1, f"清除仿生记忆时出错: {str(e)}")
-
-        # 2. 清除认知记忆（文件系统）
+        # 清除认知记忆（文件系统）
         try:
             memory_dir = os.path.join(os.getcwd(), "memory")
 

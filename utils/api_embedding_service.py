@@ -18,9 +18,7 @@ except ImportError as e:
     CONFIG_UTIL_AVAILABLE = False
     cfg = None
 
-# 使用统一日志配置
-from bionicmemory.utils.logging_config import get_logger
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 if not CONFIG_UTIL_AVAILABLE:
     logger.warning("无法导入 config_util，将使用环境变量配置")
