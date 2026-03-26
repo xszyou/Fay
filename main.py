@@ -1,6 +1,7 @@
 ﻿#入口文件main
 import os
 import sys
+import runpy
 
 def _resolve_runtime_dir():
     if hasattr(sys, "_MEIPASS"):
@@ -9,6 +10,54 @@ def _resolve_runtime_dir():
 
 _RUNTIME_DIR = _resolve_runtime_dir()
 os.environ['PATH'] += os.pathsep + os.path.join(_RUNTIME_DIR, "test", "ovr_lipsync", "ffmpeg", "bin")
+
+
+def _resolve_runner_script_path(script_arg):
+    candidate = str(script_arg or "").strip()
+    if not candidate:
+        return None
+    if os.path.isabs(candidate):
+        return candidate if os.path.exists(candidate) else None
+
+    current_dir = os.path.abspath(os.getcwd())
+    current_candidate = os.path.abspath(os.path.join(current_dir, candidate))
+    if os.path.exists(current_candidate):
+        return current_candidate
+
+    runtime_candidate = os.path.abspath(os.path.join(_RUNTIME_DIR, candidate))
+    if os.path.exists(runtime_candidate):
+        return runtime_candidate
+    return None
+
+
+def _maybe_run_mcp_stdio_runner(argv):
+    if not argv or argv[0] != "--mcp-stdio-runner":
+        return
+
+    runner_args = list(argv[1:])
+    while runner_args and runner_args[0] in ("-u", "-B", "-E", "-s", "-S", "-O", "-OO"):
+        runner_args.pop(0)
+
+    if not runner_args:
+        print("Missing MCP runner target script.", file=sys.stderr)
+        raise SystemExit(2)
+
+    script_path = _resolve_runner_script_path(runner_args[0])
+    if not script_path:
+        print(f"Cannot resolve MCP runner target: {runner_args[0]}", file=sys.stderr)
+        raise SystemExit(2)
+
+    script_path = os.path.abspath(script_path)
+    script_dir = os.path.dirname(script_path)
+    if script_dir and script_dir not in sys.path:
+        sys.path.insert(0, script_dir)
+    if _RUNTIME_DIR not in sys.path:
+        sys.path.insert(0, _RUNTIME_DIR)
+
+    os.chdir(script_dir or os.getcwd())
+    sys.argv = [script_path] + runner_args[1:]
+    runpy.run_path(script_path, run_name="__main__")
+    raise SystemExit(0)
 
 def _extract_config_center_id(argv):
     for i, arg in enumerate(argv):
@@ -24,6 +73,7 @@ def _preload_config_center(argv):
         os.environ["FAY_CONFIG_CENTER_ID"] = config_center_id
 
 _preload_config_center(sys.argv[1:])
+_maybe_run_mcp_stdio_runner(sys.argv[1:])
 
 import time
 import psutil

@@ -28,6 +28,7 @@ except Exception:
 
 logger = logging.getLogger(__name__)
 _PYTHON_VERSION_CACHE: Dict[str, Optional[str]] = {}
+_PYTHON_RUNNER_FLAGS = {"-u", "-B", "-E", "-s", "-S", "-O", "-OO"}
 
 
 def _runtime_root_dir() -> str:
@@ -125,6 +126,20 @@ def _resolve_stdio_arg_paths(args: List[Any], cwd: Optional[str], runtime_root: 
     return resolved_args
 
 
+def _find_python_script_arg(args: List[Any]) -> Optional[str]:
+    for arg in args:
+        if isinstance(arg, str) and arg and not arg.startswith("-"):
+            return arg
+    return None
+
+
+def _is_path_within(base_dir: str, target_path: str) -> bool:
+    try:
+        return os.path.commonpath([os.path.abspath(base_dir), os.path.abspath(target_path)]) == os.path.abspath(base_dir)
+    except Exception:
+        return False
+
+
 def _merge_process_env(env: Optional[Dict[str, Any]]) -> Dict[str, str]:
     merged_env = dict(os.environ)
     if isinstance(env, dict):
@@ -177,66 +192,28 @@ def _inject_packaged_python_env(
     return merged_env
 
 
-_PACKAGED_STDIO_SERVERS = [
-    {
-        "script": "test/mcp_stdio_example.py",
-        "cwd": "",
-        "exe_relpath": os.path.join("mcp_bin", "mcp_stdio_example", "mcp_stdio_example.exe"),
-    },
-    {
-        "script": "mcp_servers/schedule_manager/server.py",
-        "cwd": "mcp_servers/schedule_manager",
-        "exe_relpath": os.path.join("mcp_bin", "schedule_manager_mcp", "schedule_manager_mcp.exe"),
-    },
-    {
-        "script": "mcp_servers/logseq/server.py",
-        "cwd": "mcp_servers/logseq",
-        "exe_relpath": os.path.join("mcp_bin", "logseq_mcp", "logseq_mcp.exe"),
-    },
-    {
-        "script": "mcp_servers/yueshen_rag/server.py",
-        "cwd": "mcp_servers/yueshen_rag",
-        "exe_relpath": os.path.join("mcp_bin", "yueshen_rag_mcp", "yueshen_rag_mcp.exe"),
-    },
-    {
-        "script": "mcp_servers/window_capture/server.py",
-        "cwd": "mcp_servers/window_capture",
-        "exe_relpath": os.path.join("mcp_bin", "window_capture_mcp", "window_capture_mcp.exe"),
-    },
-    {
-        "script": "mcp_servers/mcp-todo-server/server.py",
-        "cwd": "mcp_servers/mcp-todo-server",
-        "exe_relpath": os.path.join("mcp_bin", "todo_server_mcp", "todo_server_mcp.exe"),
-    },
-    {
-        "script": "mcp_servers/elderly_mcp/server.py",
-        "cwd": "mcp_servers/elderly_mcp",
-        "exe_relpath": os.path.join("mcp_bin", "elderly_mcp_server", "elderly_mcp_server.exe"),
-    },
-]
-
-
-def _resolve_packaged_stdio_binary(
+def _resolve_packaged_stdio_runner(
     runtime_root: str, command: Any, args: List[Any], cwd: Optional[str]
-) -> Optional[Tuple[str, List[Any], str]]:
+) -> Optional[Tuple[str, List[Any], Optional[str]]]:
     if not getattr(sys, "frozen", False):
         return None
+    if not _is_python_command(command):
+        return None
 
-    arg_paths = [str(arg) for arg in args if isinstance(arg, str) and arg and not str(arg).startswith("-")]
-    command_text = str(command or "")
-    for target in _PACKAGED_STDIO_SERVERS:
-        matched = any(_path_matches(arg, target["script"]) for arg in arg_paths)
-        if not matched and target["cwd"] and _path_matches(cwd, target["cwd"]):
-            if not arg_paths or any(os.path.basename(arg).lower() == "server.py" for arg in arg_paths):
-                matched = True
-        if not matched and _path_matches(command_text, target["exe_relpath"]):
-            matched = True
-        if not matched:
-            continue
+    resolved_args = _resolve_stdio_arg_paths(args, cwd, runtime_root)
+    script_arg = _find_python_script_arg(resolved_args)
+    if not script_arg:
+        return None
+    if not isinstance(script_arg, str) or not script_arg.lower().endswith(".py"):
+        return None
+    if not os.path.exists(script_arg):
+        return None
+    if not _is_path_within(runtime_root, script_arg):
+        return None
 
-        exe_path = os.path.join(runtime_root, target["exe_relpath"])
-        if os.path.exists(exe_path):
-            return exe_path, [], os.path.dirname(exe_path)
+    runner_command = os.path.abspath(sys.executable)
+    runner_args = ["--mcp-stdio-runner"] + resolved_args
+    return runner_command, runner_args, cwd
     return None
 
 
@@ -492,7 +469,7 @@ class McpClient:
         if cwd and not os.path.isabs(cwd):
             cwd = os.path.abspath(os.path.join(runtime_root, cwd))
 
-        packaged_launch = _resolve_packaged_stdio_binary(runtime_root, command, args, cwd)
+        packaged_launch = _resolve_packaged_stdio_runner(runtime_root, command, args, cwd)
         if packaged_launch is not None:
             command, args, cwd = packaged_launch
         else:
@@ -509,8 +486,11 @@ class McpClient:
                 if resolved_command:
                     command = resolved_command
 
-        args = _resolve_stdio_arg_paths(args, cwd, runtime_root)
-        env = _inject_packaged_python_env(env, runtime_root, command)
+        if not (isinstance(command, str) and os.path.basename(command).lower() == os.path.basename(sys.executable).lower() and args[:1] == ["--mcp-stdio-runner"]):
+            args = _resolve_stdio_arg_paths(args, cwd, runtime_root)
+            env = _inject_packaged_python_env(env, runtime_root, command)
+
+        logger.info("Resolved MCP stdio launch command=%s cwd=%s args=%s", command, cwd or "", args)
 
         resolved_cfg = {
             "command": command,
