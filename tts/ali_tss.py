@@ -103,7 +103,7 @@ class Speech:
                     }
                 # text = f"<speak>{text}</speak>"
                 # 设置HTTPS Body。
-                body = {'appkey': self.ali_nls_app_key, 'token': self.token,'speech_rate':0, 'text': text, 'format': 'mp3', 'sample_rate': 16000, 'voice': config_util.config["attribute"]["voice"]}
+                body = {'appkey': self.ali_nls_app_key, 'token': self.token,'speech_rate':0, 'text': text, 'format': 'wav', 'sample_rate': 16000, 'voice': config_util.config["attribute"]["voice"]}
                 body = json.dumps(body)
                 conn = http.client.HTTPSConnection(host, context=_ssl_context)
                 conn.request(method='POST', url=url, body=body, headers=httpHeaders)
@@ -112,13 +112,10 @@ class Speech:
                 tt = time.time()
                 contentType = response.getheader('Content-Type')
                 body = response.read()
-                if 'audio/mpeg' == contentType :
-                    file_url = './samples/sample-' + str(int(time.time() * 1000)) + '.mp3'
-                    with wave.open(file_url, 'wb') as wf:
-                        wf.setnchannels(1)
-                        wf.setsampwidth(2)
-                        wf.setframerate(16000)
-                        wf.writeframes(body)
+                if contentType and 'audio' in contentType : 
+                    file_url = './samples/sample-' + str(int(time.time() * 1000)) + '.wav'
+                    with open(file_url, 'wb') as f:
+                        f.write(body)
                 
                 else :
                     util.log(1, "[x] 语音转换失败！")
