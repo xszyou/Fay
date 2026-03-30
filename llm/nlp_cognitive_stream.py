@@ -172,6 +172,24 @@ class AgentState(TypedDict, total=False):
     max_steps: int
 
 
+def _find_last_safe_punct(text: str, punctuation_list) -> int:
+    """在文本中查找最后一个安全的标点切分位置，跳过数字中的小数点（如0.85）"""
+    last_punct_pos = -1
+    for punct in punctuation_list:
+        pos = text.rfind(punct)
+        # 对英文句点，跳过数字间的小数点
+        while pos > 0 and punct == ".":
+            prev_ch = text[pos - 1] if pos > 0 else ""
+            next_ch = text[pos + 1] if pos + 1 < len(text) else ""
+            if prev_ch.isdigit() and next_ch.isdigit():
+                pos = text.rfind(punct, 0, pos)
+            else:
+                break
+        if pos > last_punct_pos:
+            last_punct_pos = pos
+    return last_punct_pos
+
+
 def _truncate_text(text: Any, limit: int = 400) -> str:
     text_str = "" if text is None else str(text)
     if len(text_str) <= limit:
@@ -2266,11 +2284,7 @@ def question(content, username, observation=None):
             full_response_text += flush_text
             if len(accumulated_text) >= 20:
                 while True:
-                    last_punct_pos = -1
-                    for punct in punctuation_list:
-                        pos = accumulated_text.rfind(punct)
-                        if pos > last_punct_pos:
-                            last_punct_pos = pos
+                    last_punct_pos = _find_last_safe_punct(accumulated_text, punctuation_list)
                     if last_punct_pos > 10:
                         sentence_text = accumulated_text[: last_punct_pos + 1]
                         write_sentence(sentence_text, force_first=is_first_sentence)
@@ -2332,11 +2346,7 @@ def question(content, username, observation=None):
             # 检查是否有完整句子可以输出
             if len(accumulated_text) >= 20:
                 while True:
-                    last_punct_pos = -1
-                    for punct in punctuation_list:
-                        pos = accumulated_text.rfind(punct)
-                        if pos > last_punct_pos:
-                            last_punct_pos = pos
+                    last_punct_pos = _find_last_safe_punct(accumulated_text, punctuation_list)
                     if last_punct_pos > 10:
                         sentence_text = accumulated_text[: last_punct_pos + 1]
                         write_sentence(sentence_text, force_first=is_first_sentence)
