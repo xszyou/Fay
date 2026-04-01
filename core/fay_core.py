@@ -1608,6 +1608,7 @@ class FeiFei:
                         tm = time.time()
 
 
+                        filtered_text = filtered_text.replace('\n', '')
                         mood_voice = self.__get_mood_voice()
                         cache_key = self.__build_tts_cache_key(filtered_text, mood_voice)
                         cache_result = self.__get_tts_cache(cache_key)
