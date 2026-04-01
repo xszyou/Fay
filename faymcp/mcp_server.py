@@ -36,6 +36,8 @@ try:
     from starlette.applications import Starlette
     from starlette.responses import Response
     from starlette.routing import Mount, Route
+    from starlette.middleware import Middleware
+    from starlette.middleware.base import BaseHTTPMiddleware
 except ImportError:
     print("缺少 starlette，请先安装：pip install starlette sse-starlette", file=sys.stderr)
     sys.exit(1)
@@ -297,12 +299,25 @@ async def sse_endpoint(request):
     return Response()
 
 
+class Utf8CharsetMiddleware(BaseHTTPMiddleware):
+    """确保所有 text/ 类型的响应都声明 charset=utf-8"""
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        ct = response.headers.get("content-type", "")
+        if ct.startswith("text/") and "charset" not in ct:
+            response.headers["content-type"] = ct + "; charset=utf-8"
+        return response
+
+
 routes = [
     Route(SSE_PATH, sse_endpoint, methods=["GET"]),
     Mount(MSG_PATH, app=sse_transport.handle_post_message),
 ]
 
-app = Starlette(routes=routes)
+app = Starlette(
+    routes=routes,
+    middleware=[Middleware(Utf8CharsetMiddleware)],
+)
 
 
 def main():
