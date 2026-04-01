@@ -35,7 +35,19 @@ except ImportError:
     sys.exit(1)
 
 
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+def _runtime_dir():
+    if getattr(sys, "frozen", False):
+        return os.path.abspath(os.path.dirname(sys.executable))
+    return os.path.abspath(os.path.dirname(__file__))
+
+
+def _project_root():
+    if getattr(sys, "frozen", False):
+        return os.path.abspath(os.path.join(_runtime_dir(), "..", ".."))
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+
+
+PROJECT_ROOT = _project_root()
 DEFAULT_SAVE_DIR = os.path.join(PROJECT_ROOT, "cache_data", "window_captures")
 os.makedirs(DEFAULT_SAVE_DIR, exist_ok=True)
 

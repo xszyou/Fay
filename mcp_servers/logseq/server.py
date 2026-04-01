@@ -26,7 +26,19 @@ import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 # 将项目根目录加入 sys.path
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+def _runtime_dir():
+    if getattr(sys, "frozen", False):
+        return os.path.abspath(os.path.dirname(sys.executable))
+    return os.path.abspath(os.path.dirname(__file__))
+
+
+def _project_root():
+    if getattr(sys, "frozen", False):
+        return os.path.abspath(os.path.join(_runtime_dir(), "..", ".."))
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+
+
+PROJECT_ROOT = _project_root()
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 

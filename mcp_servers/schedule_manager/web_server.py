@@ -10,32 +10,38 @@ import json
 import sqlite3
 import datetime
 
-# 检查并安装依赖
+# ???????????
 try:
     from flask import Flask, jsonify, request, send_from_directory
     from flask_cors import CORS
 except ImportError:
-    print("正在安装必要的依赖包...")
-    import subprocess
-    try:
-        subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'flask', 'flask-cors'])
-        from flask import Flask, jsonify, request, send_from_directory
-        from flask_cors import CORS
-        print("依赖包安装完成")
-    except Exception as e:
-        print(f"安装依赖包失败: {e}")
-        print("请手动运行: pip install flask flask-cors")
-        sys.exit(1)
+    print("Missing Flask dependencies for schedule_manager web server.")
+    print("Please install them first: pip install flask flask-cors")
+    sys.exit(1)
 
 # 添加项目根目录到Python路径
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-sys.path.insert(0, project_root)
+def _runtime_dir():
+    if getattr(sys, "frozen", False):
+        return os.path.abspath(os.path.dirname(sys.executable))
+    return os.path.abspath(os.path.dirname(__file__))
+
+
+def _project_root():
+    if getattr(sys, "frozen", False):
+        return os.path.abspath(os.path.join(_runtime_dir(), "..", ".."))
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+
+
+RUNTIME_DIR = _runtime_dir()
+project_root = _project_root()
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
 app = Flask(__name__)
 CORS(app)  # 允许跨域请求
 
 # 数据库文件路径
-DB_PATH = os.path.join(os.path.dirname(__file__), 'schedules.db')
+DB_PATH = os.path.join(RUNTIME_DIR, 'schedules.db')
 
 class ScheduleWebAPI:
     """日程管理Web API类"""
@@ -224,7 +230,7 @@ class ScheduleWebAPI:
             # 如果有更新时间或状态，通知调度器重新调度（通过创建触发文件）
             if schedule_time is not None or repeat_rule is not None or status is not None or auto_activate:
                 # 创建一个触发文件，让调度器知道需要重新检查
-                trigger_file = os.path.join(os.path.dirname(__file__), f'.reschedule_{schedule_id}')
+                trigger_file = os.path.join(RUNTIME_DIR, f'.reschedule_{schedule_id}')
                 try:
                     with open(trigger_file, 'w') as f:
                         f.write(str(datetime.datetime.now()))
@@ -253,7 +259,7 @@ schedule_api = ScheduleWebAPI()
 @app.route('/')
 def index():
     """主页，返回日程管理网页"""
-    return send_from_directory(os.path.dirname(__file__), 'schedule_web.html')
+    return send_from_directory(RUNTIME_DIR, 'schedule_web.html')
 
 @app.route('/api/schedule/list')
 def api_get_schedules():

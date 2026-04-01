@@ -25,7 +25,19 @@ import requests
 os.environ.setdefault("CHROMA_TELEMETRY", "FALSE")
 
 # Make project root importable (for optional fallback embedding)
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+def _runtime_dir():
+    if getattr(sys, "frozen", False):
+        return os.path.abspath(os.path.dirname(sys.executable))
+    return os.path.abspath(os.path.dirname(__file__))
+
+
+def _project_root():
+    if getattr(sys, "frozen", False):
+        return os.path.abspath(os.path.join(_runtime_dir(), "..", ".."))
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+
+
+PROJECT_ROOT = _project_root()
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
@@ -39,8 +51,8 @@ except ImportError:
 
 try:
     import chromadb
-except ImportError:
-    print("chromadb not installed. Please run: pip install chromadb", file=sys.stderr, flush=True)
+except ImportError as exc:
+    print(f"chromadb import failed: {exc}. Please run: pip install chromadb", file=sys.stderr, flush=True)
     sys.exit(1)
 
 server = Server("yueshen_rag")
