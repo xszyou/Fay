@@ -45,9 +45,12 @@ class LipSyncGenerator:
     def generate_visemes(self, wav_filepath):
         if wav_filepath.endswith(".mp3"):
             wav_filepath = self.convert_mp3_to_wav(wav_filepath)
+        else:
+            # WAV文件也需要标准化采样率，ProcessWAV.exe要求44100Hz
+            wav_filepath = self.normalize_wav(wav_filepath)
         arguments = ["--print-viseme-name", wav_filepath]
         self.run_exe_and_get_output(arguments)
-        
+
         return self.filter(self.viseme)
         
     def consolidate_visemes(self, viseme_list):
@@ -78,6 +81,16 @@ class LipSyncGenerator:
                 new_data.append(result[i])
         return new_data
     
+    def normalize_wav(self, wav_filepath):
+        """将WAV文件标准化为44100Hz采样率（ProcessWAV.exe要求）"""
+        audio = AudioSegment.from_wav(wav_filepath)
+        if audio.frame_rate != 44100:
+            audio = audio.set_frame_rate(44100)
+            normalized_path = wav_filepath.rsplit(".", 1)[0] + "_44k.wav"
+            audio.export(normalized_path, format="wav")
+            return normalized_path
+        return wav_filepath
+
     def convert_mp3_to_wav(self, mp3_filepath):
         audio = AudioSegment.from_mp3(mp3_filepath)
         # 使用 set_frame_rate 方法设置采样率
