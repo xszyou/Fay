@@ -5,7 +5,7 @@ import time
 import os
 import pyaudio
 import re
-from flask import Flask, render_template, request, jsonify, Response, send_file
+from flask import Flask, render_template, request, jsonify, Response, send_file, stream_with_context
 from flask_cors import CORS
 import requests
 import datetime
@@ -21,6 +21,10 @@ except Exception:
     HumanMessage = None
     SystemMessage = None
     AIMessage = None
+try:
+    from langsmith.run_trees import RunTree
+except Exception:
+    RunTree = None
 
 import fay_booter
 from tts import tts_voice
@@ -119,6 +123,214 @@ def _build_llm_url(base_url: str) -> str:
     if url.endswith("/v1"):
         return url + "/chat/completions"
     return url + "/v1/chat/completions"
+
+
+def _normalize_llm_proxy_role(role):
+    role_value = str(role or "user").strip().lower()
+    if role_value in ("system", "user", "assistant", "tool", "function", "developer"):
+        return role_value
+    return "user"
+
+
+def _prepare_llm_proxy_messages(messages):
+    if isinstance(messages, str):
+        return [{"role": "user", "content": messages}]
+    if not isinstance(messages, list):
+        return []
+
+    normalized = []
+    for msg in messages:
+        if not isinstance(msg, dict):
+            continue
+        item = dict(msg)
+        item["role"] = _normalize_llm_proxy_role(item.get("role"))
+        if "content" not in item and item["role"] not in ("assistant",):
+            item["content"] = ""
+        normalized.append(item)
+    return normalized
+
+
+def _prepare_llm_proxy_payload(payload, model_name):
+    proxy_payload = dict(payload) if isinstance(payload, dict) else {}
+    proxy_payload["messages"] = _prepare_llm_proxy_messages(proxy_payload.get("messages", []))
+    if model_name:
+        proxy_payload["model"] = model_name
+    return proxy_payload
+
+
+def _build_llm_proxy_headers(api_key, stream_requested=False):
+    headers = {
+        "Content-Type": "application/json",
+    }
+    if stream_requested:
+        headers["Accept"] = "text/event-stream"
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    return headers
+
+
+def _build_proxy_response(resp):
+    try:
+        content_type = resp.headers.get("Content-Type", "application/json")
+        if "charset=" not in content_type.lower():
+            content_type = f"{content_type}; charset=utf-8"
+        body = resp.content
+    finally:
+        resp.close()
+    return Response(
+        body,
+        status=resp.status_code,
+        content_type=content_type,
+    )
+
+
+def _build_streaming_proxy_response(resp):
+    content_type = resp.headers.get("Content-Type", "text/event-stream")
+    if "charset=" not in content_type.lower():
+        content_type = f"{content_type}; charset=utf-8"
+
+    def generate():
+        try:
+            for chunk in resp.iter_content(chunk_size=8192):
+                if chunk:
+                    yield chunk
+        finally:
+            resp.close()
+
+    return Response(
+        stream_with_context(generate()),
+        status=resp.status_code,
+        content_type=content_type,
+    )
+
+
+def _langsmith_proxy_enabled():
+    if RunTree is None:
+        return False
+    api_key = os.getenv("LANGSMITH_API_KEY") or os.getenv("LANGCHAIN_API_KEY")
+    if not api_key:
+        return False
+    return _as_bool(os.getenv("LANGSMITH_TRACING")) or _as_bool(os.getenv("LANGCHAIN_TRACING_V2"))
+
+
+def _langsmith_project_name():
+    return (os.getenv("LANGSMITH_PROJECT") or os.getenv("LANGCHAIN_PROJECT") or "").strip() or None
+
+
+def _langsmith_wrap_outputs(payload):
+    if isinstance(payload, dict):
+        return payload
+    return {"response": payload}
+
+
+def _langsmith_preview_text(value, limit=12000):
+    text = value if isinstance(value, str) else str(value)
+    if len(text) <= limit:
+        return text
+    return text[:limit] + f"\n...[truncated {len(text) - limit} chars]"
+
+
+def _langsmith_parse_response(body, content_type):
+    text = body.decode("utf-8", errors="replace") if isinstance(body, (bytes, bytearray)) else str(body)
+    lowered = (content_type or "").lower()
+    if "application/json" in lowered:
+        try:
+            return json.loads(text)
+        except Exception:
+            pass
+    return {"raw_text": _langsmith_preview_text(text)}
+
+
+def _start_langsmith_proxy_trace(llm_url, payload):
+    if not _langsmith_proxy_enabled():
+        return None
+    try:
+        root_run = RunTree(
+            name="Fay LLM Proxy",
+            run_type="chain",
+            project_name=_langsmith_project_name(),
+            inputs={
+                "url": llm_url,
+                "request": payload,
+            },
+        )
+        root_run.post()
+        child_run = root_run.create_child(
+            name="Upstream Chat Completions",
+            run_type="llm",
+            inputs=payload,
+        )
+        child_run.post()
+        return {"root": root_run, "child": child_run}
+    except Exception as exc:
+        util.log(2, f"LangSmith proxy tracing init failed: {exc}")
+        return None
+
+
+def _finish_langsmith_proxy_trace(trace_state, *, outputs=None, error=None):
+    if not trace_state:
+        return
+    root_run = trace_state.get("root")
+    child_run = trace_state.get("child")
+    try:
+        if child_run is not None:
+            if error:
+                child_run.end(error=str(error))
+            else:
+                child_run.end(outputs=_langsmith_wrap_outputs(outputs))
+            child_run.patch()
+    except Exception as exc:
+        util.log(2, f"LangSmith child trace finalize failed: {exc}")
+    try:
+        if root_run is not None:
+            if error:
+                root_run.end(error=str(error))
+            else:
+                root_run.end(outputs=_langsmith_wrap_outputs(outputs))
+            root_run.patch()
+    except Exception as exc:
+        util.log(2, f"LangSmith root trace finalize failed: {exc}")
+
+
+def _build_streaming_proxy_response_with_trace(resp, trace_state):
+    content_type = resp.headers.get("Content-Type", "text/event-stream")
+    if "charset=" not in content_type.lower():
+        content_type = f"{content_type}; charset=utf-8"
+
+    def generate():
+        captured = bytearray()
+        truncated = False
+        try:
+            for chunk in resp.iter_content(chunk_size=8192):
+                if not chunk:
+                    continue
+                if len(captured) < 524288:
+                    remaining = 524288 - len(captured)
+                    captured.extend(chunk[:remaining])
+                    if len(chunk) > remaining:
+                        truncated = True
+                else:
+                    truncated = True
+                yield chunk
+            outputs = {
+                "status_code": resp.status_code,
+                "stream": True,
+                "content_type": content_type,
+                "sse_preview": _langsmith_preview_text(captured.decode("utf-8", errors="replace")),
+                "truncated": truncated,
+            }
+            _finish_langsmith_proxy_trace(trace_state, outputs=outputs)
+        except Exception as exc:
+            _finish_langsmith_proxy_trace(trace_state, error=exc)
+            raise
+        finally:
+            resp.close()
+
+    return Response(
+        stream_with_context(generate()),
+        status=resp.status_code,
+        content_type=content_type,
+    )
 
 
 def _normalize_openai_content(content):
@@ -451,108 +663,61 @@ def api_send_v1_chat_completions():
     try:
         model = data.get('model', 'fay')
         if model == 'llm':
-            if ChatOpenAI is None or HumanMessage is None:
-                return jsonify({'error': 'langchain_openai or langchain_core is not available'}), 500
             try:
                 config_util.load_config()
                 api_key = config_util.key_gpt_api_key
                 model_engine = config_util.gpt_model_engine
-                base_url = _build_langchain_base_url(config_util.gpt_base_url)
+                llm_url = _build_llm_url(config_util.gpt_base_url)
             except Exception as exc:
                 return jsonify({'error': f'LLM config load failed: {exc}'}), 500
 
-            if not base_url:
+            if not llm_url:
                 return jsonify({'error': 'LLM base_url is not configured'}), 500
 
-            payload = dict(data)
-            stream_requested = _as_bool(payload.get('stream', False))
-            model_name = model_engine or payload.get('model')
-            lc_messages = _build_langchain_messages(payload.get('messages', []))
-            if not lc_messages:
+            stream_requested = _as_bool(data.get('stream', False))
+            model_name = model_engine or data.get('model')
+            payload = _prepare_llm_proxy_payload(data, model_name)
+            if not payload.get("messages"):
                 return jsonify({'error': 'messages is required'}), 400
 
-            llm_kwargs = {
-                "model": model_name,
-                "base_url": base_url,
-                "api_key": api_key,
-                "streaming": bool(stream_requested),
-            }
-            if payload.get("temperature") is not None:
-                llm_kwargs["temperature"] = payload.get("temperature")
-            if payload.get("max_tokens") is not None:
-                llm_kwargs["max_tokens"] = payload.get("max_tokens")
-            model_kwargs = {}
-            if payload.get("top_p") is not None:
-                model_kwargs["top_p"] = payload.get("top_p")
-            if model_kwargs:
-                llm_kwargs["model_kwargs"] = model_kwargs
+            headers = _build_llm_proxy_headers(api_key, stream_requested=stream_requested)
+            trace_state = _start_langsmith_proxy_trace(llm_url, payload)
 
             try:
-                llm_client = ChatOpenAI(**llm_kwargs)
-                run_cfg = {
-                    "tags": ["fay", "api", "model-llm"],
-                    "metadata": {"entrypoint": "api_send_v1_chat_completions", "model_alias": "llm"},
-                }
                 if stream_requested:
-                    stream_id = "chatcmpl-" + str(uuid.uuid4())
-                    def generate():
-                        try:
-                            for chunk in llm_client.stream(lc_messages, config=run_cfg):
-                                text_piece = _safe_text_from_chunk(chunk)
-                                if text_piece is None or text_piece == "":
-                                    continue
-                                message = {
-                                    "id": stream_id,
-                                    "object": "chat.completion.chunk",
-                                    "created": int(time.time()),
-                                    "model": model_name,
-                                    "choices": [
-                                        {
-                                            "delta": {"content": text_piece},
-                                            "index": 0,
-                                            "finish_reason": None
-                                        }
-                                    ]
-                                }
-                                yield f"data: {json.dumps(message, ensure_ascii=False)}\n\n"
-                            final_message = {
-                                "id": stream_id,
-                                "object": "chat.completion.chunk",
-                                "created": int(time.time()),
-                                "model": model_name,
-                                "choices": [
-                                    {
-                                        "delta": {},
-                                        "index": 0,
-                                        "finish_reason": "stop"
-                                    }
-                                ]
-                            }
-                            yield f"data: {json.dumps(final_message, ensure_ascii=False)}\n\n"
-                            yield "data: [DONE]\n\n"
-                        finally:
-                            pass
-                    return Response(generate(), content_type="text/event-stream; charset=utf-8")
-
-                ai_resp = llm_client.invoke(lc_messages, config=run_cfg)
-                answer_text = _normalize_openai_content(getattr(ai_resp, "content", ""))
-                return jsonify({
-                    "id": "chatcmpl-" + str(uuid.uuid4()),
-                    "object": "chat.completion",
-                    "created": int(time.time()),
-                    "model": model_name,
-                    "choices": [
-                        {
-                            "index": 0,
-                            "message": {
-                                "role": "assistant",
-                                "content": answer_text
-                            },
-                            "finish_reason": "stop"
+                    resp = requests.post(llm_url, headers=headers, json=payload, stream=True, timeout=(10, 600))
+                    content_type = resp.headers.get("Content-Type", "")
+                    if "text/event-stream" not in content_type.lower():
+                        body = resp.content
+                        outputs = {
+                            "status_code": resp.status_code,
+                            "stream": False,
+                            "content_type": content_type,
+                            "response": _langsmith_parse_response(body, content_type),
                         }
-                    ]
-                })
+                        if resp.status_code >= 400:
+                            _finish_langsmith_proxy_trace(trace_state, error=f"HTTP {resp.status_code}: {_langsmith_preview_text(outputs['response'])}")
+                        else:
+                            _finish_langsmith_proxy_trace(trace_state, outputs=outputs)
+                        return _build_proxy_response(resp)
+                    return _build_streaming_proxy_response_with_trace(resp, trace_state)
+
+                resp = requests.post(llm_url, headers=headers, json=payload, timeout=600)
+                body = resp.content
+                content_type = resp.headers.get("Content-Type", "application/json")
+                outputs = {
+                    "status_code": resp.status_code,
+                    "stream": False,
+                    "content_type": content_type,
+                    "response": _langsmith_parse_response(body, content_type),
+                }
+                if resp.status_code >= 400:
+                    _finish_langsmith_proxy_trace(trace_state, error=f"HTTP {resp.status_code}: {_langsmith_preview_text(outputs['response'])}")
+                else:
+                    _finish_langsmith_proxy_trace(trace_state, outputs=outputs)
+                return _build_proxy_response(resp)
             except Exception as exc:
+                _finish_langsmith_proxy_trace(trace_state, error=exc)
                 return jsonify({'error': f'LLM request failed: {exc}'}), 500
 
         last_content = ""
