@@ -34,10 +34,9 @@ except ImportError:
 
 try:
     from starlette.applications import Starlette
-    from starlette.responses import Response
+    from starlette.datastructures import MutableHeaders
     from starlette.routing import Mount, Route
-    from starlette.middleware import Middleware
-    from starlette.middleware.base import BaseHTTPMiddleware
+    from starlette.types import ASGIApp, Message, Receive, Scope, Send
 except ImportError:
     print("缺少 starlette，请先安装：pip install starlette sse-starlette", file=sys.stderr)
     sys.exit(1)
@@ -285,39 +284,50 @@ def _normalize_result(result: Any) -> List[TextContent]:
     return [_text_content(str(result))]
 
 
-async def sse_endpoint(request):
-    # 为每个连接创建新的 Server 实例以支持并发
-    local_server = Server(SERVER_NAME)
-    
-    # 注册工具处理程序
-    local_server.list_tools()(_handle_list_tools)
-    local_server.call_tool()(_handle_call_tool)
+class SseEndpoint:
+    """ASGI endpoint for MCP SSE connections.
 
-    async with sse_transport.connect_sse(request.scope, request.receive, request._send) as (read_stream, write_stream):
-        await local_server.run(read_stream, write_stream, local_server.create_initialization_options())
-    # 客户端断开时返回空响应，避免 NoneType 问题
-    return Response()
+    `connect_sse()` writes the response directly to the ASGI send channel, so
+    this route must not return an extra Starlette `Response`.
+    """
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        local_server = Server(SERVER_NAME)
+        local_server.list_tools()(_handle_list_tools)
+        local_server.call_tool()(_handle_call_tool)
+
+        async with sse_transport.connect_sse(scope, receive, send) as (read_stream, write_stream):
+            await local_server.run(read_stream, write_stream, local_server.create_initialization_options())
 
 
-class Utf8CharsetMiddleware(BaseHTTPMiddleware):
-    """确保所有 text/ 类型的响应都声明 charset=utf-8"""
-    async def dispatch(self, request, call_next):
-        response = await call_next(request)
-        ct = response.headers.get("content-type", "")
-        if ct.startswith("text/") and "charset" not in ct:
-            response.headers["content-type"] = ct + "; charset=utf-8"
-        return response
+class Utf8CharsetMiddleware:
+    """Ensure text responses declare UTF-8 without buffering streaming bodies."""
+
+    def __init__(self, app: ASGIApp):
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        async def send_with_charset(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                headers = MutableHeaders(scope=message)
+                content_type = headers.get("content-type", "")
+                if content_type.startswith("text/") and "charset=" not in content_type.lower():
+                    headers["content-type"] = f"{content_type}; charset=utf-8"
+            await send(message)
+
+        await self.app(scope, receive, send_with_charset)
 
 
 routes = [
-    Route(SSE_PATH, sse_endpoint, methods=["GET"]),
+    Route(SSE_PATH, SseEndpoint(), methods=["GET"]),
     Mount(MSG_PATH, app=sse_transport.handle_post_message),
 ]
 
-app = Starlette(
-    routes=routes,
-    middleware=[Middleware(Utf8CharsetMiddleware)],
-)
+app = Utf8CharsetMiddleware(Starlette(routes=routes))
 
 
 def main():
