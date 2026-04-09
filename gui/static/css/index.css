@@ -175,7 +175,7 @@ html {
 
   .main_right{float: right;width: 79%;height: 720px;}
 
-.top_info{font-size: 14px; color: #617bab; line-height: 50px; text-align: left;width: 1000px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.top_info{font-size: 14px; color: #617bab; line-height: 50px; text-align: left;width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; position: relative; box-sizing: border-box; padding-right: 36px; }
 .top_info_text{font-size: 15px;font-weight: bold;}
 .chatmessage{
 	padding-bottom: 48px;  
@@ -878,4 +878,152 @@ html {
 .status-dot.connected {
   background-color: #4CAF50; /* 绿色 */
   box-shadow: 0 0 4px #4CAF50;
+}
+
+/* ===== 分享图多选相关样式 ===== */
+.share-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  background: #f0f4ff;
+  border-bottom: 1px solid #dce3f0;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+.share-toolbar-info {
+  color: #555;
+  margin-right: 4px;
+  font-weight: 500;
+}
+.chatmessage-select-mode {
+  cursor: pointer;
+}
+.message-row {
+  display: flex;
+  align-items: flex-start;
+  transition: background 0.15s;
+}
+.message-row-selected {
+  background: rgba(64, 128, 255, 0.06);
+}
+.share-checkbox {
+  display: flex;
+  align-items: center;
+  padding: 12px 4px 0 6px;
+  flex-shrink: 0;
+}
+.share-cb-unchecked,
+.share-cb-checked {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 2px solid #bbb;
+  background: #fff;
+  position: relative;
+  transition: all 0.15s;
+}
+.share-cb-checked {
+  background: #409eff;
+  border-color: #409eff;
+}
+.share-cb-checked::after {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 1px;
+  width: 5px;
+  height: 10px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.share-entry-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  cursor: pointer;
+  opacity: 0.35;
+  transition: opacity 0.2s;
+  color: #666;
+  border-radius: 4px;
+}
+.share-entry-btn:hover {
+  opacity: 1;
+  background: rgba(0,0,0,0.04);
+}
+
+/* 分享图预览卡片 */
+.share-preview-card {
+  background: #fff;
+  border-radius: 8px;
+  padding: 16px 20px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft Yahei', sans-serif;
+  font-size: 14px;
+  color: #333;
+}
+.share-preview-header {
+  font-size: 12px;
+  color: #999;
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid #eee;
+}
+.share-preview-msg {
+  margin-bottom: 14px;
+}
+.share-preview-name {
+  font-size: 12px;
+  color: #999;
+  margin-bottom: 4px;
+}
+.share-preview-bubble {
+  padding: 10px 14px;
+  border-radius: 8px;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+.share-preview-bubble-fay {
+  background: #f0f4ff;
+}
+.share-preview-bubble-user {
+  background: #e8f5e9;
+  text-align: right;
+}
+.share-preview-bubble-fay.markdown-body {
+  font-size: 14px;
+  line-height: 1.6;
+}
+.share-preview-bubble-fay.markdown-body pre {
+  background: #f6f8fa;
+  padding: 10px;
+  border-radius: 6px;
+  overflow-x: auto;
+  font-size: 12px;
+}
+.share-preview-bubble-fay.markdown-body code {
+  background: #f0f0f0;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+.share-preview-time {
+  font-size: 10px;
+  color: #ccc;
+  margin-top: 4px;
+}
+.share-preview-footer {
+  font-size: 10px;
+  color: #aaa;
+  border-top: 1px solid #eee;
+  padding-top: 8px;
+  margin-top: 12px;
+  text-align: center;
 }

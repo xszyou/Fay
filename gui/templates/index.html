@@ -5,14 +5,47 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Fay数字人</title>
-    <link rel="stylesheet" href="{{ url_for('static',filename='css/index.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static',filename='css/index.css') }}?v={{ cache_bust }}" />
     <link rel="icon" href="{{ url_for('static',filename='images/favicon.ico') }}" type="image/x-icon">
     <script src="{{ url_for('static',filename='js/vue.js') }}"></script>
     <script src="{{ url_for('static',filename='js/element-ui.js') }}"></script>
     <link rel="stylesheet" href="{{ url_for('static',filename='css/element/theme-chalk.css') }}" />
-    <script src="{{ url_for('static',filename='js/marked.min.js') }}"></script>
-    <script src="{{ url_for('static',filename='js/index.js') }}" defer></script>
-    <script src="{{ url_for('static',filename='js/script.js') }}" defer></script>
+    <script>
+      // Older embedded browsers/WebViews may miss `.at()`, but marked v15 uses it.
+      (function () {
+        function atPolyfill(index) {
+          var length = this.length >>> 0;
+          var relativeIndex = Number(index) || 0;
+          if (relativeIndex < 0) {
+            relativeIndex += length;
+          }
+          if (relativeIndex < 0 || relativeIndex >= length) {
+            return undefined;
+          }
+          return this[relativeIndex];
+        }
+
+        if (!Array.prototype.at) {
+          Object.defineProperty(Array.prototype, 'at', {
+            value: atPolyfill,
+            writable: true,
+            configurable: true
+          });
+        }
+
+        if (!String.prototype.at) {
+          Object.defineProperty(String.prototype, 'at', {
+            value: atPolyfill,
+            writable: true,
+            configurable: true
+          });
+        }
+      })();
+    </script>
+    <script src="{{ url_for('static',filename='js/marked.min.js') }}?v={{ cache_bust }}"></script>
+    <script src="{{ url_for('static',filename='js/html2canvas.min.js') }}?v={{ cache_bust }}"></script>
+    <script src="{{ url_for('static',filename='js/index.js') }}?v={{ cache_bust }}" defer></script>
+    <script src="{{ url_for('static',filename='js/script.js') }}?v={{ cache_bust }}" defer></script>
   </head>
   <body>
     <div id="app" class="main_bg">
@@ -42,9 +75,21 @@
       <div class="main_right">
         <div class="top_info">
           <span class="top_info_text">消息：</span>[[panelMsg]]
+          <span v-if="!shareSelectMode && messages.length > 0" class="share-entry-btn" @click="enterShareSelectMode" title="多选生成分享图">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+          </span>
         </div>
 
-        <div class="chatmessage">
+        <!-- 多选操作栏 -->
+        <div class="share-toolbar" v-if="shareSelectMode">
+          <span class="share-toolbar-info">已选 [[shareSelectedCount]] 条消息</span>
+          <el-button size="mini" @click="shareSelectAll">全选</el-button>
+          <el-button size="mini" @click="shareDeselectAll">取消全选</el-button>
+          <el-button size="mini" type="primary" :disabled="shareSelectedCount === 0" @click="generateShareImage">生成分享图</el-button>
+          <el-button size="mini" @click="exitShareSelectMode">退出</el-button>
+        </div>
+
+        <div class="chatmessage" :class="{'chatmessage-select-mode': shareSelectMode}">
           <div class="chat-container" id="user0">
             <!-- 加载更多提示 -->
             <div v-if="loadingMoreMessages" class="loading-more">
@@ -57,19 +102,22 @@
             <div v-else-if="messages.length > 0" class="no-more-messages">
               — 没有更多消息了 —
             </div>
-            <div v-for="(item, index) in messages" :key="index">
-              <div class="message receiver-message" v-if="item.type == 'fay'">
+            <div v-for="(item, index) in messages" :key="index" class="message-row" :class="{'message-row-selected': item.shareSelected}" @click="shareSelectMode && toggleShareSelect(index)">
+              <div v-if="shareSelectMode" class="share-checkbox">
+                <span :class="item.shareSelected ? 'share-cb-checked' : 'share-cb-unchecked'"></span>
+              </div>
+              <div class="message receiver-message" v-if="item.type == 'fay'" style="flex:1;min-width:0;">
                 <img class="avatar" src="{{ url_for('static',filename='images/Fay_send.png') }}" alt="接收者头像">
                 <div class="message-content">
                   <div class="message-bubble">
-                    <div v-if="parseThinkContent(item.content).thinkContent || item.thinkLoading" class="think-toggle" @click="toggleThink(index)">
+                    <div v-if="parseThinkContent(item.content).thinkContent || item.thinkLoading" class="think-toggle" @click.stop="toggleThink(index)">
                       <span class="think-arrow" :class="{'expanded': item.thinkExpanded}">▶</span>
                       <span class="think-label">思考过程</span>
                       <span v-if="item.thinkLoading" class="think-spinner"></span>
                     </div>
 <div v-if="(parseThinkContent(item.content).thinkContent || item.thinkLoading) && item.thinkExpanded" class="think-content-inline">[[parseThinkContent(item.content).thinkContent]]</div>
                     <div class="message-text markdown-body" v-html="renderMarkdown(parseThinkContent(item.content).mainContent)"></div>
-                    <div v-if="parseThinkContent(item.content).prestartContent" class="prestart-toggle" @click="togglePrestart(index)">
+                    <div v-if="parseThinkContent(item.content).prestartContent" class="prestart-toggle" @click.stop="togglePrestart(index)">
                       <span class="prestart-arrow" :class="{'expanded': item.prestartExpanded}">▶</span>
                       <span class="prestart-label">预启动工具</span>
                     </div>
@@ -77,16 +125,16 @@
                   </div>
                   <div class="message-time">
                     <span class="what-time">[[item.timetext]]</span>
-                    <div v-if="item.is_adopted == 0" class="adopt-button" @click="adoptText(item.id)">
+                    <div v-if="item.is_adopted == 0" class="adopt-button" @click.stop="adoptText(item.id)">
                       <img src="{{ url_for('static',filename='images/adopt.png') }}" alt="采纳图标" class="adopt-img" />
                     </div>
-                    <div v-else class="adopt-button" @click="unadoptText(item.id)">
+                    <div v-else class="adopt-button" @click.stop="unadoptText(item.id)">
                       <img src="{{ url_for('static',filename='images/adopted.png') }}" alt="已采纳图标" class="adopt-img" />
                     </div>
                   </div>
                 </div>
               </div>
-              <div class="message sender-message" v-else>
+              <div class="message sender-message" v-else style="flex:1;min-width:0;">
                 <div class="message-content">
                   <div class="sender-message message-bubble">[[item.content]]</div>
                   <div class="sender-message-time">[[item.timetext]]</div>
@@ -96,6 +144,34 @@
             </div>
           </div>
         </div>
+
+        <!-- 分享图预览弹窗 -->
+        <el-dialog title="分享图预览" :visible.sync="sharePreviewVisible" width="560px" top="3vh" :close-on-click-modal="false">
+          <div style="max-height:75vh;overflow-y:auto;">
+            <div id="sharePreviewContainer" class="share-preview-card">
+              <div class="share-preview-header">Fay 开源数字人</div>
+              <div v-for="(item, idx) in shareSelectedMessages" :key="idx" class="share-preview-msg">
+                <div v-if="item.type === 'fay'" class="share-preview-fay">
+                  <div class="share-preview-name">Fay</div>
+                  <div class="share-preview-bubble share-preview-bubble-fay markdown-body" v-html="renderMarkdown(parseThinkContent(item.content).mainContent)"></div>
+                  <div class="share-preview-time">[[item.timetext]]</div>
+                </div>
+                <div v-else class="share-preview-user">
+                  <div class="share-preview-name" style="text-align:right;">[[selectedUser ? selectedUser[1] : '用户']]</div>
+                  <div class="share-preview-bubble share-preview-bubble-user">[[item.content]]</div>
+                  <div class="share-preview-time" style="text-align:right;">[[item.timetext]]</div>
+                </div>
+              </div>
+              <div class="share-preview-footer">
+                github.com/xszyou/fay &nbsp;|&nbsp; gitee.com/xszyou/fay &nbsp;|&nbsp; 公众号: fay数字人
+              </div>
+            </div>
+          </div>
+          <span slot="footer" class="dialog-footer">
+            <el-button size="small" @click="sharePreviewVisible = false">关闭</el-button>
+            <el-button size="small" type="primary" @click="downloadShareImage">保存图片</el-button>
+          </span>
+        </el-dialog>
 
         <div class="inputmessage">
           <div class="inputmessage_voice">
@@ -108,7 +184,6 @@
           <div class="inputmessage_send">
             <img src="{{ url_for('static',filename='images/send.png') }}" alt="发送信息" @click="sendMessage">
           </div>
-
           <div v-if="liveState == 1" class="inputmessage_open">
             <img v-if="!play_sound_enabled" src="{{ url_for('static',filename='images/sound_off.png') }}" @click="changeSound()">
             <img v-else src="{{ url_for('static',filename='images/sound_on.png') }}" @click="changeSound()">

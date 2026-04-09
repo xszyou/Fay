@@ -83,7 +83,8 @@ def verify_password(username, password):
 
 def __get_template():
     try:
-        return render_template('index.html')
+        import time as _time
+        return render_template('index.html', cache_bust=str(int(_time.time())))
     except Exception as e:
         return f"Error rendering template: {e}", 500
 
@@ -651,6 +652,21 @@ def api_get_Msg():
         return jsonify({'list': [], 'total': 0, 'hasMore': False, 'message': '无效的JSON数据'})
     except Exception as e:
         return jsonify({'list': [], 'total': 0, 'hasMore': False, 'message': f'获取消息时出错: {e}'}), 500
+
+# 根据ID获取单条消息
+@__app.route('/api/get-msg-by-id', methods=['post'])
+def api_get_msg_by_id():
+    try:
+        data = request.get_json(silent=True) or {}
+        msg_id = data.get('id')
+        if not msg_id:
+            return jsonify({'content': ''})
+        record = content_db.new_instance().get_content_by_id(msg_id)
+        if record:
+            return jsonify({'content': record[3]})
+        return jsonify({'content': ''})
+    except Exception as e:
+        return jsonify({'content': '', 'error': str(e)})
 
 #文字沟通接口
 @__app.route('/v1/chat/completions', methods=['post'])

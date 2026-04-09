@@ -2747,7 +2747,7 @@ class FeiFei:
 
         return "".join(out)
 
-    def __send_panel_message(self, text, username, uid, content_id=None, type=None):
+    def __send_panel_message(self, text, username, uid, content_id=None, type=None, is_end=False):
 
 
         """
@@ -2846,7 +2846,10 @@ class FeiFei:
                     "is_adopted": type == 'qa',
 
 
-                    "timetext": getattr(self, '_last_update_timetext', None) or util.get_time_ms()
+                    "timetext": getattr(self, '_last_update_timetext', None) or util.get_time_ms(),
+
+
+                    "is_end": is_end
 
 
                 },
@@ -3013,7 +3016,7 @@ class FeiFei:
         # 发送主回复到面板和数字人
 
 
-        self.__send_panel_message(text, username, uid, content_id, type)
+        self.__send_panel_message(text, username, uid, content_id, type, is_end)
 
 
         self.__send_digital_human_message(text, username, is_first, is_end)

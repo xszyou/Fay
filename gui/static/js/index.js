@@ -258,8 +258,40 @@ class FayInterface {
             vueInstance.$set(existingMessage, 'thinkLoading', false);
           }
 
-          // 强制更新视图
-          vueInstance.$forceUpdate();
+          // 防抖更新视图，减少渲染频率避免PyQt卡死
+          if (!this._streamDebounceTimers) this._streamDebounceTimers = {};
+          const timerKey = existingMessage.id + '_' + existingMessage.type;
+          if (this._streamDebounceTimers[timerKey]) {
+            clearTimeout(this._streamDebounceTimers[timerKey]);
+          }
+          this._streamDebounceTimers[timerKey] = setTimeout(() => {
+            vueInstance.$forceUpdate();
+            delete this._streamDebounceTimers[timerKey];
+          }, 150);
+
+          // 流式结束兜底：500ms无新chunk时从数据库拉取完整内容，确保markdown正确渲染
+          if (!this._streamEndTimers) this._streamEndTimers = {};
+          const endKey = existingMessage.id + '_end';
+          if (this._streamEndTimers[endKey]) {
+            clearTimeout(this._streamEndTimers[endKey]);
+          }
+          this._streamEndTimers[endKey] = setTimeout(() => {
+            // 从后端拉取完整消息内容
+            fetch(`${this.baseApiUrl}/api/get-msg-by-id`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id: existingMessage.id })
+            })
+            .then(r => r.json())
+            .then(res => {
+              if (res.content) {
+                existingMessage.content = res.content;
+                vueInstance.$forceUpdate();
+              }
+            })
+            .catch(() => {});
+            delete this._streamEndTimers[endKey];
+          }, 500);
         } else {
           // 添加新消息
           const newMessage = {
@@ -348,7 +380,19 @@ new Vue({
       messageLimit: 30,
       hasMoreMessages: false,
       loadingMoreMessages: false,
+      // 分享图相关
+      shareSelectMode: false,
+      sharePreviewVisible: false,
+      shareImageUrl: '',
     };
+  },
+  computed: {
+    shareSelectedCount() {
+      return this.messages.filter(m => m.shareSelected).length;
+    },
+    shareSelectedMessages() {
+      return this.messages.filter(m => m.shareSelected);
+    }
   },
   watch: {
     // 消息列表变化时的监听（保留用于其他扩展）
@@ -1070,36 +1114,89 @@ unadoptText(id) {
     });
   },
 
+  // 流式传输中的轻量渲染（仅处理换行和基本格式，避免不完整markdown导致渲染异常）
+  renderStreamingText(content) {
+    if (!content) return '';
+    let result = content
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/\\n/g, '<br>')
+      .replace(/\n/g, '<br>');
+    result = this.convertImagePaths(result);
+    return result;
+  },
+
   // 渲染 Markdown 内容
   renderMarkdown(content) {
     if (!content) return '';
     try {
-      // 配置 marked 选项
-      if (typeof marked !== 'undefined') {
+      if (typeof marked !== 'undefined' && typeof marked.parse === 'function') {
         marked.setOptions({
-          breaks: true,  // 支持换行
-          gfm: true,     // 支持 GitHub 风格的 Markdown
+          breaks: true,
+          gfm: true,
         });
-        // 预处理：确保 ** 和 * 标记能正确解析
-        // 处理中文加粗：**文字** 后面可能有空格或其他字符
-        let processed = content;
-        // 手动处理加粗语法 **text**
-        processed = processed.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
-        // 手动处理斜体语法 *text*（避免与加粗冲突）
-        processed = processed.replace(/(?<!\*)\*([^*\n]+)\*(?!\*)/g, '<em>$1</em>');
-        // 对剩余内容使用 marked 解析
+        // 将字面量 \n 转为真正的换行符（LLM流式输出常见）
+        let processed = content.replace(/\\n/g, '\n');
+        // 直接交给 marked 处理，不做手动 bold/italic 替换，避免与 marked 冲突
         let result = marked.parse(processed);
-        // 转换图片路径为缩略图
         result = this.convertImagePaths(result);
         return result;
+      } else {
+        console.warn('[Fay] marked library not available, typeof marked =', typeof marked);
       }
     } catch (e) {
-      console.error('Markdown rendering error:', e);
+      console.error('[Fay] Markdown rendering error:', e);
     }
-    // 如果 marked 不可用，返回简单处理的内容
-    let result = content.replace(/\n/g, '<br>');
+    // fallback
+    let result = content.replace(/\\n/g, '<br>').replace(/\n/g, '<br>');
     result = this.convertImagePaths(result);
     return result;
+  },
+
+  // ===== 分享图功能 =====
+  enterShareSelectMode() {
+    this.shareSelectMode = true;
+    this.messages.forEach(m => this.$set(m, 'shareSelected', false));
+  },
+  exitShareSelectMode() {
+    this.shareSelectMode = false;
+    this.messages.forEach(m => { m.shareSelected = false; });
+  },
+  toggleShareSelect(index) {
+    const msg = this.messages[index];
+    this.$set(msg, 'shareSelected', !msg.shareSelected);
+  },
+  shareSelectAll() {
+    this.messages.forEach(m => this.$set(m, 'shareSelected', true));
+  },
+  shareDeselectAll() {
+    this.messages.forEach(m => this.$set(m, 'shareSelected', false));
+  },
+  generateShareImage() {
+    if (this.shareSelectedCount === 0) return;
+    this.sharePreviewVisible = true;
+  },
+  downloadShareImage() {
+    const container = document.getElementById('sharePreviewContainer');
+    if (!container) return;
+    if (typeof html2canvas !== 'function') {
+      this.$message.error('html2canvas 未加载，请刷新页面后重试');
+      return;
+    }
+    var vm = this;
+    html2canvas(container, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: '#ffffff'
+    }).then(function(canvas) {
+      var link = document.createElement('a');
+      link.download = 'fay_share_' + Date.now() + '.png';
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    }).catch(function() {
+      vm.$message.error('生成图片失败，请尝试截图保存');
+    });
   },
 
   // 检查MCP服务器状态
