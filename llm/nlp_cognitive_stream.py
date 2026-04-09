@@ -2540,11 +2540,11 @@ def question(content, username, observation=None):
     routed_llm = None
     if model_router.is_enabled():
         try:
-            route_decision, confidence, reason = model_router.classify_request(
+            route_decision, reason = model_router.classify_request(
                 content, has_tools=bool(tool_registry)
             )
             routed_llm = model_router.get_llm_for_route(route_decision)
-            util.log(1, f"[大小模型路由] 决策={route_decision}, 置信度={confidence:.2f}, 理由={reason}")
+            util.log(1, f"[大小模型路由] 决策={route_decision}, 理由={reason}")
         except Exception as exc:
             util.log(1, f"[大小模型路由] 路由异常，回退默认流程: {exc}")
             route_decision = None

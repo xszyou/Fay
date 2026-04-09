@@ -5,21 +5,20 @@
 设计思路：
 - 小模型（轻量/低成本）：处理简单问答、闲聊、意图识别等低复杂度任务
 - 大模型（强推理）：处理复杂推理、工具编排、多步规划、长文生成等高复杂度任务
-- 路由器：基于小模型的意图分类结果，决定由哪个模型处理当前请求
+- 路由器：基于规则的本地分类，零额外 LLM 调用开销
 
-路由策略：
-1. 小模型先对用户输入进行意图分类和复杂度评估
-2. 简单任务（闲聊、问候、简单事实问答）由小模型直接回复
-3. 复杂任务（推理、工具调用、代码、分析）升级到大模型处理
-4. 小模型置信度不足时主动升级到大模型
+路由策略（规则优先，不依赖小模型返回置信度）：
+1. 有 MCP 工具可用时 → 大模型（工具编排需要强推理）
+2. 命中"升级关键词"时 → 大模型（用户明确要求深度处理）
+3. 文本长度 / 问号数量超阈值 → 大模型（复杂多步问题）
+4. 其余情况 → 小模型
 """
 
-import json
+import re
 import threading
 from typing import Optional, Tuple, Literal
 
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import HumanMessage, SystemMessage
 
 from utils import util
 import utils.config_util as cfg
@@ -38,34 +37,46 @@ _large_llm: Optional[ChatOpenAI] = None
 _small_llm_fingerprint: Optional[str] = None
 _large_llm_fingerprint: Optional[str] = None
 
+# ─── 规则路由配置 ───────────────────────────────────────────
 
-ROUTE_CLASSIFY_PROMPT = """\
-你是一个任务复杂度分类器。根据用户的输入，判断该任务应该由"小模型"还是"大模型"处理。
+# 命中任一关键词 → 升级到大模型
+_UPGRADE_KEYWORDS = {
+    # 深度分析类
+    "详细分析", "深入分析", "深入讲解", "详细解释", "深度解读",
+    "帮我分析", "系统分析", "全面分析", "仔细分析",
+    # 代码 / 技术类
+    "写代码", "写个代码", "编程", "代码", "debug", "调试",
+    "bug", "报错", "函数", "算法", "脚本", "编译",
+    "python", "java", "javascript", "sql", "html", "css",
+    # 长文创作类
+    "写一篇", "写篇", "帮我写", "写个方案", "写个报告",
+    "写论文", "写文章", "写总结", "写计划", "写邮件",
+    "翻译", "翻译一下", "帮我翻译",
+    # 推理 / 数学类
+    "推理", "证明", "计算", "求解", "数学",
+    "逻辑", "为什么会", "原因是什么", "怎么推导",
+    # 对比 / 总结类
+    "对比", "比较", "区别是什么", "优缺点",
+    "总结一下", "归纳", "梳理",
+    # 工具 / 搜索类
+    "搜索", "查一下", "帮我查", "搜一下", "上网",
+}
 
-## 分类标准
+# 命中任一正则 → 升级到大模型
+_UPGRADE_PATTERNS = [
+    re.compile(r"(帮我|请).{0,4}(写|生成|创建|设计|制作|画|做)"),  # "帮我写..."
+    re.compile(r"如何.{2,}"),           # "如何实现..." 通常是技术问题
+    re.compile(r"怎么.{4,}"),           # "怎么用Python..." 较长说明复杂
+    re.compile(r"\d+[\+\-\*\/\^]\d+"),  # 数学表达式
+    re.compile(r"```"),                 # 包含代码块
+    re.compile(r"step.by.step|一步一步|逐步", re.IGNORECASE),
+]
 
-**小模型处理（输出 "small"）**：
-- 日常问候、闲聊、打招呼
-- 简单事实性问答（天气、时间、基础常识）
-- 简短的情感回应、安慰、鼓励
-- 简单的信息查询或确认
-- 上下文不复杂的简短对话
+# 输入文本长度阈值：超过此字符数认为是复杂请求
+_LENGTH_THRESHOLD = 100
 
-**大模型处理（输出 "large"）**：
-- 需要多步推理或逻辑分析的问题
-- 代码编写、调试、技术问题
-- 需要调用工具/搜索/计算的任务
-- 长文创作、文案撰写、翻译
-- 复杂的数据分析或总结
-- 涉及专业领域知识的深度问答
-- 用户明确要求"详细分析"、"深入讲解"等
-- 多轮追问、需要综合上下文的复杂对话
-
-## 输出格式
-
-严格按照以下JSON格式输出，不要输出任何其他内容：
-{"route": "small"或"large", "confidence": 0.0到1.0之间的数字, "reason": "简短的分类理由"}
-"""
+# 问号数量阈值：多个问号通常意味着多步问题
+_QUESTION_MARK_THRESHOLD = 2
 
 
 def _build_fingerprint(api_key: Optional[str], base_url: Optional[str], model: Optional[str]) -> str:
@@ -154,63 +165,50 @@ def is_enabled() -> bool:
     return True
 
 
-def classify_request(content: str, has_tools: bool = False) -> Tuple[RouteDecision, float, str]:
+def classify_request(content: str, has_tools: bool = False) -> Tuple[RouteDecision, str]:
     """
-    使用小模型对用户请求进行意图分类，决定路由方向。
+    基于规则对用户请求进行路由分类，零额外 LLM 调用。
 
     Args:
         content: 用户输入文本
         has_tools: 当前是否有可用的 MCP 工具
 
     Returns:
-        (route_decision, confidence, reason)
+        (route_decision, reason)
         - route_decision: "small" 或 "large"
-        - confidence: 0.0~1.0 置信度
         - reason: 分类理由
     """
-    # 如果有工具可用，直接路由到大模型（工具编排需要强推理能力）
+    # 规则 1：有工具可用 → 大模型
     if has_tools:
-        return "large", 1.0, "检测到可用工具，需要大模型进行工具编排"
+        return "large", "检测到可用工具，需要大模型进行工具编排"
 
-    small_llm = _ensure_small_llm()
-    if small_llm is None:
-        return "large", 1.0, "小模型不可用，回退到大模型"
+    if not content or not content.strip():
+        return "small", "空输入，小模型处理"
 
-    try:
-        messages = [
-            SystemMessage(content=ROUTE_CLASSIFY_PROMPT),
-            HumanMessage(content=content),
-        ]
-        response = small_llm.invoke(messages)
-        result_text = response.content.strip()
+    text = content.strip()
 
-        # 尝试解析 JSON（兼容模型可能输出的 markdown code block）
-        if result_text.startswith("```"):
-            # 去掉 ```json ... ``` 包裹
-            lines = result_text.split("\n")
-            result_text = "\n".join(
-                line for line in lines if not line.strip().startswith("```")
-            )
+    # 规则 2：关键词命中 → 大模型
+    text_lower = text.lower()
+    for kw in _UPGRADE_KEYWORDS:
+        if kw in text_lower:
+            return "large", f"命中升级关键词: {kw}"
 
-        result = json.loads(result_text)
-        route = result.get("route", "large")
-        confidence = float(result.get("confidence", 0.5))
-        reason = result.get("reason", "")
+    # 规则 3：正则模式命中 → 大模型
+    for pattern in _UPGRADE_PATTERNS:
+        if pattern.search(text):
+            return "large", f"命中升级模式: {pattern.pattern}"
 
-        # 置信度不足时升级到大模型
-        if route == "small" and confidence < 0.7:
-            util.log(1, f"[路由] 小模型置信度不足({confidence:.2f})，升级到大模型: {reason}")
-            return "large", confidence, f"置信度不足，升级: {reason}"
+    # 规则 4：文本过长 → 大模型（长输入通常意味着复杂需求）
+    if len(text) > _LENGTH_THRESHOLD:
+        return "large", f"输入长度({len(text)})超过阈值({_LENGTH_THRESHOLD})"
 
-        util.log(1, f"[路由] 决策={route}, 置信度={confidence:.2f}, 理由={reason}")
-        return route, confidence, reason
+    # 规则 5：多个问号 → 大模型（多个子问题）
+    question_marks = text.count("?") + text.count("？")
+    if question_marks >= _QUESTION_MARK_THRESHOLD:
+        return "large", f"检测到{question_marks}个问号，可能是多步问题"
 
-    except json.JSONDecodeError as exc:
-        util.log(1, f"[路由] 分类结果解析失败: {exc}, 原始输出: {result_text}")
-        return "large", 0.5, "分类结果解析失败，回退到大模型"
-    except Exception as exc:
-        util.log(1, f"[路由] 分类请求失败: {exc}")
-        return "large", 0.5, f"分类异常，回退到大模型: {exc}"
+    # 默认 → 小模型
+    return "small", "未命中升级规则，小模型处理"
 
 
 def get_llm_for_route(route: RouteDecision) -> ChatOpenAI:
