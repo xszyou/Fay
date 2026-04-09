@@ -863,6 +863,15 @@ def api_get_system_status():
     except Exception as e:
         return jsonify({'server': False, 'digital_human': False, 'remote_audio': False, 'error': str(e)}), 500
 
+@__app.route('/api/model-router-status', methods=['GET'])
+def api_model_router_status():
+    """获取大小模型交互路由的配置状态"""
+    try:
+        from llm.model_router import get_route_info
+        return jsonify(get_route_info())
+    except Exception as e:
+        return jsonify({'enabled': False, 'error': str(e)}), 500
+
 @__app.route('/api/get-audio-config', methods=['GET'])
 def api_get_audio_config():
     """获取麦克风和扬声器的配置状态"""

@@ -53,6 +53,7 @@ from core import content_db
 from core import stream_manager
 from core import member_db
 from faymcp import runtime_bridge as mcp_runtime
+from llm import model_router
 
 # 加载配置
 cfg.load_config()
@@ -2500,8 +2501,9 @@ def question(content, username, observation=None):
 
         return final_stream_done
 
-    def run_direct_llm() -> bool:
+    def run_direct_llm(target_llm=None) -> bool:
         nonlocal full_response_text, accumulated_text, is_first_sentence, messages_buffer
+        use_llm = target_llm if target_llm is not None else llm
         try:
             summary_state: AgentState = {
                 "request": content,
@@ -2518,7 +2520,7 @@ def question(content, username, observation=None):
             }
 
             final_messages = _build_final_messages(summary_state)
-            stream_response_chunks(llm.stream(final_messages))
+            stream_response_chunks(use_llm.stream(final_messages))
             return True
         except Exception as exc:
             util.log(1, f"请求失败: {type(exc).__name__}: {exc}")
@@ -2533,12 +2535,32 @@ def question(content, username, observation=None):
     if not sm.should_stop_generation(username, conversation_id=conversation_id):
         send_prestart_content()
 
-    workflow_success = False
-    if tool_registry:
-        workflow_success = run_workflow(tool_registry)
+    # === 大小模型交互路由 ===
+    route_decision = None
+    routed_llm = None
+    if model_router.is_enabled():
+        try:
+            route_decision, confidence, reason = model_router.classify_request(
+                content, has_tools=bool(tool_registry)
+            )
+            routed_llm = model_router.get_llm_for_route(route_decision)
+            util.log(1, f"[大小模型路由] 决策={route_decision}, 置信度={confidence:.2f}, 理由={reason}")
+        except Exception as exc:
+            util.log(1, f"[大小模型路由] 路由异常，回退默认流程: {exc}")
+            route_decision = None
+            routed_llm = None
 
-    if (not tool_registry or not workflow_success) and not sm.should_stop_generation(username, conversation_id=conversation_id):
-        run_direct_llm()
+    workflow_success = False
+    if route_decision == "small":
+        # 小模型直接回复，跳过工具工作流
+        run_direct_llm(target_llm=routed_llm)
+    else:
+        # 大模型路径：先尝试工具工作流，失败则走直接 LLM
+        if tool_registry:
+            workflow_success = run_workflow(tool_registry)
+
+        if (not tool_registry or not workflow_success) and not sm.should_stop_generation(username, conversation_id=conversation_id):
+            run_direct_llm(target_llm=routed_llm)
 
     if not sm.should_stop_generation(username, conversation_id=conversation_id):
         finalize_stream(force_end=True)

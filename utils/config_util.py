@@ -86,6 +86,12 @@ embedding_api_model = None
 embedding_api_base_url = None
 embedding_api_key = None
 
+# 小模型配置全局变量（大小模型交互）
+small_model_api_key = None
+small_model_base_url = None
+small_model_engine = None
+model_interaction_enabled = None
+
 SYSTEM_CONFIG_ENV_KEY = 'FAY_SYSTEM_CONF_JSON'
 
 # 避免重复加载配置中心导致日志刷屏
@@ -317,6 +323,11 @@ def load_config(force_reload=False):
     global embedding_api_base_url
     global embedding_api_key
 
+    global small_model_api_key
+    global small_model_base_url
+    global small_model_engine
+    global model_interaction_enabled
+
     global CONFIG_SERVER
     global system_conf_path
     global config_json_path
@@ -538,6 +549,12 @@ def load_config(force_reload=False):
     embedding_api_base_url = gpt_base_url  # 复用 LLM base_url
     embedding_api_key = key_gpt_api_key  # 复用 LLM api_key
 
+    # 读取小模型配置（大小模型交互），未配置时复用大模型设置
+    small_model_api_key = system_config.get('key', 'small_model_api_key', fallback=None)
+    small_model_base_url = system_config.get('key', 'small_model_base_url', fallback=None)
+    small_model_engine = system_config.get('key', 'small_model_engine', fallback=None)
+    model_interaction_enabled = system_config.get('key', 'model_interaction_enabled', fallback='false').lower() == 'true'
+
     start_mode = system_config.get('key', 'start_mode', fallback=None)
     fay_url = system_config.get('key', 'fay_url', fallback=None)
     # 如果fay_url为空或None，则动态获取本机IP地址
@@ -600,6 +617,12 @@ def load_config(force_reload=False):
         'embedding_api_model': embedding_api_model,
         'embedding_api_base_url': embedding_api_base_url,
         'embedding_api_key': embedding_api_key,
+
+        # 小模型配置（大小模型交互）
+        'small_model_api_key': small_model_api_key,
+        'small_model_base_url': small_model_base_url,
+        'small_model_engine': small_model_engine,
+        'model_interaction_enabled': model_interaction_enabled,
 
         'source': 'api' if using_config_center else 'local'  # 标记配置来源
     }
