@@ -2536,31 +2536,25 @@ def question(content, username, observation=None):
         send_prestart_content()
 
     # === 大小模型交互路由 ===
-    route_decision = None
+    # 逻辑：有工具 → 大模型走 workflow；无工具 → 小模型直接对话
     routed_llm = None
     if model_router.is_enabled():
         try:
-            route_decision, reason = model_router.classify_request(
-                content, has_tools=bool(tool_registry)
-            )
-            routed_llm = model_router.get_llm_for_route(route_decision)
-            util.log(1, f"[大小模型路由] 决策={route_decision}, 理由={reason}")
+            route = model_router.classify_request(has_tools=bool(tool_registry))
+            routed_llm = model_router.get_llm_for_route(route)
+            util.log(1, f"[大小模型路由] 决策={route}, 模型={routed_llm.model_name if hasattr(routed_llm, 'model_name') else '?'}")
         except Exception as exc:
             util.log(1, f"[大小模型路由] 路由异常，回退默认流程: {exc}")
-            route_decision = None
             routed_llm = None
 
     workflow_success = False
-    if route_decision == "small":
-        # 小模型直接回复，跳过工具工作流
-        run_direct_llm(target_llm=routed_llm)
-    else:
-        # 大模型路径：先尝试工具工作流，失败则走直接 LLM
-        if tool_registry:
-            workflow_success = run_workflow(tool_registry)
+    if tool_registry:
+        # 有工具 → 大模型走 workflow（工具编排需要强推理）
+        workflow_success = run_workflow(tool_registry)
 
-        if (not tool_registry or not workflow_success) and not sm.should_stop_generation(username, conversation_id=conversation_id):
-            run_direct_llm(target_llm=routed_llm)
+    if (not tool_registry or not workflow_success) and not sm.should_stop_generation(username, conversation_id=conversation_id):
+        # 无工具或 workflow 失败 → 直接 LLM（若启用路由则用小模型）
+        run_direct_llm(target_llm=routed_llm)
 
     if not sm.should_stop_generation(username, conversation_id=conversation_id):
         finalize_stream(force_end=True)
