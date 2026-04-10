@@ -782,6 +782,15 @@ html {
   margin: 12px 0;
 }
 
+.markdown-body img {
+  max-width: 100%;
+  max-height: 300px;
+  border-radius: 6px;
+  margin: 6px 0;
+  cursor: pointer;
+  display: block;
+}
+
 .markdown-body strong {
   font-weight: 600;
 }

@@ -1096,7 +1096,7 @@ unadoptText(id) {
     // Windows: D:\path\to\image.png 或 D:/path/to/image.png
     // Unix: /path/to/image.png
     // 支持的图片格式: png, jpg, jpeg, gif, bmp, webp
-    const imagePathRegex = /([A-Za-z]:[\\\/][^\s<>"']+\.(png|jpg|jpeg|gif|bmp|webp)|\/[^\s<>"']+\.(png|jpg|jpeg|gif|bmp|webp))/gi;
+    const imagePathRegex = /([A-Za-z]:[\\\/][^\s<>"']+\.(png|jpg|jpeg|gif|bmp|webp))/gi;
 
     const baseUrl = window.location.protocol + '//' + window.location.hostname + ':' + window.location.port;
 

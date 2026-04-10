@@ -1548,6 +1548,9 @@ class FeiFei:
 
 
             tts_text = self.__remove_prestart_tags(text) if text else text
+            # 移除 markdown 图片语法，避免TTS朗读图片链接
+            if tts_text:
+                tts_text = re.sub(r'!\[.*?\]\(https?://[^\s\)]+\)', '', tts_text).strip()
 
 
 
@@ -2251,6 +2254,13 @@ class FeiFei:
 
                     content["Data"]["Sentiment"] = sentiment_value
 
+                    # 提取文本中的 markdown 图片 URL 并附加到消息
+                    audio_image_urls = re.findall(r'!\[.*?\]\((https?://[^\s\)]+)\)', text or "")
+                    if audio_image_urls:
+                        content["Data"]["Images"] = audio_image_urls
+                        # 从 Text 中移除图片语法，避免语音朗读图片链接
+                        content["Data"]["Text"] = re.sub(r'!\[.*?\]\(https?://[^\s\)]+\)', '', text).strip()
+
                     # 计算 Action
                     action_signal = resolve_action_signal(text)
                     if action_signal:
@@ -2888,6 +2898,9 @@ class FeiFei:
         """
 
 
+        # 从原始文本中提取 markdown 图片 URL（在清理前提取）
+        image_urls = re.findall(r'!\[.*?\]\((https?://[^\s\)]+)\)', text or "")
+
         # 移除 prestart 标签内容，不发送给数字人
 
 
@@ -2897,7 +2910,9 @@ class FeiFei:
         full_text = self.__remove_emojis(cleaned_text.replace("*", "")) if cleaned_text else ""
 
 
-
+        # 从清理后的文本中移除 markdown 图片语法，避免数字人语音朗读图片链接
+        if image_urls:
+            full_text = re.sub(r'!\[.*?\]\(https?://[^\s\)]+\)', '', full_text).strip()
 
 
         # 如果文本为空且不是结束标记，则不发送，但需保留 is_first
@@ -2954,6 +2969,9 @@ class FeiFei:
 
 
             }
+
+            if image_urls:
+                content['Data']['Images'] = image_urls
 
 
             wsa_server.get_instance().add_cmd(content)
