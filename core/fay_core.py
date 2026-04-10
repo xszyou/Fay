@@ -2568,6 +2568,30 @@ class FeiFei:
         return cleaned.strip()
 
 
+    def __remove_think_tags(self, text):
+        """
+        移除文本中的 think 标签及其内容（含未闭合的流式分片）
+
+        :param text: 原始文本
+        :return: 移除 think 标签后的文本
+        """
+        if not text:
+            return text
+
+        # 1. 先剥离完整的 <think>...</think>
+        cleaned = re.sub(r'<think[^>]*>[\s\S]*?</think>', '', text, flags=re.IGNORECASE)
+
+        # 2. 处理流式分片中孤立的 </think> —— 取最后一个 </think> 之后的内容
+        if re.search(r'</think>', cleaned, flags=re.IGNORECASE):
+            cleaned = re.split(r'</think>', cleaned, flags=re.IGNORECASE)[-1]
+
+        # 3. 处理流式分片中未闭合的 <think>... —— 截断该位置之后的内容
+        if re.search(r'<think[^>]*>', cleaned, flags=re.IGNORECASE):
+            cleaned = re.split(r'<think[^>]*>', cleaned, flags=re.IGNORECASE)[0]
+
+        return cleaned.strip()
+
+
 
     def __has_prestart(self, text):
 
@@ -2901,10 +2925,12 @@ class FeiFei:
         # 从原始文本中提取 markdown 图片 URL（在清理前提取）
         image_urls = re.findall(r'!\[.*?\]\((https?://[^\s\)]+)\)', text or "")
 
-        # 移除 prestart 标签内容，不发送给数字人
+        # 移除 prestart 与 think 标签内容，不发送给数字人
 
 
         cleaned_text = self.__remove_prestart_tags(text) if text else ""
+
+        cleaned_text = self.__remove_think_tags(cleaned_text) if cleaned_text else ""
 
 
         full_text = self.__remove_emojis(cleaned_text.replace("*", "")) if cleaned_text else ""
