@@ -32,13 +32,13 @@ _configure_console_streams()
 
 
 def test_gpt(prompt, username="张三", observation="", no_reply=False):
-    url = 'http://192.168.1.18:1234/v1/chat/completions'  # 替换为您的接口地址
+    url = 'http://127.0.0.1:5000/v1/chat/completions'  # 替换为您的接口地址
     headers = {
         'Content-Type': 'application/json',
         'Authorization': f'Bearer sk-lm-W3h0kb9s:wjTMT85AtBtW4VFLnmyG',  # 如果您的接口需要身份验证
     }
     data = {
-        'model': 'qwen/qwen3.5-9b', #model为llm时，会直接透传到上游的llm输出，fay不作任何处理、记录
+        'model': 'llm', #model为llm时，会直接透传到上游的llm输出，fay不作任何处理、记录
         'messages': [
             {'role': username, 'content': prompt}
         ],
@@ -78,8 +78,17 @@ def test_gpt(prompt, username="张三", observation="", no_reply=False):
                     if choices:
                         delta = choices[0].get('delta', {})
                         content = delta.get('content', '')
+                        tool_calls = delta.get('tool_calls')
+                        function_call = delta.get('function_call')
+                        finish_reason = choices[0].get('finish_reason')
                         if content:
                             _print_stream_content(content)
+                        if tool_calls:
+                            print("\n[tool_calls] " + json.dumps(tool_calls, ensure_ascii=False), end="", flush=True)
+                        if function_call:
+                            print("\n[function_call] " + json.dumps(function_call, ensure_ascii=False), end="", flush=True)
+                        if finish_reason and finish_reason != "stop":
+                            print(f"\n[finish_reason] {finish_reason}", end="", flush=True)
                 except json.JSONDecodeError:
                     print(f"\n无法解析的 JSON 数据：{line}")
             else:
