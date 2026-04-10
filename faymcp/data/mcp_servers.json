@@ -70,5 +70,21 @@
         ],
         "cwd": "",
         "env": {}
+    },
+    {
+        "id": 6,
+        "name": "课程知识库",
+        "ip": "",
+        "connection_time": "2026-04-10 10:19:46",
+        "key": "",
+        "transport": "stdio",
+        "command": "python",
+        "args": [
+            "mcp_servers/fay_player_knowledge/fay_player_knowledge_base_mcp_server.py",
+            "--source",
+            "./fay_player_knowledge"
+        ],
+        "cwd": "",
+        "env": {}
     }
 ]
