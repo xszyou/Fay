@@ -1,4 +1,5 @@
 import openai
+import httpx
 import time
 import base64
 from typing import List, Dict, Any, Union, Optional
@@ -11,9 +12,14 @@ from utils import config_util as cfg
 cfg.load_config()
 
 # 初始化 OpenAI 客户端
+# 注意：必须显式配置 timeout 与 max_retries，否则一旦上游 LLM 在 chunked/keep-alive
+# 响应中长时间不发字节，调用会永久挂起，进而连带把 agent_lock 锁死，整个对话流程
+# 都会被阻塞（曾经导致 release 机器 5 小时无响应）。
 client = openai.OpenAI(
     api_key=OPENAI_API_KEY,
-    base_url=OPENAI_API_BASE
+    base_url=OPENAI_API_BASE,
+    timeout=httpx.Timeout(60.0, connect=10.0),
+    max_retries=1,
 )
 
 # 设置全局API密钥（兼容性考虑）
@@ -143,7 +149,9 @@ def gpt4_vision(messages: List[dict], max_tokens: int = 1500) -> str:
   try:
     client = openai.OpenAI(
         api_key=OPENAI_API_KEY,
-        base_url=OPENAI_API_BASE
+        base_url=OPENAI_API_BASE,
+        timeout=httpx.Timeout(60.0, connect=10.0),
+        max_retries=1,
     )
     response = client.chat.completions.create(
       model="gpt-4o",

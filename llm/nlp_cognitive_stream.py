@@ -46,7 +46,8 @@ except ImportError:
 from utils import util
 import utils.config_util as cfg
 from genagents.genagents import GenerativeAgent
-from genagents.modules.memory_stream import ConceptNode
+from genagents.modules.memory_stream import ConceptNode, generate_importance_score
+from simulation_engine.gpt_structure import get_text_embedding
 from urllib3.exceptions import InsecureRequestWarning
 from scheduler.thread_manager import MyThread
 from core import content_db
@@ -125,7 +126,9 @@ llm = ChatOpenAI(
         model=cfg.gpt_model_engine,
         base_url=cfg.gpt_base_url,
         api_key=cfg.key_gpt_api_key,
-        streaming=True
+        streaming=True,
+        timeout=60,
+        max_retries=1,
     )
 
 
@@ -1907,7 +1910,13 @@ def load_agent_memory(agent, username=None):
 
 # 记忆对话内容的线程函数
 def remember_conversation_thread(username, content, response_text):
-    """Background task to store a conversation memory node."""
+    """Background task to store a conversation memory node.
+
+    重要：所有耗时的网络调用（importance 评分、文本嵌入）都必须在 agent_lock
+    之外完成，否则一旦上游 LLM/embedding 阻塞，新的 question() 调用就无法
+    再获取 agent_lock，整个对话流程会被永久挂死（曾经导致 release 机器
+    5 小时无响应）。
+    """
     try:
         ag = create_agent(username)
         if ag is None:
@@ -1919,27 +1928,63 @@ def remember_conversation_thread(username, content, response_text):
         question_text = content if content is not None else ""
         answer_text = response_text if response_text is not None else ""
         memory_content = f"{questioner}：{question_text}\n{answerer}：{answer_text}"
+
+        # 1) 在锁外完成所有网络调用
+        try:
+            importance = generate_importance_score([memory_content])[0]
+        except Exception as e:
+            util.log(1, f"生成对话重要度失败，使用默认值: {str(e)}")
+            importance = 1
+        try:
+            embedding = get_text_embedding(memory_content)
+        except Exception as e:
+            util.log(1, f"生成对话嵌入失败，使用空向量: {str(e)}")
+            embedding = []
+
+        # 2) 仅在写内存数据结构时持锁
         with agent_lock:
             time_step = get_current_time_step(username)
-            if ag.memory_stream and hasattr(ag.memory_stream, "remember_conversation"):
-                ag.memory_stream.remember_conversation(memory_content, time_step)
+            ms = ag.memory_stream
+            if ms and hasattr(ms, "append_prepared_node"):
+                ms.append_prepared_node(time_step, "conversation", memory_content, importance, embedding, None)
+            elif ms and hasattr(ms, "remember_conversation"):
+                ms.remember_conversation(memory_content, time_step)
             else:
                 ag.remember(memory_content, time_step)
     except Exception as e:
         util.log(1, f"记录对话记忆失败: {str(e)}")
 
 def remember_observation_thread(username, observation_text):
-    """Background task to store an observation memory node."""
+    """Background task to store an observation memory node.
+
+    与 remember_conversation_thread 同理：先在锁外算 importance/embedding，
+    再持 agent_lock 写入。
+    """
     try:
         ag = create_agent(username)
         if ag is None:
             return
         text = observation_text if observation_text is not None else ""
         memory_content = text
+
+        try:
+            importance = generate_importance_score([memory_content])[0]
+        except Exception as e:
+            util.log(1, f"生成观察重要度失败，使用默认值: {str(e)}")
+            importance = 1
+        try:
+            embedding = get_text_embedding(memory_content)
+        except Exception as e:
+            util.log(1, f"生成观察嵌入失败，使用空向量: {str(e)}")
+            embedding = []
+
         with agent_lock:
             time_step = get_current_time_step(username)
-            if ag.memory_stream and hasattr(ag.memory_stream, "remember"):
-                ag.memory_stream.remember(memory_content, time_step)
+            ms = ag.memory_stream
+            if ms and hasattr(ms, "append_prepared_node"):
+                ms.append_prepared_node(time_step, "observation", memory_content, importance, embedding, None)
+            elif ms and hasattr(ms, "remember"):
+                ms.remember(memory_content, time_step)
             else:
                 ag.remember(memory_content, time_step)
     except Exception as e:
@@ -2764,62 +2809,54 @@ def save_agent_memory():
         return
     
     try:
+        # 节流：60s 内只允许保存一次
         with save_lock:
             if save_time and datetime.datetime.now() - save_time < datetime.timedelta(seconds=60):
                 return
             save_time = datetime.datetime.now()
-            with agent_lock:
-                # 逐个用户代理保存记忆
-                for username, agent in agents.items():
-                    memory_dir = get_user_memory_dir(username)
-                    # 检查.memory_cleared标记文件是否存在
-                    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                    mem_base = os.path.join(base_dir, "memory")
-                    memory_cleared_flag_file = os.path.join(mem_base, ".memory_cleared")
-                    if os.path.exists(memory_cleared_flag_file):
-                        util.log(1, "检测到.memory_cleared标记文件，跳过保存操作")
-                        return
-                    
-                    # 确保agent和memory_stream已初始化
+
+        # .memory_cleared 标记文件检查（无需持锁）
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        mem_base = os.path.join(base_dir, "memory")
+        memory_cleared_flag_file = os.path.join(mem_base, ".memory_cleared")
+        if os.path.exists(memory_cleared_flag_file):
+            util.log(1, "检测到.memory_cleared标记文件，跳过保存操作")
+            return
+
+        # 仅短暂持锁拿到用户名快照，避免长时间锁住整个 agents
+        with agent_lock:
+            usernames = list(agents.keys())
+
+        # 逐个用户保存：每个用户独立持锁，给 question() 等线程留出抢占机会
+        for username in usernames:
+            try:
+                with agent_lock:
+                    agent = agents.get(username)
                     if agent is None:
-                        util.log(1, "代理未初始化，无法保存记忆")
-                        return
-                        
+                        continue
                     if agent.memory_stream is None:
-                        util.log(1, "代理记忆流未初始化，无法保存记忆")
-                        return
-                        
-                    # 确保embeddings不为None
+                        util.log(1, f"代理 {username} 记忆流未初始化，跳过")
+                        continue
+
+                    # 防御性初始化
                     if agent.memory_stream.embeddings is None:
-                        util.log(1, "代理embeddings为None，初始化为空字典")
                         agent.memory_stream.embeddings = {}
-                        
-                    # 确保seq_nodes不为None
                     if agent.memory_stream.seq_nodes is None:
-                        util.log(1, "代理seq_nodes为None，初始化为空列表")
                         agent.memory_stream.seq_nodes = []
-                        
-                    # 确保id_to_node不为None
                     if agent.memory_stream.id_to_node is None:
-                        util.log(1, "代理id_to_node为None，初始化为空字典")
                         agent.memory_stream.id_to_node = {}
-                        
-                    # 确保scratch不为None
                     if agent.scratch is None:
-                        util.log(1, "代理scratch为None，初始化为空字典")
                         agent.scratch = {}
-                    
-                    # 保存记忆前进行完整性检查
+
+                    memory_dir = get_user_memory_dir(username)
+
+                    # 完整性检查
                     try:
-                        # 检查seq_nodes中的每个节点是否有效
                         valid_nodes = []
                         for node in agent.memory_stream.seq_nodes:
                             if node is None:
-                                util.log(1, "发现无效节点(None)，跳过")
                                 continue
-                                
                             if not hasattr(node, 'node_id') or not hasattr(node, 'content'):
-                                util.log(1, f"发现无效节点(缺少必要属性)，跳过")
                                 continue
                             raw_content = node.content if isinstance(node.content, str) else str(node.content)
                             cleaned_content = _remove_think_from_text(raw_content)
@@ -2835,11 +2872,8 @@ def save_agent_memory():
                             else:
                                 node.content = raw_content
                             valid_nodes.append(node)
-                        
-                        # 更新seq_nodes为有效节点列表
+
                         agent.memory_stream.seq_nodes = valid_nodes
-                        
-                        # 重建id_to_node字典
                         agent.memory_stream.id_to_node = {node.node_id: node for node in valid_nodes if hasattr(node, 'node_id')}
                         if agent.memory_stream.embeddings is not None:
                             kept_contents = {node.content for node in valid_nodes if hasattr(node, 'content')}
@@ -2850,23 +2884,19 @@ def save_agent_memory():
                             }
                     except Exception as e:
                         util.log(1, f"检查记忆完整性时出错: {str(e)}")
-                    
+
                     # 保存记忆
                     try:
                         agent.save(memory_dir)
                     except Exception as e:
                         util.log(1, f"调用agent.save()时出错: {str(e)}")
-                        # 尝试手动保存关键数据
                         try:
-                            # 创建必要的目录
                             memory_stream_dir = os.path.join(memory_dir, "memory_stream")
                             os.makedirs(memory_stream_dir, exist_ok=True)
-                            
-                            # 保存embeddings
+
                             with open(os.path.join(memory_stream_dir, "embeddings.json"), "w", encoding='utf-8') as f:
                                 json.dump(agent.memory_stream.embeddings or {}, f, ensure_ascii=False, indent=2)
-                                
-                            # 保存nodes
+
                             with open(os.path.join(memory_stream_dir, "nodes.json"), "w", encoding='utf-8') as f:
                                 nodes_data = []
                                 for node in agent.memory_stream.seq_nodes:
@@ -2876,19 +2906,17 @@ def save_agent_memory():
                                         except Exception as node_e:
                                             util.log(1, f"打包节点时出错: {str(node_e)}")
                                 json.dump(nodes_data, f, ensure_ascii=False, indent=2)
-                            
-                            # 保存meta
+
                             with open(os.path.join(memory_dir, "meta.json"), "w", encoding='utf-8') as f:
                                 meta_data = {"id": str(agent.id)} if hasattr(agent, 'id') else {}
                                 json.dump(meta_data, f, ensure_ascii=False, indent=2)
-                                
+
                             util.log(1, "通过备用方法成功保存记忆")
                         except Exception as backup_e:
                             util.log(1, f"备用保存方法也失败: {str(backup_e)}")
-                    
-                    # 更新scratch中的时间
+
+                    # 更新 scratch
                     try:
-                        # 实时从config_util更新scratch数据
                         agent.scratch["first_name"] = cfg.config["attribute"]["name"]
                         agent.scratch["age"] = cfg.config["attribute"]["age"]
                         agent.scratch["sex"] = cfg.config["attribute"]["gender"]
@@ -2904,7 +2932,9 @@ def save_agent_memory():
                         agent.scratch["current_time"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     except Exception as e:
                         util.log(1, f"更新时间时出错: {str(e)}")
-            
+            except Exception as e:
+                util.log(1, f"保存用户 {username} 的代理记忆失败: {str(e)}")
+
     except Exception as e:
         util.log(1, f"保存代理记忆失败: {str(e)}")
 

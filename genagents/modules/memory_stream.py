@@ -705,6 +705,29 @@ class MemoryStream:
     score = generate_importance_score([content])[0]
     self._add_node(time_step, "conversation", content, score, None)
 
+  def append_prepared_node(self, time_step, node_type, content, importance, embedding, pointer_id=None):
+    """
+    使用预先计算好的 importance 与 embedding 直接落库，避免在调用方持锁时
+    再发起任何网络请求。仅做内存数据结构变更。
+    """
+    node_dict = dict()
+    node_dict["node_id"] = len(self.seq_nodes)
+    node_dict["node_type"] = node_type
+    node_dict["content"] = content
+    node_dict["importance"] = importance
+    node_dict["datetime"] = datetime.datetime.now().strftime("%Y/%m/%d %H:%M:%S")
+    node_dict["created"] = time_step
+    node_dict["last_retrieved"] = time_step
+    node_dict["pointer_id"] = pointer_id
+    new_node = ConceptNode(node_dict)
+
+    self.seq_nodes += [new_node]
+    self.id_to_node[new_node.node_id] = new_node
+
+    if self.embeddings is None:
+        self.embeddings = {}
+    self.embeddings[content] = embedding if embedding is not None else []
+
 
   def reflect(self, anchor, reflection_count=5, 
               retrieval_count=120, time_step=0): 
