@@ -119,15 +119,15 @@ https://qqk9ntwbcit.feishu.cn/wiki/Mcw3wbA3RiNZzwkexz6cnKCsnhh
 
 ![](readme/gzh.png)
 
-**微信交流群**
+**商务联系**
 
-![](readme/wechat.jpg)
+qq467665317
 
 
 ## **致谢**
 
 感谢以下开源项目为 Fay 提供的技术支持：
 
-- [BionicMemory](https://github.com/caoyc/BionicMemory) - 提供仿生记忆能力
-- [OpenAI Codex](https://github.com/openai/codex) - 提供稳定的工具调用能力
+- [openclaw](https://github.com/openclaw/openclaw) - 提供记忆机制及skills设计的参考
+- [OpenAI Codex](https://github.com/openai/codex) - 提供稳定的工具调用能力的参考
 - [FunASR](https://github.com/modelscope/FunASR) - 提供语音识别（ASR）能力
