@@ -126,6 +126,17 @@ def _build_llm_url(base_url: str) -> str:
     return url + "/v1/chat/completions"
 
 
+def _build_models_url(base_url: str) -> str:
+    if not base_url:
+        return ""
+    url = base_url.rstrip("/")
+    if url.endswith("/chat/completions"):
+        url = url[:-len("/chat/completions")]
+    if url.endswith("/v1"):
+        return url + "/models"
+    return url + "/v1/models"
+
+
 def _normalize_llm_proxy_role(role):
     role_value = str(role or "user").strip().lower()
     if role_value in ("system", "user", "assistant", "tool", "function", "developer"):
@@ -668,6 +679,47 @@ def api_get_msg_by_id():
     except Exception as e:
         return jsonify({'content': '', 'error': str(e)})
 
+#模型列表接口
+@__app.route('/v1/models', methods=['get'])
+@__app.route('/api/send/v1/models', methods=['get'])
+def api_v1_models():
+    fay_models = [
+        {
+            "id": "fay",
+            "object": "model",
+            "created": 0,
+            "owned_by": "fay",
+        },
+        {
+            "id": "fay-streaming",
+            "object": "model",
+            "created": 0,
+            "owned_by": "fay",
+        },
+    ]
+
+    upstream_models = []
+    try:
+        config_util.load_config()
+        api_key = config_util.key_gpt_api_key
+        models_url = _build_models_url(config_util.gpt_base_url)
+        if models_url:
+            headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+            resp = requests.get(models_url, headers=headers, timeout=10)
+            if resp.status_code == 200:
+                result = resp.json()
+                data = result.get("data") if isinstance(result, dict) else None
+                if isinstance(data, list):
+                    upstream_models = data
+    except Exception:
+        pass
+
+    return jsonify({
+        "object": "list",
+        "data": fay_models + upstream_models,
+    })
+
+
 #文字沟通接口
 @__app.route('/v1/chat/completions', methods=['post'])
 @__app.route('/api/send/v1/chat/completions', methods=['post'])
@@ -678,11 +730,10 @@ def api_send_v1_chat_completions():
         return jsonify({'error': 'missing request body'})
     try:
         model = data.get('model', 'fay')
-        if model == 'llm':
+        if model not in ('fay', 'fay-streaming'):
             try:
                 config_util.load_config()
                 api_key = config_util.key_gpt_api_key
-                model_engine = config_util.gpt_model_engine
                 llm_url = _build_llm_url(config_util.gpt_base_url)
             except Exception as exc:
                 return jsonify({'error': f'LLM config load failed: {exc}'}), 500
@@ -691,7 +742,7 @@ def api_send_v1_chat_completions():
                 return jsonify({'error': 'LLM base_url is not configured'}), 500
 
             stream_requested = _as_bool(data.get('stream', False))
-            model_name = model_engine or data.get('model')
+            model_name = model
             payload = _prepare_llm_proxy_payload(data, model_name)
             if not payload.get("messages"):
                 return jsonify({'error': 'messages is required'}), 400
@@ -737,13 +788,15 @@ def api_send_v1_chat_completions():
                 return jsonify({'error': f'LLM request failed: {exc}'}), 500
 
         last_content = ""
-        username = "User"
+        username = (data.get("user") or "").strip()
+        if not username:
+            auth_header = (request.headers.get("Authorization") or "").strip()
+            if auth_header.startswith("Bearer "):
+                username = auth_header[7:].strip()
+        username = username or "User"
         messages = data.get("messages")
         if isinstance(messages, list) and messages:
             last_message = messages[-1] or {}
-            username = last_message.get("role", "User") or "User"
-            if username == "user":
-                username = "User"
             last_content = last_message.get("content") or ""
         elif isinstance(messages, str):
             last_content = messages
