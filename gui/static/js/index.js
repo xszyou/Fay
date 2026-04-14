@@ -384,6 +384,11 @@ new Vue({
       shareSelectMode: false,
       sharePreviewVisible: false,
       shareImageUrl: '',
+      // 后台任务侧边栏
+      execPanelOpen: false,
+      execStatus: { status: 'idle', original_request: '', current_step: '', steps_done: 0, elapsed: 0, error: null, progress_messages: [] },
+      execStatusUsername: null,
+      execPollTimer: null,
     };
   },
   computed: {
@@ -392,6 +397,10 @@ new Vue({
     },
     shareSelectedMessages() {
       return this.messages.filter(m => m.shareSelected);
+    },
+    execStatusLabel() {
+      var map = { idle: '空闲', running: '执行中', done: '已完成', failed: '失败', cancelled: '已取消' };
+      return map[this.execStatus.status] || this.execStatus.status;
     }
   },
   watch: {
@@ -405,6 +414,7 @@ new Vue({
     this.startMcpStatusTimer();
     this.startSystemStatusTimer();
     this.startAudioConfigSyncTimer();
+    this.startExecPollTimer();
   },
   methods: {
     // 检查系统各组件连接状态
@@ -760,6 +770,10 @@ new Vue({
         return;
       }
       this.selectedUser = user;
+      // 切换用户时重置后台任务面板，立即拉取新用户的任务状态
+      this.execStatusUsername = user[1];
+      this.execStatus = { status: 'idle', original_request: '', current_step: '', steps_done: 0, elapsed: 0, error: null, progress_messages: [] };
+      this.pollExecStatus();
       this.fayService.websocket.send(JSON.stringify({ "Username": user[1] }));
       this.loadMessageHistory(user[1], 'common');
     },
@@ -1248,7 +1262,91 @@ unadoptText(id) {
       this.checkMcpStatus();
     }, 30000);
   },
-  
+
+  // ===== 后台任务侧边栏 =====
+  toggleExecPanel() {
+    this.execPanelOpen = !this.execPanelOpen;
+    if (this.execPanelOpen) {
+      this.pollExecStatus();
+    }
+  },
+
+  pollExecStatus() {
+    var username = 'User';
+    if (this.selectedUser && this.selectedUser.length > 1) {
+      username = this.selectedUser[1];
+    }
+    var polledUsername = username;
+    fetch(this.base_url + '/api/execution-status?username=' + encodeURIComponent(username))
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        // 响应返回时用户可能已切换，忽略过期响应
+        var currentUsername = 'User';
+        if (this.selectedUser && this.selectedUser.length > 1) {
+          currentUsername = this.selectedUser[1];
+        }
+        if (polledUsername !== currentUsername) {
+          return;
+        }
+        var newStatus = data.status || 'idle';
+        // 后端已清理(idle)，但前端还在显示同一用户的任务状态时：
+        // - 如果之前是 running，说明任务刚完成，标记为 done 并保留
+        // - 如果之前已经是 done/failed/cancelled，保持显示直到新任务
+        if (newStatus === 'idle'
+            && (this.execStatusUsername === null || this.execStatusUsername === polledUsername)
+            && this.execStatus.status && this.execStatus.status !== 'idle') {
+          if (this.execStatus.status === 'running') {
+            this.execStatus.status = 'done';
+            this.execStatus.current_step = '执行完成';
+          }
+          return;
+        }
+        this.execStatusUsername = polledUsername;
+        this.execStatus = {
+          status: newStatus,
+          original_request: data.original_request || '',
+          current_step: data.current_step || '',
+          steps_done: data.steps_done || 0,
+          elapsed: data.elapsed || 0,
+          error: data.error || null,
+          progress_messages: data.progress_messages || []
+        };
+        // 有任务在跑时自动展开面板
+        if (newStatus === 'running' && !this.execPanelOpen) {
+          this.execPanelOpen = true;
+        }
+      }.bind(this))
+      .catch(function() {});
+  },
+
+  startExecPollTimer() {
+    this.pollExecStatus();
+    if (this.execPollTimer) {
+      clearInterval(this.execPollTimer);
+    }
+    this.execPollTimer = setInterval(function() {
+      this.pollExecStatus();
+    }.bind(this), 3000);
+  },
+
+  cancelExecution() {
+    var username = 'User';
+    if (this.selectedUser && this.selectedUser.length > 1) {
+      username = this.selectedUser[1];
+    }
+    fetch(this.base_url + '/api/execution-cancel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: username })
+    })
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+      if (data.success) {
+        this.pollExecStatus();
+      }
+    }.bind(this))
+    .catch(function() {});
+  },
 
   }
 });

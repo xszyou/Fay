@@ -54,6 +54,10 @@ from core import content_db
 from core import stream_manager
 from core import member_db
 from faymcp import runtime_bridge as mcp_runtime
+from llm.execution_manager import (
+    ExecutionManager, ExecutionState, ExecutionStatus,
+    get_execution_manager, _get_llm_instance,
+)
 
 # 加载配置
 cfg.load_config()
@@ -122,14 +126,8 @@ def _is_current_only_turn(content: Any, observation: Any = None) -> bool:
     return normalized in short_greetings
 
 
-llm = ChatOpenAI(
-        model=cfg.gpt_model_engine,
-        base_url=cfg.gpt_base_url,
-        api_key=cfg.key_gpt_api_key,
-        streaming=True,
-        timeout=60,
-        max_retries=1,
-    )
+# 小模型实例（流式，面向用户的快速回复）
+llm = _get_llm_instance("small", streaming=True)
 
 
 @dataclass
@@ -819,18 +817,35 @@ def _build_planner_messages(state: AgentState) -> List[SystemMessage | HumanMess
     else:
         prestart_section = ""
 
+    # 规划器 prompt 精简：不含人设/记忆，只聚焦"要不要调工具"
+    # 弱模型 context 有限，塞太多无关信息会导致工具调用指令被忽略
+    knowledge_hint = context.get("knowledge_hint", "")
+    # 构建工具名列表（简短，只列名称）
+    tool_names = ", ".join(tool_specs.keys()) if tool_specs else "无"
+
     planner_system = _merge_system_input(
-        "你负责规划下一步行动，请严格输出合法 JSON。",
-        "请基于提供的上下文和对话顺序进行判断，不要改写用户原话。",
-        "可用输出格式只有两种："
-        "\n1. {\"action\": \"tool\", \"tool\": \"工具名\", \"args\": {...}}"
-        "\n2. {\"action\": \"finish\", \"message\": \"你的回复内容\"}",
-        system_prompt,
-        _format_context_section("关联记忆", memory_context),
-        _format_context_section("其他观察", observation),
+        "你是一个闲聊判断器。判断用户的话是不是闲聊，请严格输出合法 JSON，不要输出其他内容。",
+        '输出格式只有两种：'
+        '\n1. 是闲聊: {"action": "finish", "message": "你的回复内容"}'
+        '\n2. 不是闲聊: {"action": "tool", "keyword": "提取的搜索关键词"}'
+        '\n\n什么是闲聊（输出 finish）：'
+        '\n- 打招呼：你好、hi、早上好'
+        '\n- 情绪表达：我好开心、今天好累'
+        '\n- 感谢道别：谢谢、再见、拜拜'
+        '\n- 简单确认：好的、收到、明白了'
+        '\n- 对你上一句话的回应：哈哈、对的、没错、说得好'
+        '\n\n什么不是闲聊（输出 tool）：'
+        '\n- 问任何具体事物/概念：XX是什么、你知道XX吗'
+        '\n- 要求查询/获取/阅读内容'
+        '\n- 提到任何产品名、项目名、专有名词'
+        '\n- 任何你需要查资料才能准确回答的问题'
+        '\n- 用户的问题涉及下方"可用工具"或"知识库主题"中的任何内容'
+        '\n\n不确定时 → 输出 tool',
+        _format_context_section("可用工具", tool_names),
+        _format_context_section("知识库主题（提到这些主题必须输出 tool）", knowledge_hint),
         _format_context_section("最新工具结果", latest_tool_result_text),
         _format_context_section("预启动工具结果", prestart_context),
-        _format_context_section("可用工具", tools_text, "（暂无可用工具）"),
+        _format_context_section("其他观察", observation),
         _format_context_section("历史工具执行", history_text if history_text != "（暂无）" else ""),
         _format_context_section("规划器预览", planner_preview),
     )
@@ -2004,8 +2019,240 @@ def record_observation(username, observation_text):
         util.log(1, f"记录观察记忆失败: {exc}")
         return False, f"observation record failed: {exc}"
 
+# ---------------------------------------------------------------------------
+# 大小模型协作辅助函数
+# ---------------------------------------------------------------------------
+
+def _classify_intent_for_running_task(content, running_state):
+    """
+    判断用户新消息相对正在执行的后台任务的意图。
+    返回: update_task / query_progress / cancel_task / new_task / normal_chat
+    """
+    tool_count = len(running_state.tool_results)
+    prompt = f"""用户当前有一个后台任务正在执行：
+- 原始请求: {running_state.original_request}
+- 当前进度: {running_state.current_step}
+- 已执行工具: {tool_count} 个
+
+用户新消息: {content}
+
+请判断用户意图，只返回以下之一（不要返回其他内容）:
+- update_task （补充或修改当前任务的要求）
+- query_progress （询问任务进度）
+- cancel_task （取消当前任务）
+- new_task （提出了一个新的、需要工具执行的独立任务，与当前任务不同）
+- normal_chat （与当前任务无关的普通聊天）"""
+    try:
+        response = llm.invoke([
+            SystemMessage(content="你是一个意图分类器，只输出意图标签，不输出其他内容。"),
+            HumanMessage(content=prompt),
+        ])
+        result = getattr(response, "content", "normal_chat").strip().lower()
+        for intent in ("update_task", "query_progress", "cancel_task", "new_task", "normal_chat"):
+            if intent in result:
+                return intent
+        return "normal_chat"
+    except Exception as exc:
+        util.log(1, f"意图分类失败: {exc}")
+        return "normal_chat"
+
+
+def _build_new_task_confirm_reply(content, running_state):
+    """当用户在任务执行中提出新任务时，生成反问消息让用户明确意图。"""
+    prompt = f"""你正在帮用户执行一个任务：「{running_state.original_request}」
+用户现在又说：「{content}」
+
+你需要用简洁自然的口语反问用户，确认他的意图：
+- 是要在当前任务的基础上追加这个新需求？
+- 还是要放弃当前任务，改为执行新的？
+不要输出选项编号，直接用口语化的方式问。一两句话即可。"""
+    try:
+        response = llm.invoke([
+            SystemMessage(content="你是一个友好的助手。"),
+            HumanMessage(content=prompt),
+        ])
+        return getattr(response, "content", "").strip()
+    except Exception as exc:
+        util.log(1, f"生成反问消息失败: {exc}")
+        return f"我正在帮你处理「{running_state.original_request}」，你是要同时处理新需求，还是停掉当前任务改做新的？"
+
+
+def _auto_reply_after_execution(username, finished_exec_state):
+    """
+    大模型后台执行完成后，在原 conversation_id 上用小模型直接生成最终回复。
+    不走 question() 全流程（避免重新加载记忆/历史导致上下文溢出），
+    只用精简 prompt + 工具结果生成回复，写入原始流。
+    """
+    try:
+        from core import stream_manager as sm_mod
+        from utils.stream_state_manager import get_state_manager
+
+        sm = sm_mod.new_instance()
+        conv_id = finished_exec_state.conversation_id
+
+        # 复用原 conversation_id
+        sm.set_current_conversation(username, conv_id)
+        sm.set_stop_generation(username, stop=False)
+
+        state_mgr = None
+        try:
+            state_mgr = get_state_manager()
+        except Exception:
+            pass
+
+        # 精简 prompt：只保留原始请求 + 工具结果，不重新加载全量记忆/历史
+        tool_context = (finished_exec_state.final_tool_context or "")[:4000]
+        hint = (finished_exec_state.final_response_hint or "")[:500]
+        error_info = finished_exec_state.error or ""
+
+        # 从工具调用记录提取实际查询主题（用户可能只说了"好""查一下"等简短消息）
+        tool_call_details = ""
+        for r in (finished_exec_state.tool_results or []):
+            call = r.get("call", {})
+            tool_call_details += f"调用了 {call.get('name', '')}，参数: {json.dumps(call.get('args', {}), ensure_ascii=False)}\n"
+
+        user_request = finished_exec_state.original_request
+        unverified = finished_exec_state.unverified_response or ""
+
+        if unverified:
+            # 核实场景：之前已流式输出了一段未核实的回复+过渡语，现在基于工具结果纠正或确认
+            compact_system = f"""你是一个友好的助手。你刚才对用户的问题给出了一个回答，但那是未经核实的。
+随后你已经告诉用户"等等，我再帮你核实一下…"，现在你通过工具查到了真实资料。
+请对比工具结果和之前的回答：
+- 如果之前的回答有事实性错误，必须明确指出哪里不对，然后给出正确答案（例如"刚才说的不太准确，实际上……"）
+- 如果之前基本正确，简短确认并补充细节即可
+- 不要再重复"我来查一下"之类的过渡语
+---
+**用户消息**: {user_request}
+**你之前未核实的回答**: {unverified[:300]}
+**工具执行结果**:
+{tool_context}
+"""
+        else:
+            # 正常工具调用场景：之前已告诉用户"我来帮你查一下，稍等…"
+            compact_system = f"""你是一个友好的助手。你已经告诉用户"我来帮你查一下，稍等…"，现在工具执行完毕。
+请基于以下工具执行结果回答用户，不要再重复"我来查一下"之类的过渡语，直接给出答案。
+---
+**用户消息**: {user_request}
+**实际执行的操作**:
+{tool_call_details}
+**工具执行结果**:
+{tool_context}
+"""
+        if error_info:
+            compact_system += f"\n执行过程中出现错误: {error_info}\n"
+        if hint:
+            compact_system += f"\n建议回复方向: {hint}\n"
+
+        compact_system += "\n请基于工具结果直接回答，用日常口语，不要说'工具调用'等技术术语。回复简洁，3-5句话即可。"
+        compact_system += '\n注意：课程中的"封面""目录"等是结构性页面，不是正式章节内容，描述时请区分。'
+
+        small_llm = _get_llm_instance("small", streaming=True)
+        messages = [
+            SystemMessage(content=compact_system),
+            HumanMessage(content=finished_exec_state.original_request),
+        ]
+
+        # 构建执行日志 think 标签，回填到消息开头
+        think_parts = []
+        for r in (finished_exec_state.tool_results or []):
+            call = r.get("call", {})
+            status = "成功" if r.get("success") else "失败"
+            output_preview = (r.get("output") or r.get("error") or "")[:200]
+            think_parts.append(f"[{call.get('name', '?')}] {status} | 参数: {json.dumps(call.get('args', {}), ensure_ascii=False)} | 结果: {output_preview}")
+        elapsed = round(finished_exec_state.end_time - finished_exec_state.start_time, 1) if finished_exec_state.start_time else 0
+        think_content = "\n".join(think_parts)
+        think_tag = f"<think>\n执行耗时: {elapsed}s，共 {len(finished_exec_state.tool_results)} 步\n{think_content}\n</think>\n"
+
+        # 流式写入原始会话流（计划消息已经作为 first sentence 发出，这里续接）
+        is_first = False  # first sentence 已由 question() 中的 plan_msg 发出
+        accumulated = ""
+        full_text = think_tag  # think 标签作为完整文本的开头
+        punctuations = [",", ".", "!", "?", "\n", "\uff0c", "\u3002", "\uff01", "\uff1f"]
+
+        def _write(text, force_first=False, force_end=False):
+            marked = None
+            if state_mgr:
+                try:
+                    marked, _, _ = state_mgr.prepare_sentence(
+                        username, text, force_first=force_first,
+                        force_end=force_end, conversation_id=conv_id,
+                    )
+                except Exception:
+                    marked = None
+            if marked is None:
+                prefix = "_<isfirst>" if force_first else ""
+                suffix = "_<isend>" if force_end else ""
+                marked = f"{prefix}{text}{suffix}"
+            sm.write_sentence(username, marked, conversation_id=conv_id)
+
+        # 先写出 think 标签（执行日志）
+        _write(think_tag, force_first=is_first)
+        is_first = False
+
+        try:
+            for chunk in small_llm.stream(messages):
+                flush_text = getattr(chunk, "content", None)
+                if not flush_text:
+                    continue
+                flush_text = str(flush_text)
+                accumulated += flush_text
+                full_text += flush_text
+                if len(accumulated) >= 20:
+                    while True:
+                        last_pos = -1
+                        for p in punctuations:
+                            pos = accumulated.rfind(p)
+                            if pos > last_pos:
+                                last_pos = pos
+                        if last_pos > 10:
+                            sentence = accumulated[:last_pos + 1]
+                            _write(sentence, force_first=is_first)
+                            is_first = False
+                            accumulated = accumulated[last_pos + 1:].lstrip()
+                        else:
+                            break
+        except Exception as exc:
+            util.log(1, f"小模型最终回复流式生成失败: {exc}")
+            if not full_text:
+                accumulated = "抱歉，处理结果时出了点问题。"
+                full_text = accumulated
+
+        # 刷出剩余文本
+        if accumulated:
+            _write(accumulated, force_first=is_first, force_end=True)
+        else:
+            _write("", force_end=True)
+
+        util.log(1, f"[大小模型] {username}: 后台任务回复已写入原始会话 {conv_id}")
+
+        # 结束会话状态
+        if state_mgr:
+            try:
+                state_mgr.end_session(username, conversation_id=conv_id)
+            except Exception:
+                pass
+
+        # 消费掉执行结果，避免下次 question() 进入情况1重复回复
+        exec_mgr = get_execution_manager()
+        exec_mgr.consume_result(username)
+
+        # 记忆：存入对话记忆，供后续对话检索
+        try:
+            if full_text and full_text.strip():
+                MyThread(
+                    target=remember_conversation_thread,
+                    args=(username, finished_exec_state.original_request, full_text.strip()),
+                ).start()
+        except Exception as mem_exc:
+            util.log(1, f"后台回复记忆存储失败: {mem_exc}")
+
+    except Exception as exc:
+        util.log(1, f"自动回复触发失败: {exc}")
+
+
 def question(content, username, observation=None):
-    """处理用户提问并返回回复。"""
+    """处理用户提问并返回回复。工具执行统一走后台线程，所有接口行为一致。"""
     global agents, current_username
     current_username = username
     full_response_text = ""
@@ -2169,6 +2416,14 @@ def question(content, username, observation=None):
             system_prompt += f"**用户画像**\n以下是通过历史对话分析得到的「{display_username}」的用户画像，可帮助你更好地理解用户：\n{user_portrait}\n\n"
     except Exception as exc:
         util.log(1, f"获取用户画像失败: {exc}")
+
+    # 注入 MCP Resources 知识上下文
+    try:
+        resource_text = mcp_runtime.get_all_resource_texts()
+        if resource_text:
+            system_prompt += f"**知识库上下文**\n以下是已加载的课程知识概览，可帮助你了解自己掌握的知识范围，在用户提问时精准定位相关章节：\n{resource_text}\n\n"
+    except Exception as exc:
+        util.log(1, f"注入 MCP Resources 失败: {exc}")
 
     # 根据配置决定是否按用户隔离历史消息
     try:
@@ -2574,42 +2829,278 @@ def question(content, username, observation=None):
             accumulated_text = ""
             return False
 
-    # 在LLM生成之前先发送预启动工具结果
+    # ------------------------------------------------------------------
+    # 大小模型协作分流逻辑
+    # ------------------------------------------------------------------
+    exec_mgr = get_execution_manager()
+
+    def _end_session_and_remember(response_text: str) -> str:
+        """统一的收尾：结束会话 + 记忆存储"""
+        if state_mgr is not None:
+            try:
+                state_mgr.end_session(username, conversation_id=conversation_id)
+            except Exception:
+                pass
+        else:
+            try:
+                from utils.stream_state_manager import get_state_manager
+                get_state_manager().end_session(username, conversation_id=conversation_id)
+            except Exception:
+                pass
+        final_text = _remove_think_from_text(response_text) if response_text else ""
+        final_text = _remove_prestart_from_text(final_text, keep_marked=False)
+        try:
+            MyThread(target=remember_conversation_thread, args=(username, content, final_text)).start()
+        except Exception as exc:
+            util.log(1, f"记忆线程启动失败: {exc}")
+        return final_text
+
+    # ━━━ 情况1: 有已完成的后台执行结果 ━━━
+    finished_state = exec_mgr.consume_result(username)
+    if finished_state and finished_state.status in (ExecutionStatus.DONE, ExecutionStatus.FAILED):
+        util.log(1, f"[大小模型] {username}: 取回后台执行结果，小模型生成最终回复")
+        if not sm.should_stop_generation(username, conversation_id=conversation_id):
+            send_prestart_content()
+
+        tool_context = finished_state.final_tool_context or ""
+        hint = finished_state.final_response_hint or ""
+        error_info = finished_state.error or ""
+
+        tool_result_section = f"""
+---
+**后台工具执行结果**
+以下工具已在后台执行完成，请基于结果回答用户的问题「{finished_state.original_request}」:
+{tool_context}
+"""
+        if error_info:
+            tool_result_section += f"\n执行过程中的错误: {error_info}\n"
+        if hint:
+            tool_result_section += f"\n大模型建议回复方向: {hint}\n"
+
+        enhanced_system = system_prompt + tool_result_section
+        summary_state: AgentState = {
+            "request": content,
+            "messages": messages_buffer,
+            "tool_results": finished_state.tool_results,
+            "planner_preview": hint,
+            "context": {
+                "system_prompt": enhanced_system,
+                "observation": observation,
+                "memory_context": memory_context,
+                "prestart_context": prestart_context,
+                "username": username,
+            },
+        }
+        try:
+            final_messages = _build_final_messages(summary_state)
+            stream_response_chunks(llm.stream(final_messages))
+        except Exception as exc:
+            util.log(1, f"小模型最终回复失败: {exc}")
+            write_sentence("抱歉，处理结果时出了点问题。", force_first=is_first_sentence)
+            is_first_sentence = False
+
+        if not sm.should_stop_generation(username, conversation_id=conversation_id):
+            finalize_stream(force_end=True)
+        return _end_session_and_remember(full_response_text)
+
+    # ━━━ 情况2: 有正在运行的后台任务 ━━━
+    running_state = exec_mgr.get_state(username)
+    if running_state and running_state.status == ExecutionStatus.RUNNING:
+        util.log(1, f"[大小模型] {username}: 后台任务运行中，判断用户意图")
+
+        intent = _classify_intent_for_running_task(content, running_state)
+
+        if intent == "update_task":
+            exec_mgr.modify(username, content)
+            reply = "好的，我已经把你的补充要求传达给正在执行的任务了。"
+            write_sentence(reply, force_first=True)
+            finalize_stream(force_end=True)
+            return _end_session_and_remember(reply)
+        elif intent == "query_progress":
+            progress_info = running_state.current_step or "处理中"
+            steps_done = len(running_state.tool_results)
+            elapsed = int(time.time() - running_state.start_time)
+            progress_text = f"正在执行你之前的请求：「{running_state.original_request}」\n当前进度：{progress_info}，已完成 {steps_done} 步，耗时 {elapsed} 秒。"
+            write_sentence(progress_text, force_first=True)
+            finalize_stream(force_end=True)
+            return _end_session_and_remember(progress_text)
+        elif intent == "cancel_task":
+            exec_mgr.cancel(username)
+            reply = "好的，已取消正在执行的任务。"
+            write_sentence(reply, force_first=True)
+            finalize_stream(force_end=True)
+            return _end_session_and_remember(reply)
+        elif intent == "new_task":
+            # 新任务意图不明确，反问用户确认
+            confirm_reply = _build_new_task_confirm_reply(content, running_state)
+            write_sentence(confirm_reply, force_first=True)
+            finalize_stream(force_end=True)
+            return _end_session_and_remember(confirm_reply)
+        else:
+            # normal_chat — 小模型直接回复，不影响后台任务
+            if not sm.should_stop_generation(username, conversation_id=conversation_id):
+                send_prestart_content()
+            if not sm.should_stop_generation(username, conversation_id=conversation_id):
+                run_direct_llm()
+            if not sm.should_stop_generation(username, conversation_id=conversation_id):
+                finalize_stream(force_end=True)
+            return _end_session_and_remember(full_response_text)
+
+    # ━━━ 情况3: 无后台任务，正常流程 ━━━
     if not sm.should_stop_generation(username, conversation_id=conversation_id):
         send_prestart_content()
 
-    workflow_success = False
-    if tool_registry:
-        workflow_success = run_workflow(tool_registry)
+    if not tool_registry:
+        # 无工具可用，小模型直接回复
+        if not sm.should_stop_generation(username, conversation_id=conversation_id):
+            run_direct_llm()
+        if not sm.should_stop_generation(username, conversation_id=conversation_id):
+            finalize_stream(force_end=True)
+        return _end_session_and_remember(full_response_text)
 
-    if (not tool_registry or not workflow_success) and not sm.should_stop_generation(username, conversation_id=conversation_id):
-        run_direct_llm()
-
-    if not sm.should_stop_generation(username, conversation_id=conversation_id):
-        finalize_stream(force_end=True)
-
-    if state_mgr is not None:
-        try:
-            state_mgr.end_session(username, conversation_id=conversation_id)
-        except Exception:
-            pass
-    else:
-        try:
-            from utils.stream_state_manager import get_state_manager
-
-            get_state_manager().end_session(username, conversation_id=conversation_id)
-        except Exception:
-            pass
-
-    # 记忆内容中去掉 think 和 prestart 标签（移除所有 prestart，包括 keep="true" 的）
-    final_text = _remove_think_from_text(full_response_text) if full_response_text else ""
-    final_text = _remove_prestart_from_text(final_text, keep_marked=False)
+    # 提取知识库摘要给规划器（让它知道能查什么主题）
+    knowledge_hint = ""
     try:
-        MyThread(target=remember_conversation_thread, args=(username, content, final_text)).start()
-    except Exception as exc:
-        util.log(1, f"记忆线程启动失败: {exc}")
+        resource_text = mcp_runtime.get_all_resource_texts()
+        if resource_text:
+            # 只取前500字符作为摘要，避免占太多 context
+            knowledge_hint = resource_text[:500]
+    except Exception:
+        pass
 
-    return final_text
+    # 有工具：小模型带流式回调做规划，finish 时直接流出，tool 时提交后台
+    plan_state: AgentState = {
+        "request": content,
+        "messages": messages_buffer,
+        "tool_results": [],
+        "audit_log": [],
+        "context": {
+            "system_prompt": system_prompt,
+            "memory_context": memory_context,
+            "observation": observation,
+            "prestart_context": prestart_context,
+            "tool_registry": tool_registry,
+            "username": username,
+            "knowledge_hint": knowledge_hint,
+        },
+    }
+
+    def _first_plan_stream_callback(chunk_text: str) -> None:
+        """规划器流式回调：finish 时实时把回复内容流给用户"""
+        nonlocal accumulated_text, full_response_text, is_first_sentence
+        if not chunk_text:
+            return
+        accumulated_text += chunk_text
+        full_response_text += chunk_text
+        if len(accumulated_text) >= 20:
+            while True:
+                last_punct_pos = _find_last_safe_punct(accumulated_text, punctuation_list)
+                if last_punct_pos > 10:
+                    sentence_text = accumulated_text[: last_punct_pos + 1]
+                    write_sentence(sentence_text, force_first=is_first_sentence)
+                    is_first_sentence = False
+                    accumulated_text = accumulated_text[last_punct_pos + 1 :].lstrip()
+                else:
+                    break
+
+    try:
+        first_decision = _call_planner_llm(plan_state, stream_callback=_first_plan_stream_callback)
+    except Exception as llm_err:
+        util.log(1, f"[大小模型] {username}: 规划器LLM调用失败: {llm_err}")
+        error_reply = "抱歉，我的大脑暂时开了小差，请稍后再试一下。"
+        write_sentence(error_reply, force_first=is_first_sentence)
+        if not sm.should_stop_generation(username, conversation_id=conversation_id):
+            finalize_stream(force_end=True)
+        return _end_session_and_remember(error_reply)
+    first_action = first_decision.get("action")
+
+    # ---- 提交后台工具执行的通用函数 ----
+    def _submit_tool_execution(tool_decision, show_plan_msg=True, unverified_response=""):
+        """提交工具执行到后台，返回 "" 表示等待后台完成。
+        unverified_response: 规划器先输出的未核实回复（兜底核实场景传入）。
+        """
+        nonlocal is_first_sentence
+        t_name = tool_decision.get("tool", "工具")
+        t_args = tool_decision.get("args") or {}
+        util.log(1, f"[大小模型] {username}: 需调用工具 {t_name}，提交后台执行")
+
+        if show_plan_msg:
+            plan_msg = "我来帮你查一下，稍等…\n"
+            write_sentence(plan_msg, force_first=is_first_sentence)
+            is_first_sentence = False
+
+        def _on_bg_complete(state):
+            try:
+                _auto_reply_after_execution(username, state)
+            except Exception as e:
+                util.log(1, f"自动回复触发失败: {e}")
+
+        exec_state = ExecutionState(
+            username=username,
+            conversation_id=conversation_id,
+            original_request=content,
+            unverified_response=unverified_response,
+            first_plan={"name": t_name, "args": t_args},
+            system_prompt=system_prompt,
+            messages_buffer=[m.copy() for m in messages_buffer],
+            memory_context=memory_context,
+            observation=observation,
+            prestart_context=prestart_context,
+            tool_registry=tool_registry,
+            on_complete=_on_bg_complete,
+        )
+
+        if exec_mgr.submit(exec_state):
+            util.log(1, f"[大小模型] {username}: 后台任务已提交，等待执行完成")
+        else:
+            transit_reply = "你有一个任务还在执行中，请等它完成后再试。"
+            write_sentence(transit_reply)
+            if not sm.should_stop_generation(username, conversation_id=conversation_id):
+                finalize_stream(force_end=True)
+            return _end_session_and_remember(transit_reply)
+        return ""
+
+    if first_action == "tool":
+        # 不是闲聊 → 走工具搜索（规划器只做闲聊判断，具体工具由大模型执行循环决定）
+        search_tool = "kb_search" if "kb_search" in tool_registry else next(iter(tool_registry), "kb_search")
+        # 用规划器提取的关键词作为搜索词，提取失败时回退到用户原话
+        search_query = (first_decision.get("keyword") or "").strip() or content.strip()
+        return _submit_tool_execution(
+            {"tool": search_tool, "args": {"query": search_query}},
+            show_plan_msg=True,
+        )
+
+    else:
+        # 闲聊 — 内容已通过 stream_callback 流式输出
+        finish_msg = first_decision.get("message", "")
+
+        # ---- 兜底：闲聊判断器的 finish 不该产生长回复 ----
+        # 真正的闲聊（问候、确认、简短回答）一般不超过 80 字
+        # 超过说明弱模型在 finish 里编造事实性内容，追加工具核实
+        has_kb_search = 'kb_search' in tool_registry
+        if has_kb_search and len(finish_msg) > 80:
+            util.log(1, f"[大小模型] {username}: 闲聊判断器 finish 过长({len(finish_msg)}字)，追加核实")
+            if accumulated_text:
+                write_sentence(accumulated_text, force_first=is_first_sentence)
+                is_first_sentence = False
+                accumulated_text = ""
+            verify_msg = "\n\n等等，我再帮你核实一下…\n\n---\n"
+            write_sentence(verify_msg)
+            full_response_text += verify_msg
+            return _submit_tool_execution(
+                {"tool": "kb_search", "args": {"query": content.strip()}},
+                show_plan_msg=False,
+                unverified_response=finish_msg,
+            )
+
+        was_streamed = first_decision.get("_streamed", False)
+        if not was_streamed:
+            if finish_msg:
+                stream_response_chunks([finish_msg])
+
+        if not sm.should_stop_generation(username, conversation_id=conversation_id):
+            finalize_stream(force_end=True)
+        return _end_session_and_remember(full_response_text)
 def set_memory_cleared_flag(flag=True):
     """
     设置记忆清除标记

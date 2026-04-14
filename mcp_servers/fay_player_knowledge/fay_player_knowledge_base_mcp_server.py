@@ -124,6 +124,7 @@ class SectionRecord:
     images: List[Dict[str, str]] = field(default_factory=list)
     body_markdown: str = ""
     content_text: str = ""
+    section_type: str = "content"  # "cover" | "toc" | "content"
 
     def to_catalog_dict(self) -> Dict[str, Any]:
         return {
@@ -131,6 +132,7 @@ class SectionRecord:
             "index": self.index,
             "title": self.title,
             "level": self.level,
+            "section_type": self.section_type,
             "quiz_count": len(self.quizzes),
             "image_count": len(self.images),
             "has_script": bool(self.script.strip()),
@@ -148,6 +150,7 @@ class SectionRecord:
             "index": self.index,
             "title": self.title,
             "level": self.level,
+            "section_type": self.section_type,
             "script": self.script,
             "code_text": self.code_text,
             "images": list(self.images),
@@ -366,7 +369,16 @@ def strip_markdown(text: str) -> str:
 
 def build_search_tokens(text: str) -> set[str]:
     normalized = normalize_search_text(text)
-    tokens = {match.group(0).lower() for match in ASCII_TOKEN_RE.finditer(normalized)}
+    tokens = set()
+    for match in ASCII_TOKEN_RE.finditer(normalized):
+        whole = match.group(0).lower()
+        tokens.add(whole)
+        # 将含连字符/点号的复合词拆成子 token（如 fay-player → fay, player）
+        if any(sep in whole for sep in ("-", ".", "/")):
+            for part in re.split(r"[-./]", whole):
+                part = part.strip()
+                if len(part) >= 2:
+                    tokens.add(part)
     for span in CJK_SPAN_RE.findall(normalized):
         if len(span) <= 2:
             tokens.add(span)
@@ -434,6 +446,20 @@ def section_title_from_heading(raw_title: str, default_index: int) -> Tuple[int,
         rest = normalize_spaces(matched.group(2))
         return index, rest or f"Section {index}"
     return default_index, title or f"Section {default_index}"
+
+
+_COVER_KEYWORDS = {"封面", "cover", "首页", "标题页"}
+_TOC_KEYWORDS = {"目录", "toc", "table of contents", "章节目录", "课程目录", "大纲"}
+
+
+def classify_section_type(title: str) -> str:
+    """根据节标题判断类型: cover / toc / content"""
+    t = normalize_spaces(title).lower().strip()
+    if t in _COVER_KEYWORDS or any(kw in t for kw in _COVER_KEYWORDS):
+        return "cover"
+    if t in _TOC_KEYWORDS or any(kw in t for kw in _TOC_KEYWORDS):
+        return "toc"
+    return "content"
 
 
 def split_markdown_on_level(text: str, level: int) -> Tuple[List[str], List[Tuple[str, List[str]]]]:
@@ -775,6 +801,7 @@ def load_markdown_source(path: Path, text: str, source_type: str) -> KnowledgeSo
                     images=images,
                     body_markdown=body,
                     content_text="\n\n".join(content_chunks).strip(),
+                    section_type=classify_section_type(section_title),
                 )
             )
     else:
@@ -784,11 +811,12 @@ def load_markdown_source(path: Path, text: str, source_type: str) -> KnowledgeSo
                 quizzes = parse_quizzes_from_markdown(body) if "题目" in heading else []
                 code_blocks = extract_code_blocks(body)
                 content_text = strip_markdown(body)
+                sec_title = normalize_spaces(heading) or f"Section {idx + 1}"
                 sections.append(
                     SectionRecord(
                         section_id=f"s{idx + 1:02d}-{slugify(heading, f'section-{idx + 1}')}",
                         index=idx,
-                        title=normalize_spaces(heading) or f"Section {idx + 1}",
+                        title=sec_title,
                         level=2,
                         script=content_text,
                         code_text="\n\n".join(code_blocks).strip(),
@@ -796,6 +824,7 @@ def load_markdown_source(path: Path, text: str, source_type: str) -> KnowledgeSo
                         images=extract_image_refs(body),
                         body_markdown=body,
                         content_text=content_text,
+                        section_type=classify_section_type(sec_title),
                     )
                 )
         else:
@@ -812,6 +841,7 @@ def load_markdown_source(path: Path, text: str, source_type: str) -> KnowledgeSo
                     images=extract_image_refs(text),
                     body_markdown=text.strip(),
                     content_text=content_text,
+                    section_type=classify_section_type(title),
                 )
             )
 
@@ -1004,6 +1034,7 @@ def load_course_zip(path: Path) -> KnowledgeSource:
                     images=images,
                     body_markdown="",
                     content_text="\n\n".join(content_parts).strip(),
+                    section_type=classify_section_type(raw_title),
                 )
             )
 
@@ -1327,10 +1358,20 @@ class KnowledgeBase:
             if source_id and chunk.source_id != source_id:
                 continue
 
+            source_title_text = normalize_search_text(chunk.source_title)
             title_text = normalize_search_text(chunk.section_title)
             body_text = normalize_search_text(chunk.text)
             score = 0.0
 
+            # 课程标题匹配（最高优先级）
+            if query_text == source_title_text:
+                score += 200.0
+            elif query_text in source_title_text:
+                score += 120.0
+            elif source_title_text in query_text:
+                score += 80.0
+
+            # 章节标题匹配
             if query_text == title_text:
                 score += 100.0
             elif query_text in title_text:
@@ -1340,13 +1381,18 @@ class KnowledgeBase:
 
             token_hits = 0
             title_hits = 0
+            source_title_tokens = build_search_tokens(source_title_text)
+            source_title_hits = 0
             for token in query_tokens:
                 if token in chunk.tokens:
                     token_hits += 1
                 if token in chunk.title_tokens:
                     title_hits += 1
+                if token in source_title_tokens:
+                    source_title_hits += 1
             score += token_hits * 4.0
             score += title_hits * 6.0
+            score += source_title_hits * 15.0
 
             if chunk.chunk_type == "quiz" and ("题" in query_text or "quiz" in query_text):
                 score += 3.0
@@ -1437,6 +1483,7 @@ class KnowledgeBase:
                 "section_id": section.section_id,
                 "section_index": section.index,
                 "section_title": section.title,
+                "section_type": section.section_type,
                 "matched_in": sorted(group["matched_in"]),
                 "match_count": int(group["match_count"]),
                 "snippet": details[0]["snippet"] if details else short_text(section.content_text or section.script),
@@ -1551,6 +1598,74 @@ def make_tool_specs() -> Dict[str, Dict[str, Any]]:
     }
 
 
+def _build_resources_list(kb: KnowledgeBase) -> Dict[str, Any]:
+    """Build the resources/list response from current knowledge base state."""
+    resources: List[Dict[str, Any]] = []
+    # 1) 课程总览资源
+    resources.append({
+        "uri": "knowledge://courses",
+        "name": "课程列表",
+        "description": "当前已加载的所有课程概览（名称、作者、简介）",
+        "mimeType": "application/json",
+    })
+    # 2) 每门课程的目录资源
+    for source_id in sorted(kb.sources):
+        source = kb.sources[source_id]
+        resources.append({
+            "uri": f"knowledge://courses/{source_id}/catalog",
+            "name": f"{source.title} — 章节目录",
+            "description": f"课程「{source.title}」的完整章节目录",
+            "mimeType": "application/json",
+        })
+    return {"resources": resources}
+
+
+def _read_resource(kb: KnowledgeBase, uri: str) -> List[Dict[str, Any]]:
+    """Read a resource by URI and return a list of content items."""
+    if uri == "knowledge://courses":
+        items = []
+        for sid in sorted(kb.sources):
+            s = kb.sources[sid]
+            items.append({
+                "source_id": s.source_id,
+                "title": s.title,
+                "author": s.author,
+                "description": s.description,
+                "section_count": len(s.sections),
+            })
+        return [{"uri": uri, "mimeType": "application/json", "text": json_pretty({"courses": items})}]
+
+    # knowledge://courses/{source_id}/catalog
+    prefix = "knowledge://courses/"
+    suffix = "/catalog"
+    if uri.startswith(prefix) and uri.endswith(suffix):
+        source_id = uri[len(prefix):-len(suffix)]
+        source = kb.sources.get(source_id)
+        if not source:
+            raise ValueError(f"source not found: {source_id}")
+        sections = []
+        for sec in source.sections:
+            sections.append({
+                "section_id": sec.section_id,
+                "index": sec.index,
+                "title": sec.title,
+                "level": sec.level,
+                "has_script": bool(sec.script.strip()),
+                "has_code": bool(sec.code_text.strip()),
+                "quiz_count": len(sec.quizzes),
+            })
+        payload = {
+            "source_id": source.source_id,
+            "title": source.title,
+            "author": source.author,
+            "description": source.description,
+            "sections": sections,
+        }
+        return [{"uri": uri, "mimeType": "application/json", "text": json_pretty(payload)}]
+
+    raise ValueError(f"unknown resource URI: {uri}")
+
+
 def make_tools_list(tool_specs: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
     tools = []
     for name, spec in tool_specs.items():
@@ -1656,7 +1771,7 @@ def run_mcp_loop(kb: KnowledgeBase) -> None:
         if method == "initialize":
             result = {
                 "protocolVersion": PROTOCOL_VERSION,
-                "capabilities": {"tools": {}},
+                "capabilities": {"tools": {}, "resources": {}},
                 "serverInfo": {"name": SERVER_NAME, "version": SERVER_VERSION},
                 "instructions": (
                     "Fay 课程知识库检索服务。\n\n"
@@ -1680,6 +1795,21 @@ def run_mcp_loop(kb: KnowledgeBase) -> None:
         if method == "ping":
             if msg_id is not None:
                 write_response(msg_id, {"pong": True})
+            continue
+
+        if method == "resources/list":
+            if msg_id is not None:
+                write_response(msg_id, _build_resources_list(kb))
+            continue
+
+        if method == "resources/read":
+            if msg_id is not None:
+                uri = str(params.get("uri") or "").strip()
+                try:
+                    contents = _read_resource(kb, uri)
+                    write_response(msg_id, {"contents": contents})
+                except Exception as exc:
+                    write_error(msg_id, -32602, f"resource read failed: {exc}")
             continue
 
         if method == "tools/list":

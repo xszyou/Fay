@@ -660,6 +660,67 @@ class McpClient:
             self._refresh_tools()
         return self.get_cached_tools()
 
+    async def _list_resources_async(self) -> List[Dict[str, Any]]:
+        if not self.session:
+            return []
+        try:
+            resp = await _await_or_value(self.session.list_resources(), self.list_timeout_seconds)
+        except Exception as exc:
+            logger.debug(f"list_resources failed: {exc}")
+            return []
+        resources: List[Dict[str, Any]] = []
+        items = resp if isinstance(resp, list) else getattr(resp, "resources", None) or []
+        for item in items:
+            if isinstance(item, dict):
+                resources.append(item)
+            elif hasattr(item, "uri"):
+                resources.append({
+                    "uri": str(getattr(item, "uri", "")),
+                    "name": str(getattr(item, "name", "")),
+                    "description": str(getattr(item, "description", "") or ""),
+                    "mimeType": str(getattr(item, "mimeType", "") or ""),
+                })
+        return resources
+
+    def list_resources(self) -> List[Dict[str, Any]]:
+        if not self.connected:
+            return []
+        try:
+            future = asyncio.run_coroutine_threadsafe(self._list_resources_async(), self.event_loop)
+            return future.result(timeout=self.list_timeout_seconds + 5)
+        except Exception as exc:
+            logger.debug(f"list_resources sync wrapper failed: {exc}")
+            return []
+
+    async def _read_resource_async(self, uri: str) -> Optional[str]:
+        if not self.session:
+            return None
+        try:
+            resp = await _await_or_value(self.session.read_resource(uri), self.call_timeout_seconds)
+        except Exception as exc:
+            logger.debug(f"read_resource({uri}) failed: {exc}")
+            return None
+        contents = resp if isinstance(resp, list) else getattr(resp, "contents", None) or []
+        texts: List[str] = []
+        for item in contents:
+            if isinstance(item, dict):
+                text = item.get("text")
+            else:
+                text = getattr(item, "text", None)
+            if text:
+                texts.append(str(text))
+        return "\n".join(texts) if texts else None
+
+    def read_resource(self, uri: str) -> Optional[str]:
+        if not self.connected:
+            return None
+        try:
+            future = asyncio.run_coroutine_threadsafe(self._read_resource_async(uri), self.event_loop)
+            return future.result(timeout=self.call_timeout_seconds + 5)
+        except Exception as exc:
+            logger.debug(f"read_resource sync wrapper failed: {exc}")
+            return None
+
     async def _disconnect_async(self) -> bool:
         task = self._manager_task
         event = self._disconnect_event

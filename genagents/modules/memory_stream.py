@@ -392,11 +392,21 @@ def extract_relevance(seq_nodes, embeddings, focal_pt):
       if node.content in embeddings:
         node_embedding = embeddings[node.content]
         if not _is_valid_embedding(node_embedding, expected_dim):
-          # 维度检查与修复在启动阶段完成，这里不再重算，避免首条消息扣时间
+          # 尝试在线修复：如果 embedding 服务已恢复，重新生成正确维度的向量
           current_dim = len(node_embedding) if isinstance(node_embedding, (list, tuple)) else "未知"
           util.log(2, f"检索时发现维度不一致的embedding: 节点ID={node.node_id}, 内容='{node.content[:30]}...', 当前维度={current_dim}, 期望维度={expected_dim}")
-          util.log(2, f"  -> 使用默认相关性分数 0.5 (建议重启系统进行维度修复)")
-          node_embedding = None
+          try:
+            regenerated = get_text_embedding(node.content)
+            if _is_valid_embedding(regenerated, expected_dim):
+              embeddings[node.content] = regenerated
+              node_embedding = regenerated
+              util.log(1, f"在线修复embedding成功: '{node.content[:30]}...' ({current_dim} -> {len(regenerated)})")
+            else:
+              util.log(2, f"  -> 在线修复失败（维度仍不一致），使用默认分数 0.5")
+              node_embedding = None
+          except Exception as repair_err:
+            util.log(2, f"  -> 在线修复异常: {repair_err}，使用默认分数 0.5")
+            node_embedding = None
         # 计算余弦相似度
         if node_embedding is None:
           relevance_out[node.node_id] = 0.5

@@ -1,0 +1,399 @@
+# -*- coding: utf-8 -*-
+"""
+大小模型协作 - 执行管理器
+
+小模型做第一轮规划，若需要工具则交给大模型在后台线程执行。
+按用户隔离，每用户最多一个执行线程。
+执行完毕后回调通知小模型生成最终回复。
+"""
+
+import enum
+import json
+import re
+import threading
+import time
+from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, List, Optional, Tuple
+
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import SystemMessage, HumanMessage
+
+from utils import util
+import utils.config_util as cfg
+
+
+class ExecutionStatus(enum.Enum):
+    IDLE = "idle"
+    RUNNING = "running"
+    DONE = "done"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+@dataclass
+class ExecutionState:
+    """单个用户的执行状态"""
+    username: str
+    status: ExecutionStatus = ExecutionStatus.IDLE
+    conversation_id: str = ""
+
+    # 小模型传给大模型的输入上下文
+    original_request: str = ""
+    unverified_response: str = ""  # 规划器先输出的未核实回复（兜底核实场景用）
+    first_plan: Dict[str, Any] = field(default_factory=dict)
+    system_prompt: str = ""
+    messages_buffer: List[Dict] = field(default_factory=list)
+    memory_context: str = ""
+    observation: Optional[str] = None
+    prestart_context: str = ""
+    tool_registry: Dict = field(default_factory=dict)
+
+    # 大模型执行过程
+    tool_results: List[Dict] = field(default_factory=list)
+    audit_log: List[str] = field(default_factory=list)
+    current_step: str = ""
+    progress_messages: List[str] = field(default_factory=list)
+
+    # 大模型产出的结果
+    final_tool_context: str = ""
+    final_response_hint: str = ""
+    error: Optional[str] = None
+
+    # 控制
+    cancel_flag: bool = False
+    modify_request: Optional[str] = None
+
+    # 时间
+    start_time: float = 0
+    end_time: float = 0
+
+    # 完成回调
+    on_complete: Optional[Callable] = None
+
+
+class ExecutionManager:
+    """按用户隔离的执行管理器，每用户最多一个执行线程。"""
+
+    def __init__(self):
+        self._states: Dict[str, ExecutionState] = {}
+        self._threads: Dict[str, threading.Thread] = {}
+        self._lock = threading.RLock()
+
+    def get_state(self, username: str) -> Optional[ExecutionState]:
+        with self._lock:
+            return self._states.get(username)
+
+    def is_busy(self, username: str) -> bool:
+        with self._lock:
+            state = self._states.get(username)
+            return state is not None and state.status == ExecutionStatus.RUNNING
+
+    def has_result(self, username: str) -> bool:
+        with self._lock:
+            state = self._states.get(username)
+            return state is not None and state.status in (
+                ExecutionStatus.DONE,
+                ExecutionStatus.FAILED,
+                ExecutionStatus.CANCELLED,
+            )
+
+    def submit(self, state: ExecutionState) -> bool:
+        """提交执行任务。若用户已有运行中任务返回 False。"""
+        with self._lock:
+            existing = self._states.get(state.username)
+            if existing and existing.status == ExecutionStatus.RUNNING:
+                return False
+            state.status = ExecutionStatus.RUNNING
+            state.start_time = time.time()
+            self._states[state.username] = state
+
+            t = threading.Thread(
+                target=self._run_execution,
+                args=(state,),
+                name=f"big-model-exec-{state.username}",
+                daemon=True,
+            )
+            self._threads[state.username] = t
+            t.start()
+            return True
+
+    def cancel(self, username: str) -> bool:
+        with self._lock:
+            state = self._states.get(username)
+            if state and state.status == ExecutionStatus.RUNNING:
+                state.cancel_flag = True
+                state.status = ExecutionStatus.CANCELLED
+                return True
+            return False
+
+    def modify(self, username: str, instruction: str) -> bool:
+        with self._lock:
+            state = self._states.get(username)
+            if state and state.status == ExecutionStatus.RUNNING:
+                state.modify_request = instruction
+                return True
+            return False
+
+    def consume_result(self, username: str) -> Optional[ExecutionState]:
+        """取走并清理执行结果，小模型拿到结果后调用。"""
+        with self._lock:
+            state = self._states.get(username)
+            if state and state.status in (
+                ExecutionStatus.DONE,
+                ExecutionStatus.FAILED,
+                ExecutionStatus.CANCELLED,
+            ):
+                self._states[username] = ExecutionState(username=username)
+                return state
+            return None
+
+    def _run_execution(self, state: ExecutionState):
+        try:
+            _big_model_execute(state)
+        except Exception as e:
+            util.log(1, f"大模型执行异常: {e}")
+            state.error = str(e)
+            state.status = ExecutionStatus.FAILED
+        finally:
+            state.end_time = time.time()
+            if state.status == ExecutionStatus.RUNNING:
+                state.status = ExecutionStatus.DONE
+            if state.on_complete:
+                try:
+                    state.on_complete(state)
+                except Exception as cb_err:
+                    util.log(1, f"执行完成回调异常: {cb_err}")
+
+
+# ---------------------------------------------------------------------------
+# 大/小模型实例工厂
+# ---------------------------------------------------------------------------
+
+def _get_llm_instance(role: str = "small", streaming: bool = True) -> ChatOpenAI:
+    """
+    获取 LLM 实例。
+    role="big"  → 优先用 system.conf 中的 big_model_* 配置，无配置时降级为小模型
+    role="small" → 使用 system.conf 中的 gpt_* 配置
+    """
+    cfg.load_config()
+
+    if role == "big":
+        if cfg.big_model_engine:
+            return ChatOpenAI(
+                model=cfg.big_model_engine,
+                base_url=cfg.big_model_base_url or cfg.gpt_base_url,
+                api_key=cfg.big_model_api_key or cfg.key_gpt_api_key,
+                streaming=streaming,
+                timeout=120,
+                max_retries=2,
+            )
+        # 无大模型配置，降级为小模型
+
+    # small / 降级：使用原始 gpt 配置
+    return ChatOpenAI(
+        model=cfg.gpt_model_engine,
+        base_url=cfg.gpt_base_url,
+        api_key=cfg.key_gpt_api_key,
+        streaming=streaming,
+        timeout=60,
+        max_retries=1,
+    )
+
+
+# ---------------------------------------------------------------------------
+# 大模型后台执行
+# ---------------------------------------------------------------------------
+
+def _format_tools_for_execution(tool_registry) -> str:
+    """为执行循环格式化可用工具列表（精简版）。"""
+    if not tool_registry:
+        return "（无）"
+    parts = []
+    for name, spec in tool_registry.items():
+        desc = getattr(spec, "description", "") or ""
+        example = ""
+        if hasattr(spec, "example_args") and spec.example_args:
+            example = json.dumps(spec.example_args, ensure_ascii=False)
+        parts.append(f"- {name}: {desc}" + (f" 示例args: {example}" if example else ""))
+    return "\n".join(parts)
+
+
+def _build_execution_next_step_messages(state: ExecutionState) -> list:
+    """
+    为大模型执行循环构建"下一步决策"的 prompt。
+    与初始规划器不同，这里聚焦于：任务完成了没有？还需要调什么工具？
+    """
+    # 已完成的工具摘要
+    done_parts = []
+    for r in state.tool_results:
+        call = r.get("call", {})
+        s = "成功" if r.get("success") else "失败"
+        out = (r.get("output") or r.get("error") or "")[:300]
+        done_parts.append(f"  - {call.get('name')}({json.dumps(call.get('args', {}), ensure_ascii=False)}): {s}, 输出: {out}")
+    done_summary = "\n".join(done_parts) if done_parts else "  （暂无）"
+
+    tools_text = _format_tools_for_execution(state.tool_registry)
+
+    # 获取知识库课程列表（帮助大模型做精准定向搜索）
+    knowledge_sources_hint = ""
+    try:
+        from faymcp import mcp_runtime
+        resource_text = mcp_runtime.get_all_resource_texts()
+        if resource_text:
+            knowledge_sources_hint = resource_text[:800]
+    except Exception:
+        pass
+
+    system_content = (
+        '你是一个任务执行器，负责逐步调用工具完成用户请求。请严格输出合法 JSON。\n'
+        '\n'
+        '输出格式只有两种：\n'
+        '1. 还需要调用工具: {"action": "tool", "tool": "工具名", "args": {...}}\n'
+        '2. 任务已完成: {"action": "finish", "message": "简短总结执行结果"}\n'
+        '\n'
+        '判断规则：\n'
+        '- 对照用户的原始请求，检查是否所有要求都已满足\n'
+        '- 如果用户要求获取多个项目（如"8章内容都读出来"），必须逐个调用工具，不能只做一部分就结束\n'
+        '- 工具返回的结果中如果包含列表/目录，且用户要求查看详情，需要逐项调用详情工具\n'
+        '- 某个工具失败了可以换参数重试一次，但同样参数不要重复调用\n'
+        '- 只有当用户的所有要求都已满足时，才输出 finish\n'
+        '\n搜索策略：\n'
+        '- 如果 kb_search 的结果不够相关（匹配的课程标题与用户问的主题明显不符），换关键词重试\n'
+        '- 可以用 kb_list_sources 查看所有课程列表，找到最相关的课程后用 source_id 定向搜索\n'
+        '- 优先从标题最匹配的课程中获取信息\n'
+        f'\n可用工具：\n{tools_text}\n'
+    )
+    if knowledge_sources_hint:
+        system_content += f'\n知识库中的课程：\n{knowledge_sources_hint}\n'
+    system_content += f'\n已完成的工具调用：\n{done_summary}'
+
+    user_content = f"用户原始请求: {state.original_request}\n\n请决定下一步操作。"
+
+    return [
+        SystemMessage(content=system_content),
+        HumanMessage(content=user_content),
+    ]
+
+
+def _big_model_execute(state: ExecutionState):
+    """大模型后台线程入口：从小模型的第一轮规划结果开始执行工具循环。"""
+    from llm.nlp_cognitive_stream import (
+        _remove_think_from_text,
+        _strip_json_code_fence,
+    )
+
+    big_llm = _get_llm_instance("big", streaming=False)
+    tool_registry = state.tool_registry
+    max_steps = 30
+
+    current_action = state.first_plan  # {"name": ..., "args": ...}
+
+    while len(state.tool_results) < max_steps:
+        if state.cancel_flag:
+            state.current_step = "已取消"
+            return
+
+        # 处理运行中修改指令
+        if state.modify_request:
+            instruction = state.modify_request
+            state.modify_request = None
+            state.audit_log.append(f"收到修改指令: {instruction}")
+
+        if current_action is None:
+            break
+
+        tool_name = current_action.get("name")
+        tool_args = current_action.get("args") or {}
+        state.current_step = f"正在执行工具: {tool_name}"
+        util.log(1, f"[大模型执行] {state.username}: {state.current_step}")
+
+        spec = tool_registry.get(tool_name)
+        if not spec:
+            state.audit_log.append(f"未知工具: {tool_name}")
+            state.error = f"未知工具: {tool_name}"
+            break
+
+        attempts = sum(
+            1 for r in state.tool_results
+            if r.get("call", {}).get("name") == tool_name
+            and r.get("call", {}).get("args") == tool_args
+        )
+        success, output, error = spec.executor(tool_args, attempts)
+
+        result = {
+            "call": {"name": tool_name, "args": tool_args},
+            "success": success,
+            "output": output,
+            "error": error,
+            "attempt": attempts + 1,
+        }
+        state.tool_results.append(result)
+        status_text = "成功" if success else "失败"
+        state.audit_log.append(f"工具 {tool_name} 第{attempts+1}次: {status_text}")
+        state.progress_messages.append(
+            f"[TOOL] {tool_name} {status_text}: {(output or error or '')[:200]}"
+        )
+
+        # 大模型决策下一步（使用专用的执行 prompt）
+        state.current_step = "大模型规划下一步..."
+        next_step_messages = _build_execution_next_step_messages(state)
+        try:
+            response = big_llm.invoke(next_step_messages)
+        except Exception as exc:
+            state.audit_log.append(f"大模型调用失败: {exc}")
+            state.error = f"大模型调用失败: {exc}"
+            break
+
+        content = getattr(response, "content", "")
+        trimmed = _remove_think_from_text(content.strip())
+        trimmed = _strip_json_code_fence(trimmed)
+
+        try:
+            decision = json.loads(trimmed)
+        except json.JSONDecodeError:
+            state.final_response_hint = trimmed
+            break
+
+        action = decision.get("action")
+        if action == "tool":
+            new_tool = decision.get("tool")
+            new_args = decision.get("args") or {}
+            # 防重复调用检测（同名同参数）
+            if (state.tool_results
+                    and state.tool_results[-1].get("success")
+                    and state.tool_results[-1].get("call", {}).get("name") == new_tool
+                    and state.tool_results[-1].get("call", {}).get("args") == new_args):
+                state.audit_log.append("检测到重复调用，终止循环")
+                state.final_response_hint = decision.get("message", "")
+                break
+            current_action = {"name": new_tool, "args": new_args}
+        elif action in ("finish", "finish_text"):
+            state.final_response_hint = decision.get("message", "")
+            break
+        else:
+            state.audit_log.append(f"未知决策: {decision}")
+            break
+
+    # 汇总工具结果（给小模型生成最终回复用，保留足够内容）
+    summary_parts = []
+    for r in state.tool_results:
+        call = r.get("call", {})
+        s = "成功" if r.get("success") else "失败"
+        output_text = (r.get("output") or r.get("error") or "无")[:2000]
+        summary_parts.append(
+            f"- {call.get('name')}({json.dumps(call.get('args', {}), ensure_ascii=False)}): "
+            f"{s}, 输出: {output_text}"
+        )
+    state.final_tool_context = "\n".join(summary_parts)
+    state.current_step = "执行完成"
+    util.log(1, f"[大模型执行] {state.username}: 执行完成，共 {len(state.tool_results)} 步")
+
+
+# ---------------------------------------------------------------------------
+# 全局单例
+# ---------------------------------------------------------------------------
+_manager = ExecutionManager()
+
+
+def get_execution_manager() -> ExecutionManager:
+    return _manager

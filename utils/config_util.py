@@ -67,6 +67,9 @@ local_asr_ip = None
 local_asr_port = None 
 ltp_mode = None
 gpt_base_url = None
+big_model_engine = None
+big_model_base_url = None
+big_model_api_key = None
 tts_module = None
 key_ali_tss_key_id = None
 key_ali_tss_key_secret = None
@@ -302,6 +305,9 @@ def load_config(force_reload=False):
     global local_asr_port
     global ltp_mode 
     global gpt_base_url
+    global big_model_engine
+    global big_model_base_url
+    global big_model_api_key
     global tts_module
     global key_ali_tss_key_id
     global key_ali_tss_key_secret
@@ -527,6 +533,9 @@ def load_config(force_reload=False):
     proxy_config = system_config.get('key', 'proxy_config', fallback=None)
     ltp_mode = system_config.get('key', 'ltp_mode', fallback=None)
     gpt_base_url = system_config.get('key', 'gpt_base_url', fallback=None)
+    big_model_engine = system_config.get('key', 'big_model_engine', fallback=None) or None
+    big_model_base_url = system_config.get('key', 'big_model_base_url', fallback=None) or None
+    big_model_api_key = system_config.get('key', 'big_model_api_key', fallback=None) or None
     tts_module = system_config.get('key', 'tts_module', fallback=None)
     volcano_tts_appid = system_config.get('key', 'volcano_tts_appid', fallback=None)
     volcano_tts_access_token = system_config.get('key', 'volcano_tts_access_token', fallback=None)

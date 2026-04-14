@@ -13,7 +13,7 @@ from datetime import datetime
 from typing import Any, Dict, List
 from flask_cors import CORS
 from faymcp.mcp_client import McpClient
-from faymcp import tool_registry, prestart_registry
+from faymcp import tool_registry, prestart_registry, resource_registry
 from utils import util
 
 
@@ -173,6 +173,32 @@ def _attach_prestart_metadata(server_id: int, tools: List[Dict[str, Any]]) -> Li
     return enriched
 
 # 连接真实MCP服务器
+def _fetch_and_cache_resources(server_id: int, client: McpClient) -> None:
+    """Read all MCP resources from a connected server and cache them."""
+    try:
+        res_list = client.list_resources()
+        if not res_list:
+            resource_registry.clear_server_resources(server_id)
+            return
+        cached: list = []
+        for res in res_list:
+            uri = res.get("uri", "")
+            if not uri:
+                continue
+            text = client.read_resource(uri)
+            cached.append({
+                "uri": uri,
+                "name": res.get("name", ""),
+                "description": res.get("description", ""),
+                "text": text or "",
+            })
+        resource_registry.set_server_resources(server_id, cached)
+        util.log(1, f"MCP Resources 已缓存: server_id={server_id}, count={len(cached)}")
+    except Exception as exc:
+        util.log(1, f"读取 MCP Resources 失败 (server_id={server_id}): {exc}")
+        resource_registry.clear_server_resources(server_id)
+
+
 def connect_to_real_mcp(server):
     """
     连接到真实的MCP服务器
@@ -246,7 +272,10 @@ def connect_to_real_mcp(server):
             
             # 保存客户端对象
             mcp_clients[server_id] = client
-            
+
+            # 读取 MCP Resources 并缓存
+            _fetch_and_cache_resources(server_id, client)
+
             return True, server, result
         else:
             # 连接失败，更新服务器状态
@@ -258,7 +287,8 @@ def connect_to_real_mcp(server):
             if server_id in mcp_clients:
                 del mcp_clients[server_id]
             tool_registry.mark_all_unavailable(server_id)
-                
+            resource_registry.clear_server_resources(server_id)
+
             return False, server, []
     except Exception as e:
         util.log(1, f"连接MCP服务器失败: {e}")
@@ -827,8 +857,19 @@ def get_server_tools(server_id):
         "tools": []
     }), 404
 
+@app.route('/api/mcp/servers/<int:server_id>/resources', methods=['GET'])
+def get_server_resources(server_id):
+    """获取指定服务器的 MCP Resources 列表"""
+    for server in mcp_servers:
+        if server['id'] == server_id:
+            if server['status'] != 'online':
+                return jsonify({"success": False, "message": "服务器离线", "resources": []})
+            resources = resource_registry.get_server_resources(server_id)
+            return jsonify({"success": True, "resources": resources})
+    return jsonify({"success": False, "message": "服务器未找到", "resources": []}), 404
+
+
 # API路由 - 获取所有在线服务器的工具列表
-# API?? - ??????????????
 @app.route('/api/mcp/servers/online/tools', methods=['GET'])
 def get_all_online_server_tools():
     global mcp_servers

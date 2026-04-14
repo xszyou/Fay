@@ -251,22 +251,34 @@ def _create_mock_embedding(dimension=1536):
   return _get_mock_vector
 
 # 创建模拟函数实例和 API 服务占位
-_mock_embedding_function = _create_mock_embedding(1536)
+_mock_embedding_functions = {}  # 按维度缓存模拟函数
+_known_embedding_dim = None     # 记录已知的正确 embedding 维度
 _api_embedding_service = None
 
-def get_text_embedding(text: str, 
+
+def _get_mock_embedding_function(dim=1536):
+  """获取指定维度的模拟 embedding 函数（缓存复用）"""
+  if dim not in _mock_embedding_functions:
+    _mock_embedding_functions[dim] = _create_mock_embedding(dim)
+  return _mock_embedding_functions[dim]
+
+
+def get_text_embedding(text: str,
                        model: str = "text-embedding-3-small") -> List[float]:
   """
   生成文本的 embedding。优先调用 system.conf 配置的 API 服务；
-  若 API 调用失败，则回退到本地模拟 embedding，保证流程不断。
+  若 API 调用失败，则回退到本地模拟 embedding（维度与实际服务一致），保证流程不断。
   """
+  global _known_embedding_dim
   try:
     if not isinstance(text, str):
       print("Embedding 错误: 输入必须是字符串")
-      return [0.0] * 1536
+      dim = _known_embedding_dim or 1536
+      return [0.0] * dim
     if not text.strip():
       print("Embedding 警告: 输入字符串为空")
-      return [0.0] * 1536
+      dim = _known_embedding_dim or 1536
+      return [0.0] * dim
 
     text = text.replace("\n", " ").strip()
 
@@ -274,11 +286,17 @@ def get_text_embedding(text: str,
     try:
       from utils.api_embedding_service import get_embedding_service
       service = get_embedding_service()
-      return service.encode_text(text)
+      result = service.encode_text(text)
+      # 记录实际维度，供模拟向量使用
+      if result and isinstance(result, (list, tuple)):
+        _known_embedding_dim = len(result)
+      return result
     except Exception as api_err:
-      # API 调用失败时使用本地模拟
+      # API 调用失败时使用本地模拟（维度与实际服务一致）
       print(f"调用 API embedding 失败，使用模拟向量代替: {api_err}")
-      return _mock_embedding_function(text)
+      dim = _known_embedding_dim or 1536
+      return _get_mock_embedding_function(dim)(text)
   except Exception as e:
     print(f"生成 embedding 时出错: {str(e)}")
-    return [0.0] * 1536
+    dim = _known_embedding_dim or 1536
+    return [0.0] * dim

@@ -680,39 +680,86 @@ def api_get_msg_by_id():
         return jsonify({'content': '', 'error': str(e)})
 
 #模型列表接口
+def _extract_context_length(model_obj):
+    """从上游模型对象中提取上下文长度（兼容多种服务实现）"""
+    for key in ("context_length", "max_model_len", "context_window", "max_context_length"):
+        val = model_obj.get(key)
+        if val is not None:
+            try:
+                return int(val)
+            except (ValueError, TypeError):
+                pass
+    return None
+
+
+def _fetch_upstream_models():
+    """获取上游模型列表，尝试提取 context_length"""
+    config_util.load_config()
+    api_key = config_util.key_gpt_api_key
+    models_url = _build_models_url(config_util.gpt_base_url)
+    if not models_url:
+        return [], None
+
+    headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+    resp = requests.get(models_url, headers=headers, timeout=10)
+    if resp.status_code != 200:
+        return [], None
+
+    result = resp.json()
+    data = result.get("data") if isinstance(result, dict) else None
+    if not isinstance(data, list):
+        return [], None
+
+    # 找到当前配置的模型，提取其 context_length
+    current_model = getattr(config_util, "gpt_model_engine", None)
+    current_ctx = None
+    for m in data:
+        if not isinstance(m, dict):
+            continue
+        ctx = _extract_context_length(m)
+        if ctx is not None and m.get("id") == current_model:
+            current_ctx = ctx
+
+    # 如果列表里没有 context_length，尝试查询单个模型详情
+    if current_ctx is None and current_model:
+        try:
+            base = models_url.rstrip("/")
+            detail_resp = requests.get(
+                f"{base}/{current_model}",
+                headers=headers,
+                timeout=10,
+            )
+            if detail_resp.status_code == 200:
+                detail = detail_resp.json()
+                if isinstance(detail, dict):
+                    current_ctx = _extract_context_length(detail)
+        except Exception:
+            pass
+
+    return data, current_ctx
+
+
 @__app.route('/v1/models', methods=['get'])
 @__app.route('/api/send/v1/models', methods=['get'])
 def api_v1_models():
-    fay_models = [
-        {
-            "id": "fay",
-            "object": "model",
-            "created": 0,
-            "owned_by": "fay",
-        },
-        {
-            "id": "fay-streaming",
-            "object": "model",
-            "created": 0,
-            "owned_by": "fay",
-        },
-    ]
-
     upstream_models = []
+    fay_context_length = None
     try:
-        config_util.load_config()
-        api_key = config_util.key_gpt_api_key
-        models_url = _build_models_url(config_util.gpt_base_url)
-        if models_url:
-            headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
-            resp = requests.get(models_url, headers=headers, timeout=10)
-            if resp.status_code == 200:
-                result = resp.json()
-                data = result.get("data") if isinstance(result, dict) else None
-                if isinstance(data, list):
-                    upstream_models = data
+        upstream_models, fay_context_length = _fetch_upstream_models()
     except Exception:
         pass
+
+    fay_model_base = {
+        "object": "model",
+        "created": 0,
+        "owned_by": "fay",
+    }
+    fay_models = []
+    for model_id in ("fay", "fay-streaming"):
+        entry = dict(fay_model_base, id=model_id)
+        if fay_context_length is not None:
+            entry["context_length"] = fay_context_length
+        fay_models.append(entry)
 
     return jsonify({
         "object": "list",
@@ -1767,6 +1814,59 @@ def api_open_image():
         return jsonify({'success': True, 'message': '已打开图片'}), 200
     except Exception as e:
         return jsonify({'success': False, 'message': f'打开图片时出错: {str(e)}'}), 500
+
+# 查询后台执行状态
+@__app.route('/api/execution-status', methods=['GET'])
+def api_execution_status():
+    try:
+        from llm.execution_manager import get_execution_manager
+        username = request.args.get('username', 'User')
+        mgr = get_execution_manager()
+        state = mgr.get_state(username)
+        if state is None:
+            return jsonify({'status': 'idle', 'username': username})
+        return jsonify({
+            'status': state.status.value,
+            'username': username,
+            'original_request': state.original_request,
+            'current_step': state.current_step,
+            'steps_done': len(state.tool_results),
+            'progress_messages': state.progress_messages[-10:],
+            'elapsed': round((state.end_time or time.time()) - state.start_time, 1) if state.start_time else 0,
+            'error': state.error,
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# 取消后台执行任务
+@__app.route('/api/execution-cancel', methods=['POST'])
+def api_execution_cancel():
+    try:
+        from llm.execution_manager import get_execution_manager
+        data = request.get_json() or {}
+        username = data.get('username', 'User')
+        mgr = get_execution_manager()
+        ok = mgr.cancel(username)
+        return jsonify({'success': ok, 'username': username})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# 向运行中的后台任务注入修改指令
+@__app.route('/api/execution-modify', methods=['POST'])
+def api_execution_modify():
+    try:
+        from llm.execution_manager import get_execution_manager
+        data = request.get_json() or {}
+        username = data.get('username', 'User')
+        instruction = data.get('instruction', '')
+        if not instruction:
+            return jsonify({'success': False, 'message': '缺少 instruction 参数'}), 400
+        mgr = get_execution_manager()
+        ok = mgr.modify(username, instruction)
+        return jsonify({'success': ok, 'username': username})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 
 def run():
     class NullLogHandler:

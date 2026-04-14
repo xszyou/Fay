@@ -11,7 +11,28 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Tuple
 
-from faymcp import prestart_registry, tool_registry
+from faymcp import prestart_registry, tool_registry, resource_registry
+
+
+def get_all_resource_texts() -> str:
+    """Return all cached MCP resource texts joined as a single string for prompt injection."""
+    try:
+        resources = resource_registry.get_all_resources()
+        if not resources:
+            return ""
+        parts: List[str] = []
+        for res in resources:
+            text = res.get("text", "").strip()
+            if not text:
+                continue
+            name = res.get("name", "")
+            if name:
+                parts.append(f"【{name}】\n{text}")
+            else:
+                parts.append(text)
+        return "\n\n".join(parts)
+    except Exception:
+        return ""
 
 
 def get_enabled_tools() -> List[Dict[str, Any]]:

@@ -89,57 +89,106 @@
           <el-button size="mini" @click="exitShareSelectMode">退出</el-button>
         </div>
 
-        <div class="chatmessage" :class="{'chatmessage-select-mode': shareSelectMode}">
-          <div class="chat-container" id="user0">
-            <!-- 加载更多提示 -->
-            <div v-if="loadingMoreMessages" class="loading-more">
-              <span class="loading-spinner"></span>
-              <span>加载中...</span>
-            </div>
-            <div v-else-if="hasMoreMessages" class="load-more-hint">
-              ↑ 上拉加载更多历史消息
-            </div>
-            <div v-else-if="messages.length > 0" class="no-more-messages">
-              — 没有更多消息了 —
-            </div>
-            <div v-for="(item, index) in messages" :key="index" class="message-row" :class="{'message-row-selected': item.shareSelected}" @click="shareSelectMode && toggleShareSelect(index)">
-              <div v-if="shareSelectMode" class="share-checkbox">
-                <span :class="item.shareSelected ? 'share-cb-checked' : 'share-cb-unchecked'"></span>
+        <div class="chatmessage-wrapper">
+          <div class="chatmessage" :class="{'chatmessage-select-mode': shareSelectMode, 'chatmessage-panel-open': execPanelOpen}">
+            <div class="chat-container" id="user0">
+              <!-- 加载更多提示 -->
+              <div v-if="loadingMoreMessages" class="loading-more">
+                <span class="loading-spinner"></span>
+                <span>加载中...</span>
               </div>
-              <div class="message receiver-message" v-if="item.type == 'fay'" style="flex:1;min-width:0;">
-                <img class="avatar" src="{{ url_for('static',filename='images/Fay_send.png') }}" alt="接收者头像">
-                <div class="message-content">
-                  <div class="message-bubble">
-                    <div v-if="parseThinkContent(item.content).thinkContent || item.thinkLoading" class="think-toggle" @click.stop="toggleThink(index)">
-                      <span class="think-arrow" :class="{'expanded': item.thinkExpanded}">▶</span>
-                      <span class="think-label">思考过程</span>
-                      <span v-if="item.thinkLoading" class="think-spinner"></span>
-                    </div>
+              <div v-else-if="hasMoreMessages" class="load-more-hint">
+                ↑ 上拉加载更多历史消息
+              </div>
+              <div v-else-if="messages.length > 0" class="no-more-messages">
+                — 没有更多消息了 —
+              </div>
+              <div v-for="(item, index) in messages" :key="index" class="message-row" :class="{'message-row-selected': item.shareSelected}" @click="shareSelectMode && toggleShareSelect(index)">
+                <div v-if="shareSelectMode" class="share-checkbox">
+                  <span :class="item.shareSelected ? 'share-cb-checked' : 'share-cb-unchecked'"></span>
+                </div>
+                <div class="message receiver-message" v-if="item.type == 'fay'" style="flex:1;min-width:0;">
+                  <img class="avatar" src="{{ url_for('static',filename='images/Fay_send.png') }}" alt="接收者头像">
+                  <div class="message-content">
+                    <div class="message-bubble">
+                      <div v-if="parseThinkContent(item.content).thinkContent || item.thinkLoading" class="think-toggle" @click.stop="toggleThink(index)">
+                        <span class="think-arrow" :class="{'expanded': item.thinkExpanded}">▶</span>
+                        <span class="think-label">思考过程</span>
+                        <span v-if="item.thinkLoading" class="think-spinner"></span>
+                      </div>
 <div v-if="(parseThinkContent(item.content).thinkContent || item.thinkLoading) && item.thinkExpanded" class="think-content-inline">[[parseThinkContent(item.content).thinkContent]]</div>
-                    <div class="message-text markdown-body" v-html="renderMarkdown(parseThinkContent(item.content).mainContent)"></div>
-                    <div v-if="parseThinkContent(item.content).prestartContent" class="prestart-toggle" @click.stop="togglePrestart(index)">
-                      <span class="prestart-arrow" :class="{'expanded': item.prestartExpanded}">▶</span>
-                      <span class="prestart-label">预启动工具</span>
+                      <div class="message-text markdown-body" v-html="renderMarkdown(parseThinkContent(item.content).mainContent)"></div>
+                      <div v-if="parseThinkContent(item.content).prestartContent" class="prestart-toggle" @click.stop="togglePrestart(index)">
+                        <span class="prestart-arrow" :class="{'expanded': item.prestartExpanded}">▶</span>
+                        <span class="prestart-label">预启动工具</span>
+                      </div>
+                      <div v-if="parseThinkContent(item.content).prestartContent && item.prestartExpanded" class="prestart-content-inline" v-html="convertImagePaths(parseThinkContent(item.content).prestartContent)"></div>
                     </div>
-                    <div v-if="parseThinkContent(item.content).prestartContent && item.prestartExpanded" class="prestart-content-inline" v-html="convertImagePaths(parseThinkContent(item.content).prestartContent)"></div>
+                    <div class="message-time">
+                      <span class="what-time">[[item.timetext]]</span>
+                      <div v-if="item.is_adopted == 0" class="adopt-button" @click.stop="adoptText(item.id)">
+                        <img src="{{ url_for('static',filename='images/adopt.png') }}" alt="采纳图标" class="adopt-img" />
+                      </div>
+                      <div v-else class="adopt-button" @click.stop="unadoptText(item.id)">
+                        <img src="{{ url_for('static',filename='images/adopted.png') }}" alt="已采纳图标" class="adopt-img" />
+                      </div>
+                    </div>
                   </div>
-                  <div class="message-time">
-                    <span class="what-time">[[item.timetext]]</span>
-                    <div v-if="item.is_adopted == 0" class="adopt-button" @click.stop="adoptText(item.id)">
-                      <img src="{{ url_for('static',filename='images/adopt.png') }}" alt="采纳图标" class="adopt-img" />
-                    </div>
-                    <div v-else class="adopt-button" @click.stop="unadoptText(item.id)">
-                      <img src="{{ url_for('static',filename='images/adopted.png') }}" alt="已采纳图标" class="adopt-img" />
-                    </div>
+                </div>
+                <div class="message sender-message" v-else style="flex:1;min-width:0;">
+                  <div class="message-content">
+                    <div class="sender-message message-bubble">[[item.content]]</div>
+                    <div class="sender-message-time">[[item.timetext]]</div>
                   </div>
+                  <img class="avatar" src="{{ url_for('static',filename='images/User_send.png') }}" alt="发送者头像">
                 </div>
               </div>
-              <div class="message sender-message" v-else style="flex:1;min-width:0;">
-                <div class="message-content">
-                  <div class="sender-message message-bubble">[[item.content]]</div>
-                  <div class="sender-message-time">[[item.timetext]]</div>
+            </div>
+          </div>
+
+          <!-- 后台任务侧边栏 -->
+          <div class="exec-panel" :class="{'exec-panel-open': execPanelOpen}">
+            <div class="exec-panel-tab" @click="toggleExecPanel" :class="{'exec-tab-active': execStatus.status === 'running'}">
+              <span class="exec-tab-icon">&#9881;</span>
+              <span v-if="execStatus.status === 'running'" class="exec-tab-dot"></span>
+            </div>
+            <div class="exec-panel-body" v-show="execPanelOpen">
+              <div class="exec-panel-header">
+                <span class="exec-panel-title">后台任务</span>
+                <span class="exec-panel-close" @click="execPanelOpen = false">&times;</span>
+              </div>
+              <div v-if="execStatus.status === 'idle'" class="exec-panel-empty">
+                暂无后台任务
+              </div>
+              <div v-else class="exec-panel-content">
+                <div class="exec-status-badge" :class="'exec-status-' + execStatus.status">
+                  [[ execStatusLabel ]]
                 </div>
-                <img class="avatar" src="{{ url_for('static',filename='images/User_send.png') }}" alt="发送者头像">
+                <div class="exec-detail-row">
+                  <span class="exec-detail-label">请求</span>
+                  <span class="exec-detail-value">[[ execStatus.original_request ]]</span>
+                </div>
+                <div class="exec-detail-row">
+                  <span class="exec-detail-label">进度</span>
+                  <span class="exec-detail-value">[[ execStatus.current_step || '-' ]]</span>
+                </div>
+                <div class="exec-detail-row">
+                  <span class="exec-detail-label">已完成</span>
+                  <span class="exec-detail-value">[[ execStatus.steps_done ]] 步 / [[ execStatus.elapsed ]]s</span>
+                </div>
+                <div v-if="execStatus.error" class="exec-detail-row exec-error-row">
+                  <span class="exec-detail-label">错误</span>
+                  <span class="exec-detail-value">[[ execStatus.error ]]</span>
+                </div>
+                <div v-if="execStatus.progress_messages && execStatus.progress_messages.length" class="exec-log-section">
+                  <div class="exec-log-title">执行日志</div>
+                  <div class="exec-log-list">
+                    <div v-for="(log, i) in execStatus.progress_messages" :key="i" class="exec-log-item">[[ log ]]</div>
+                  </div>
+                </div>
+                <div v-if="execStatus.status === 'running'" class="exec-panel-actions">
+                  <button class="exec-btn exec-btn-cancel" @click="cancelExecution">取消任务</button>
+                </div>
               </div>
             </div>
           </div>
