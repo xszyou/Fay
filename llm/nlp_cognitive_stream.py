@@ -2116,11 +2116,11 @@ def _auto_reply_after_execution(username, finished_exec_state):
 
         if unverified:
             # 核实场景：之前已流式输出了一段未核实的回复+过渡语，现在基于工具结果纠正或确认
-            compact_system = f"""你是一个友好的助手。你刚才对用户的问题给出了一个回答，但那是未经核实的。
-随后你已经告诉用户"等等，我再帮你核实一下…"，现在你通过工具查到了真实资料。
-请对比工具结果和之前的回答：
-- 如果之前的回答有事实性错误，必须明确指出哪里不对，然后给出正确答案（例如"刚才说的不太准确，实际上……"）
-- 如果之前基本正确，简短确认并补充细节即可
+            compact_system = f"""你是一个友好的助手。你刚才对用户的问题给出了一个回答，随后你告诉用户"等等，我再帮你核实一下…"，现在你通过工具查到了真实资料。
+请将工具结果与之前的回答做对比，按以下优先级处理：
+- 【优先】如果之前的回答与工具结果基本一致，直接说"核实了一下，刚才说的没问题"，然后可以补充一两个细节，不要重复之前已说过的内容
+- 【仅当】工具结果与之前的回答存在明确的事实性矛盾时，才指出具体哪里不对并给出正确信息
+- 不要为了显得有用而强行找错，如果没有矛盾就不要否定之前的回答
 - 不要再重复"我来查一下"之类的过渡语
 ---
 **用户消息**: {user_request}
@@ -2417,11 +2417,11 @@ def question(content, username, observation=None):
     except Exception as exc:
         util.log(1, f"获取用户画像失败: {exc}")
 
-    # 注入 MCP Resources 知识上下文
+    # 注入 MCP Resources 上下文
     try:
         resource_text = mcp_runtime.get_all_resource_texts()
         if resource_text:
-            system_prompt += f"**知识库上下文**\n以下是已加载的课程知识概览，可帮助你了解自己掌握的知识范围，在用户提问时精准定位相关章节：\n{resource_text}\n\n"
+            system_prompt += f"**外部知识上下文**\n以下是通过 MCP 服务获取的参考信息，可帮助你了解自己掌握的知识范围并据此回答用户问题：\n{resource_text}\n\n"
     except Exception as exc:
         util.log(1, f"注入 MCP Resources 失败: {exc}")
 
