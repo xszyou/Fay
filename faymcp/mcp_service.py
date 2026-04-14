@@ -173,7 +173,7 @@ def _attach_prestart_metadata(server_id: int, tools: List[Dict[str, Any]]) -> Li
     return enriched
 
 # 连接真实MCP服务器
-def _fetch_and_cache_resources(server_id: int, client: McpClient) -> None:
+def _fetch_and_cache_resources(server_id: int, client: McpClient, server_name: str = "") -> None:
     """Read all MCP resources from a connected server and cache them."""
     try:
         res_list = client.list_resources()
@@ -192,7 +192,7 @@ def _fetch_and_cache_resources(server_id: int, client: McpClient) -> None:
                 "description": res.get("description", ""),
                 "text": text or "",
             })
-        resource_registry.set_server_resources(server_id, cached)
+        resource_registry.set_server_resources(server_id, cached, server_name=server_name)
         util.log(1, f"MCP Resources 已缓存: server_id={server_id}, count={len(cached)}")
     except Exception as exc:
         util.log(1, f"读取 MCP Resources 失败 (server_id={server_id}): {exc}")
@@ -274,7 +274,7 @@ def connect_to_real_mcp(server):
             mcp_clients[server_id] = client
 
             # 读取 MCP Resources 并缓存
-            _fetch_and_cache_resources(server_id, client)
+            _fetch_and_cache_resources(server_id, client, server_name=server.get('name', ''))
 
             return True, server, result
         else:
@@ -1152,6 +1152,23 @@ def toggle_tool_state(server_id, tool_name):
             "success": False,
             "message": f"切换工具状态失败: {str(e)}"
         }), 500
+
+@app.route('/api/mcp/servers/<int:server_id>/resources/toggle', methods=['POST'])
+def toggle_resource_state(server_id):
+    """切换 Resource 的启用/禁用状态（控制是否注入 prompt）"""
+    try:
+        data = request.json or {}
+        uri = data.get("uri", "")
+        enabled = bool(data.get("enabled", True))
+        if not uri:
+            return jsonify({"success": False, "message": "缺少 uri 参数"}), 400
+        found = resource_registry.set_resource_enabled(server_id, uri, enabled)
+        if not found:
+            return jsonify({"success": False, "message": "Resource 未找到"}), 404
+        return jsonify({"success": True, "uri": uri, "enabled": enabled})
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
+
 
 # API路由 - 配置预启动工具
 @app.route('/api/mcp/servers/<int:server_id>/tools/<string:tool_name>/prestart', methods=['POST'])

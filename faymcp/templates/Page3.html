@@ -297,8 +297,9 @@
         margin-bottom: 10px;
         display: flex;
       }
-      /* 让工具列表占满整行 */
-      .mcp-info-item:nth-child(4) {
+      /* 让工具列表和资源列表占满整行 */
+      .mcp-info-item:nth-child(4),
+      .mcp-info-item:nth-child(5) {
         width: 100%;
         flex-direction: column;
         align-items: flex-start;
@@ -419,6 +420,50 @@
         margin: 4px 0 12px 0;
         text-align: left;
         width: 90%;
+      }
+      /* Resources 容器样式 */
+      .resources-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 5px;
+        width: 100%;
+      }
+      .resource-tag {
+        padding: 6px 12px;
+        border-radius: 20px;
+        border: 1px solid #e6a23c;
+        background-color: #fdf6ec;
+        color: #e6a23c;
+        font-size: 14px;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        cursor: pointer;
+        transition: all 0.3s;
+        user-select: none;
+      }
+      .resource-tag:hover {
+        border-color: #d48806;
+        color: #d48806;
+      }
+      .resource-tag.enabled {
+        background-color: #e6a23c;
+        color: #fff;
+        border-color: #e6a23c;
+      }
+      .resource-tag.enabled:hover {
+        background-color: #d48806;
+        border-color: #d48806;
+      }
+      .resource-tag .resource-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background-color: #e6a23c;
+      }
+      .resource-tag.enabled .resource-dot {
+        background-color: #67c23a;
       }
       .mcp-info-label {
         font-weight: bold;
@@ -678,6 +723,14 @@
                 <span class="mcp-info-label">可用工具:</span>
                 <div class="mcp-info-value">
                   <div class="tools-container" id="toolsContainer">
+                    <span style="color: #909399;">--</span>
+                  </div>
+                </div>
+              </div>
+              <div class="mcp-info-item" id="resourcesSection" style="display:none;">
+                <span class="mcp-info-label">Resources:</span>
+                <div class="mcp-info-value">
+                  <div class="resources-container" id="resourcesContainer">
                     <span style="color: #909399;">--</span>
                   </div>
                 </div>
@@ -1425,6 +1478,8 @@
           if (toolsContainer) {
             toolsContainer.innerHTML = '<span style="color: #909399;">服务器离线（点击"连接"按钮后可查看工具）</span>';
           }
+          const resSection = document.getElementById('resourcesSection');
+          if (resSection) resSection.style.display = 'none';
           return;
         }
 
@@ -1515,6 +1570,46 @@
             if (toolsContainer) {
               toolsContainer.innerHTML = '<span style="color: #f56c6c;">获取工具列表失败</span>';
             }
+          });
+
+        // 加载 Resources 列表
+        fetch(`/api/mcp/servers/${serverId}/resources`)
+          .then(response => response.json())
+          .then(data => {
+            const section = document.getElementById('resourcesSection');
+            const container = document.getElementById('resourcesContainer');
+            if (!container || !section) return;
+            const resources = data.resources || [];
+            if (resources.length > 0) {
+              section.style.display = '';
+              container.innerHTML = '';
+              resources.forEach(res => {
+                const isEnabled = res.enabled !== false;
+                const tag = document.createElement('div');
+                tag.className = `resource-tag ${isEnabled ? 'enabled' : ''}`;
+                tag.title = `${res.description || res.uri || ''}\n点击${isEnabled ? '禁用' : '启用'}此资源的 prompt 注入`;
+                tag.dataset.uri = res.uri;
+                tag.dataset.serverId = serverId;
+                tag.dataset.enabled = isEnabled;
+                tag.addEventListener('click', function() {
+                  toggleResource(this, serverId, res.uri);
+                });
+                const dot = document.createElement('span');
+                dot.className = 'resource-dot';
+                const nameSpan = document.createElement('span');
+                nameSpan.textContent = res.name || res.uri;
+                tag.appendChild(dot);
+                tag.appendChild(nameSpan);
+                container.appendChild(tag);
+              });
+            } else {
+              section.style.display = 'none';
+            }
+          })
+          .catch(err => {
+            console.error('获取 Resources 失败:', err);
+            const section = document.getElementById('resourcesSection');
+            if (section) section.style.display = 'none';
           });
       }
 
@@ -1799,6 +1894,45 @@
         });
       }
       
+      // 切换 Resource 启用/禁用
+      function toggleResource(tag, serverId, uri) {
+        const isEnabled = tag.dataset.enabled === 'true';
+        const newState = !isEnabled;
+
+        tag.dataset.enabled = newState;
+        if (newState) {
+          tag.classList.add('enabled');
+        } else {
+          tag.classList.remove('enabled');
+        }
+        tag.title = tag.title.replace(
+          isEnabled ? '禁用' : '启用',
+          newState ? '禁用' : '启用'
+        );
+
+        fetch(`/api/mcp/servers/${serverId}/resources/toggle`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uri: uri, enabled: newState })
+        })
+        .then(response => {
+          if (!response.ok) throw new Error('Failed to toggle resource');
+          return response.json();
+        })
+        .then(data => {
+          console.log(`Resource ${uri} 已${newState ? '启用' : '禁用'}`);
+        })
+        .catch(err => {
+          console.error('切换 Resource 状态失败:', err);
+          tag.dataset.enabled = isEnabled;
+          if (isEnabled) {
+            tag.classList.add('enabled');
+          } else {
+            tag.classList.remove('enabled');
+          }
+        });
+      }
+
       // 初始化Vue实例
       new Vue({
         el: '#app',
