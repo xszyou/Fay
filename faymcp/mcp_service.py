@@ -199,6 +199,11 @@ def _fetch_and_cache_resources(server_id: int, client: McpClient, server_name: s
         resource_registry.clear_server_resources(server_id)
 
 
+def _inject_embedding_args(args: list) -> list:
+    """MCP 服务器默认已指向本地 5000 端口，此处仅在需要覆盖时追加 --fay-url。"""
+    return args
+
+
 def connect_to_real_mcp(server):
     """
     连接到真实的MCP服务器
@@ -231,9 +236,12 @@ def connect_to_real_mcp(server):
             repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
             cfg_cwd = server.get('cwd')
             cwd = cfg_cwd if (cfg_cwd and str(cfg_cwd).strip()) else repo_root
+            # 自动注入 embedding 配置到 MCP 服务器启动参数
+            base_args = list(server.get('args', []) or [])
+            base_args = _inject_embedding_args(base_args)
             stdio_config = {
                 "command": server.get('command'),
-                "args": server.get('args', []) or [],
+                "args": base_args,
                 "cwd": cwd,
                 "env": (server.get('env') or None),
             }

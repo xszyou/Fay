@@ -39,6 +39,56 @@ SERVER_NAME = "fay_player_knowledge_base_mcp_server"
 SERVER_VERSION = "1.0.0"
 PROTOCOL_VERSION = "2024-11-05"
 
+# ---------------------------------------------------------------------------
+# 轻量 Embedding 客户端（调用 OpenAI 兼容 /embeddings 接口）
+# ---------------------------------------------------------------------------
+import math
+import urllib.request
+import urllib.error
+
+_fay_url: str = ""  # Fay 本地服务地址，如 http://127.0.0.1:5000
+
+
+def _cosine_similarity(a: List[float], b: List[float]) -> float:
+    if not a or not b or len(a) != len(b):
+        return 0.0
+    dot = sum(x * y for x, y in zip(a, b))
+    mag_a = math.sqrt(sum(x * x for x in a))
+    mag_b = math.sqrt(sum(x * x for x in b))
+    if mag_a == 0 or mag_b == 0:
+        return 0.0
+    return dot / (mag_a * mag_b)
+
+
+def _call_embedding_api(text: str) -> Optional[List[float]]:
+    """通过 Fay 透传接口 /v1/embeddings 获取向量，失败返回 None。"""
+    if not _fay_url:
+        return None
+    try:
+        url = f"{_fay_url.rstrip('/')}/v1/embeddings"
+        payload = json.dumps({
+            "model": "fay-embedding",
+            "input": text[:2000],
+        }).encode("utf-8")
+        req = urllib.request.Request(
+            url,
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+        data = result.get("data")
+        if data and isinstance(data, list) and len(data) > 0:
+            return data[0].get("embedding")
+    except Exception as exc:
+        write_stderr(f"[{SERVER_NAME}] embedding 调用失败: {exc}")
+    return None
+
+
+def _embedding_available() -> bool:
+    return bool(_fay_url)
+
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".svg"}
 MARKDOWN_EXTS = {".md", ".markdown"}
 ZIP_EXTS = {".zip"}
@@ -214,6 +264,7 @@ class SearchChunk:
     text: str
     title_tokens: set[str]
     tokens: set[str]
+    embedding: Optional[List[float]] = None
 
 
 def write_stderr(text: str) -> None:
@@ -367,14 +418,18 @@ def strip_markdown(text: str) -> str:
     return value.strip()
 
 
-def build_search_tokens(text: str) -> set[str]:
+def build_search_tokens(text: str, *, split_compound: bool = True) -> set[str]:
+    """构建搜索 token 集合。
+    split_compound=True（默认）：用于索引端，拆分复合词以扩大召回面。
+    split_compound=False：用于查询端，保持用户原词不拆，避免碎片匹配。
+    """
     normalized = normalize_search_text(text)
     tokens = set()
     for match in ASCII_TOKEN_RE.finditer(normalized):
         whole = match.group(0).lower()
         tokens.add(whole)
-        # 将含连字符/点号的复合词拆成子 token（如 fay-player → fay, player）
-        if any(sep in whole for sep in ("-", ".", "/")):
+        # 仅索引端拆分复合词（如 fay-player → fay, player）
+        if split_compound and any(sep in whole for sep in ("-", ".", "/")):
             for part in re.split(r"[-./]", whole):
                 part = part.strip()
                 if len(part) >= 2:
@@ -1153,6 +1208,41 @@ class KnowledgeBase:
                     )
         self.chunks = chunks
         self.section_lookup = section_lookup
+        # embedding 索引在后台线程异步构建，不阻塞 MCP 连接
+        if _embedding_available():
+            threading.Thread(
+                target=self._build_embeddings_async,
+                daemon=True,
+            ).start()
+
+    def _build_embeddings_async(self) -> None:
+        """后台线程：等 Fay flask 就绪后逐个计算 chunk embedding。"""
+        # 等待 Fay flask 服务就绪（最多 30 秒）
+        for _ in range(30):
+            try:
+                test_req = urllib.request.Request(
+                    f"{_fay_url.rstrip('/')}/v1/models",
+                    method="GET",
+                )
+                with urllib.request.urlopen(test_req, timeout=2):
+                    break
+            except Exception:
+                time.sleep(1)
+        else:
+            write_stderr(f"[{SERVER_NAME}] Fay 服务未就绪，跳过 embedding 索引")
+            return
+
+        embedded_count = 0
+        chunks_snapshot = list(self.chunks)  # 快照，避免迭代中被替换
+        for chunk in chunks_snapshot:
+            if chunk.embedding is not None:
+                continue
+            embed_text = f"{chunk.source_title} - {chunk.section_title}: {chunk.text[:500]}"
+            vec = _call_embedding_api(embed_text)
+            if vec:
+                chunk.embedding = vec
+                embedded_count += 1
+        write_stderr(f"[{SERVER_NAME}] embedding 索引完成: {embedded_count}/{len(chunks_snapshot)} chunks")
 
     def add_source_path(self, path_text: str, *, recursive: bool = True) -> Dict[str, Any]:
         path = Path(path_text).expanduser().resolve()
@@ -1348,9 +1438,14 @@ class KnowledgeBase:
         if source_id and source_id not in self.sources:
             source_id = ""  # fallback: search all sources
 
-        query_tokens = filter_query_tokens(build_search_tokens(query_text))
+        query_tokens = filter_query_tokens(build_search_tokens(query_text, split_compound=False))
         if not query_tokens:
             query_tokens = list(build_search_tokens(query_text))
+
+        # 计算 query embedding（用于混合评分）
+        query_embedding: Optional[List[float]] = None
+        if _embedding_available():
+            query_embedding = _call_embedding_api(query)
 
         grouped: Dict[Tuple[str, str], Dict[str, Any]] = {}
 
@@ -1399,7 +1494,12 @@ class KnowledgeBase:
             if chunk.chunk_type == "code" and ("代码" in query_text or "code" in query_text):
                 score += 3.0
 
-            if score <= 0:
+            # embedding 语义相似度加分
+            if query_embedding and chunk.embedding:
+                sim = _cosine_similarity(query_embedding, chunk.embedding)
+                score += max(0.0, sim) * 100.0  # 余弦相似度 0~1 映射到 0~100
+
+            if score < 10.0:
                 continue
 
             key = (chunk.source_id, chunk.section_id)
@@ -1434,6 +1534,27 @@ class KnowledgeBase:
                 }
             )
 
+        # 预计算每个课程的 source-level 标题匹配分（所有章节共享）
+        # 标题越短、查询词占比越高 → 越可能是"关于这个词本身"的课程
+        source_title_scores: Dict[str, float] = {}
+        for sid, src in self.sources.items():
+            st = normalize_search_text(src.title)
+            s = 0.0
+            if query_text == st:
+                s = 200.0
+            elif query_text in st:
+                # 查询词在标题中的覆盖率越高，说明课程越聚焦于该主题
+                coverage = len(query_text) / max(len(st), 1)
+                s = 120.0 + coverage * 80.0  # 120~200 之间
+            elif st in query_text:
+                s = 80.0
+            # 课程标题 token 命中
+            st_tokens = build_search_tokens(st)
+            for token in query_tokens:
+                if token in st_tokens:
+                    s += 15.0
+            source_title_scores[sid] = s
+
         ranked: List[Tuple[float, Dict[str, Any]]] = []
         for group in grouped.values():
             best_score = float(group["best_score"])
@@ -1443,6 +1564,11 @@ class KnowledgeBase:
             repeated_match_bonus = min(match_count, 3) * 0.5
             aggregate_score = best_score + max(0.0, score_sum - best_score) * 0.35
             aggregate_score += match_type_bonus + repeated_match_bonus
+            # 课程级标题分：确保"关于X的介绍"课程在搜索X时始终排在前面
+            # 取课程级和 chunk 级的较高者，避免重复计分
+            src_id = group["source"].source_id
+            src_title_score = source_title_scores.get(src_id, 0.0)
+            aggregate_score = max(aggregate_score, src_title_score) + min(aggregate_score, src_title_score) * 0.3
             ranked.append((aggregate_score, group))
 
         ranked.sort(
@@ -1978,7 +2104,21 @@ def main() -> int:
         default=DEFAULT_IMAGE_PORT,
         help=f"Port for the image HTTP server (default: {DEFAULT_IMAGE_PORT}). Set to 0 to disable.",
     )
+    parser.add_argument(
+        "--fay-url",
+        type=str,
+        default="http://127.0.0.1:5000",
+        help="Fay local service URL. Used for embedding via /v1/embeddings passthrough.",
+    )
     args = parser.parse_args()
+
+    # 初始化 embedding（通过 Fay 透传）
+    global _fay_url
+    if args.fay_url:
+        _fay_url = args.fay_url.rstrip("/")
+        write_stderr(f"[{SERVER_NAME}] embedding 已启用 (via Fay passthrough): {_fay_url}/v1/embeddings")
+    else:
+        write_stderr(f"[{SERVER_NAME}] embedding 未配置，仅使用 token 匹配")
 
     # Set up image cache and HTTP server
     if args.image_port != 0:

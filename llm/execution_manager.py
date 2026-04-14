@@ -179,17 +179,22 @@ def _get_llm_instance(role: str = "small", streaming: bool = True) -> ChatOpenAI
 
     if role == "big":
         if cfg.big_model_engine:
+            actual_base_url = cfg.big_model_base_url or cfg.gpt_base_url
+            actual_api_key = cfg.big_model_api_key or cfg.key_gpt_api_key
+            util.log(1, f"[LLM工厂] 使用大模型: model={cfg.big_model_engine}, base_url={actual_base_url}")
             return ChatOpenAI(
                 model=cfg.big_model_engine,
-                base_url=cfg.big_model_base_url or cfg.gpt_base_url,
-                api_key=cfg.big_model_api_key or cfg.key_gpt_api_key,
+                base_url=actual_base_url,
+                api_key=actual_api_key,
                 streaming=streaming,
                 timeout=120,
                 max_retries=2,
             )
         # 无大模型配置，降级为小模型
+        util.log(1, f"[LLM工厂] 请求大模型但未配置 big_model_engine，降级为小模型: {cfg.gpt_model_engine}")
 
     # small / 降级：使用原始 gpt 配置
+    util.log(1, f"[LLM工厂] 使用小模型: model={cfg.gpt_model_engine}, base_url={cfg.gpt_base_url}")
     return ChatOpenAI(
         model=cfg.gpt_model_engine,
         base_url=cfg.gpt_base_url,
@@ -267,6 +272,40 @@ def _build_execution_next_step_messages(state: ExecutionState) -> list:
         system_content += f'\n知识库中的课程：\n{knowledge_sources_hint}\n'
     system_content += f'\n已完成的工具调用：\n{done_summary}'
 
+    # ---- 同步规划器拥有的完整上下文，确保大模型决策准确 ----
+    context_parts = []
+
+    # 人设
+    if state.system_prompt and state.system_prompt.strip():
+        context_parts.append(f"【角色设定】\n{state.system_prompt.strip()}")
+
+    # 关联记忆
+    if state.memory_context and state.memory_context.strip():
+        context_parts.append(f"【关联记忆】\n{state.memory_context.strip()}")
+
+    # 观察
+    if state.observation and str(state.observation).strip():
+        context_parts.append(f"【其他观察】\n{str(state.observation).strip()}")
+
+    # 预启动工具结果
+    if state.prestart_context and state.prestart_context.strip():
+        context_parts.append(f"【预启动工具结果】\n{state.prestart_context.strip()}")
+
+    # 对话历史（全量同步）
+    if state.messages_buffer:
+        dialogue_lines = []
+        for m in state.messages_buffer:
+            role = m.get("role", "")
+            text = m.get("content") or ""
+            if role and text:
+                label = "用户" if role in ("user", "human") else "助手"
+                dialogue_lines.append(f"  {label}: {text}")
+        if dialogue_lines:
+            context_parts.append("【对话历史】\n" + "\n".join(dialogue_lines))
+
+    if context_parts:
+        system_content += "\n\n" + "\n\n".join(context_parts)
+
     user_content = f"用户原始请求: {state.original_request}\n\n请决定下一步操作。"
 
     return [
@@ -282,6 +321,7 @@ def _big_model_execute(state: ExecutionState):
         _strip_json_code_fence,
     )
 
+    util.log(1, f"[大模型执行] {state.username}: 后台线程启动，first_plan={state.first_plan}")
     big_llm = _get_llm_instance("big", streaming=False)
     tool_registry = state.tool_registry
     max_steps = 30
@@ -337,9 +377,11 @@ def _big_model_execute(state: ExecutionState):
         # 大模型决策下一步（使用专用的执行 prompt）
         state.current_step = "大模型规划下一步..."
         next_step_messages = _build_execution_next_step_messages(state)
+        util.log(1, f"[大模型执行] {state.username}: 调用大模型决策下一步...")
         try:
             response = big_llm.invoke(next_step_messages)
         except Exception as exc:
+            util.log(1, f"[大模型执行] {state.username}: 大模型调用失败: {exc}")
             state.audit_log.append(f"大模型调用失败: {exc}")
             state.error = f"大模型调用失败: {exc}"
             break
@@ -347,6 +389,7 @@ def _big_model_execute(state: ExecutionState):
         content = getattr(response, "content", "")
         trimmed = _remove_think_from_text(content.strip())
         trimmed = _strip_json_code_fence(trimmed)
+        util.log(1, f"[大模型执行] {state.username}: 大模型返回: {trimmed[:200]}")
 
         try:
             decision = json.loads(trimmed)

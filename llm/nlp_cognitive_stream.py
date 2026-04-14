@@ -817,8 +817,6 @@ def _build_planner_messages(state: AgentState) -> List[SystemMessage | HumanMess
     else:
         prestart_section = ""
 
-    # 规划器 prompt 精简：不含人设/记忆，只聚焦"要不要调工具"
-    # 弱模型 context 有限，塞太多无关信息会导致工具调用指令被忽略
     knowledge_hint = context.get("knowledge_hint", "")
     # 构建工具名列表（简短，只列名称）
     tool_names = ", ".join(tool_specs.keys()) if tool_specs else "无"
@@ -840,7 +838,12 @@ def _build_planner_messages(state: AgentState) -> List[SystemMessage | HumanMess
         '\n- 提到任何产品名、项目名、专有名词'
         '\n- 任何你需要查资料才能准确回答的问题'
         '\n- 用户的问题涉及下方"可用工具"或"知识库主题"中的任何内容'
+        '\n\nkeyword 提取规则：'
+        '\n- keyword 必须是具体的搜索主题词，不能是"再查一下""详细说说"等动作描述'
+        '\n- 如果用户消息是指代性的（如"再查一下""继续""详细说说"），从对话历史中找到实际话题作为 keyword'
         '\n\n不确定时 → 输出 tool',
+        system_prompt,
+        _format_context_section("关联记忆", memory_context),
         _format_context_section("可用工具", tool_names),
         _format_context_section("知识库主题（提到这些主题必须输出 tool）", knowledge_hint),
         _format_context_section("最新工具结果", latest_tool_result_text),
@@ -911,7 +914,8 @@ def _build_final_messages(state: AgentState) -> List[SystemMessage | HumanMessag
 
 def _call_planner_llm(
     state: AgentState,
-    stream_callback: Optional[Callable[[str], None]] = None
+    stream_callback: Optional[Callable[[str], None]] = None,
+    on_tool_detected: Optional[Callable[[], None]] = None,
 ) -> Dict[str, Any]:
     """
     调用规划器 LLM，支持流式输出 finish+message 模式。
@@ -919,6 +923,7 @@ def _call_planner_llm(
     Args:
         state: 当前工作流状态
         stream_callback: 可选的流式回调函数，用于实时输出 message 内容
+        on_tool_detected: 可选回调，流式中检测到 tool action 时立即调用（用于提前推送过渡语）
 
     Returns:
         解析后的决策字典
@@ -931,6 +936,7 @@ def _call_planner_llm(
         accumulated = ""
         in_message_mode = False
         in_plaintext_mode = False
+        tool_early_notified = False
         message_buffer = ""
         message_closed = False
         escape_next = False
@@ -996,6 +1002,14 @@ def _call_planner_llm(
                                 message_start = after_colon[1:]  # 跳过起始引号
                                 if message_start:
                                     _stream_message_text(message_start)
+
+                # 检测到 tool 模式 → 通过独立回调推送过渡语，减少用户等待
+                tool_compact_prefix = '{"action":"tool"'
+                if compact.startswith(tool_compact_prefix) and not in_message_mode and not tool_early_notified:
+                    tool_early_notified = True
+                    if on_tool_detected:
+                        on_tool_detected()
+                    # 不进入任何流式模式，后续 chunk 静默累积等完整 JSON
 
                 # 如果不是 finish+message，根据已知 JSON 前缀判断是否为纯文本
                 if not in_message_mode:
@@ -1067,6 +1081,8 @@ def _call_planner_llm(
                 "_streamed": False
             }
         decision.setdefault("_raw", trimmed)
+        if tool_early_notified:
+            decision["_tool_early_streamed"] = True
         return decision
 
     # 无流式回调，使用原有的非流式模式
@@ -2453,8 +2469,8 @@ def question(content, username, observation=None):
             if not text_value or not text_value.strip():
                 return
             messages_buffer.append({"role": role, "content": text_value})
-            if len(messages_buffer) > 60:
-                del messages_buffer[:-60]
+            if len(messages_buffer) > 20:
+                del messages_buffer[:-20]
 
         for record in history_records:
             msg_type, msg_text = record
@@ -2480,8 +2496,8 @@ def question(content, username, observation=None):
             if not text_value or not text_value.strip():
                 return
             messages_buffer.append({"role": role, "content": text_value, "username": msg_username})
-            if len(messages_buffer) > 60:
-                del messages_buffer[:-60]
+            if len(messages_buffer) > 20:
+                del messages_buffer[:-20]
 
         def append_to_buffer(role: str, text_value: str) -> None:
             append_to_buffer_multi(role, text_value, "")
@@ -2795,8 +2811,8 @@ def question(content, username, observation=None):
         final_state_messages = final_state.get("messages") if final_state else None
         if final_state_messages and len(final_state_messages) > len(messages_buffer):
             messages_buffer.extend(final_state_messages[len(messages_buffer):])
-            if len(messages_buffer) > 60:
-                del messages_buffer[:-60]
+            if len(messages_buffer) > 20:
+                del messages_buffer[:-20]
 
         return final_stream_done
 
@@ -3003,8 +3019,18 @@ def question(content, username, observation=None):
                 else:
                     break
 
+    def _on_tool_detected() -> None:
+        """流式中检测到 tool action → 立即推送过渡语给用户"""
+        nonlocal is_first_sentence
+        write_sentence("我来帮你查一下，稍等…\n", force_first=is_first_sentence)
+        is_first_sentence = False
+
     try:
-        first_decision = _call_planner_llm(plan_state, stream_callback=_first_plan_stream_callback)
+        first_decision = _call_planner_llm(
+            plan_state,
+            stream_callback=_first_plan_stream_callback,
+            on_tool_detected=_on_tool_detected,
+        )
     except Exception as llm_err:
         util.log(1, f"[大小模型] {username}: 规划器LLM调用失败: {llm_err}")
         error_reply = "抱歉，我的大脑暂时开了小差，请稍后再试一下。"
@@ -3065,9 +3091,11 @@ def question(content, username, observation=None):
         search_tool = "kb_search" if "kb_search" in tool_registry else next(iter(tool_registry), "kb_search")
         # 用规划器提取的关键词作为搜索词，提取失败时回退到用户原话
         search_query = (first_decision.get("keyword") or "").strip() or content.strip()
+        # 如果流式阶段已提前推送过渡语，不再重复
+        already_notified = first_decision.get("_tool_early_streamed", False)
         return _submit_tool_execution(
             {"tool": search_tool, "args": {"query": search_query}},
-            show_plan_msg=True,
+            show_plan_msg=not already_notified,
         )
 
     else:
