@@ -3114,12 +3114,12 @@ def question(content, username, observation=None):
         # ---- 兜底：闲聊判断器的 finish 不该产生长回复 ----
         # 真正的闲聊（问候、确认、简短回答）一般不超过 80 字
         # 超过说明弱模型在 finish 里编造事实性内容，追加工具核实
-        # 但用户消息本身是短语气词（哈哈、嗯、好的 等）时不触发核实
+        # 但用户消息本身是纯语气词（哈哈、嗯、好 等 ≤3字）时不触发核实
         has_kb_search = 'kb_search' in tool_registry
         user_msg_stripped = content.strip()
         need_verify = (has_kb_search
                        and len(finish_msg) > 80
-                       and len(user_msg_stripped) > 5)
+                       and len(user_msg_stripped) > 3)
         if need_verify:
             util.log(1, f"[大小模型] {username}: 闲聊判断器 finish 过长({len(finish_msg)}字)，追加核实")
             if accumulated_text:
