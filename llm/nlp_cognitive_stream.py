@@ -405,7 +405,7 @@ def _strip_json_code_fence(text: str) -> str:
         return text
     import re
     trimmed = text.strip()
-    match = re.match(r"^```(?:json)?\\s*(.*?)\\s*```$", trimmed, flags=re.IGNORECASE | re.DOTALL)
+    match = re.match(r"^```(?:json)?\s*(.*?)\s*```$", trimmed, flags=re.IGNORECASE | re.DOTALL)
     if match:
         return match.group(1).strip()
     return text
@@ -982,6 +982,12 @@ def _call_planner_llm(
             if not in_message_mode and not in_plaintext_mode:
                 # 移除可能的 think 标签前缀
                 check_text = _remove_think_from_text(accumulated.strip())
+                # 移除 markdown code fence 前缀（如 ```json\n），兼容包裹 JSON 的模型
+                check_text_stripped = re.sub(r'^```(?:json)?\s*', '', check_text, flags=re.IGNORECASE)
+                if check_text_stripped != check_text:
+                    # 去掉尾部的 ``` 如果已完整
+                    check_text_stripped = re.sub(r'\s*```\s*$', '', check_text_stripped)
+                    check_text = check_text_stripped
                 # 压缩空白，兼容 LLM 返回带换行的 JSON 如 {\n  "action": "finish",...}
                 compact = re.sub(r'\s+', '', check_text[:60])
 
@@ -2132,16 +2138,19 @@ def _auto_reply_after_execution(username, finished_exec_state):
 
         if unverified:
             # 核实场景：之前已流式输出了一段未核实的回复+过渡语，现在基于工具结果纠正或确认
-            compact_system = f"""你是一个友好的助手。你刚才对用户的问题给出了一个回答，随后你告诉用户"等等，我再帮你核实一下…"，现在你通过工具查到了真实资料。
-请将工具结果与之前的回答做对比，按以下优先级处理：
-- 【优先】如果之前的回答与工具结果基本一致，直接说"核实了一下，刚才说的没问题"，然后可以补充一两个细节，不要重复之前已说过的内容
-- 【仅当】工具结果与之前的回答存在明确的事实性矛盾时，才指出具体哪里不对并给出正确信息
-- 不要为了显得有用而强行找错，如果没有矛盾就不要否定之前的回答
-- 不要再重复"我来查一下"之类的过渡语
----
-**用户消息**: {user_request}
-**你之前未核实的回答**: {unverified[:300]}
-**工具执行结果**:
+            compact_system = f"""你是一个友好的助手。你刚才回答了用户的问题，然后告诉用户"等等，我再帮你核实一下…"，现在工具查到了真实资料。
+
+规则（严格遵守）：
+1. 只输出给用户看的最终回复，不要输出分析过程、对比推理、决策逻辑
+2. 如果之前的回答与工具结果基本一致 → 说"核实了一下，刚才说的没问题"，可补充一两个细节
+3. 仅当工具结果与之前回答有明确事实性矛盾 → 指出哪里不对并更正
+4. 没有矛盾就不要否定之前的回答
+5. 不要重复"我来查一下"之类的过渡语
+6. 回复简洁，2-4句话
+
+用户消息: {user_request}
+你之前的回答: {unverified[:300]}
+工具结果:
 {tool_context}
 """
         else:
@@ -3105,8 +3114,13 @@ def question(content, username, observation=None):
         # ---- 兜底：闲聊判断器的 finish 不该产生长回复 ----
         # 真正的闲聊（问候、确认、简短回答）一般不超过 80 字
         # 超过说明弱模型在 finish 里编造事实性内容，追加工具核实
+        # 但用户消息本身是短语气词（哈哈、嗯、好的 等）时不触发核实
         has_kb_search = 'kb_search' in tool_registry
-        if has_kb_search and len(finish_msg) > 80:
+        user_msg_stripped = content.strip()
+        need_verify = (has_kb_search
+                       and len(finish_msg) > 80
+                       and len(user_msg_stripped) > 5)
+        if need_verify:
             util.log(1, f"[大小模型] {username}: 闲聊判断器 finish 过长({len(finish_msg)}字)，追加核实")
             if accumulated_text:
                 write_sentence(accumulated_text, force_first=is_first_sentence)
