@@ -755,7 +755,7 @@ def api_v1_models():
         "owned_by": "fay",
     }
     fay_models = []
-    for model_id in ("fay", "fay-streaming"):
+    for model_id in ("fay", "fay-streaming", "llm"):
         entry = dict(fay_model_base, id=model_id)
         if fay_context_length is not None:
             entry["context_length"] = fay_context_length
@@ -789,7 +789,8 @@ def api_send_v1_chat_completions():
                 return jsonify({'error': 'LLM base_url is not configured'}), 500
 
             stream_requested = _as_bool(data.get('stream', False))
-            model_name = model
+            # model=llm 时自动使用 system.conf 中配置的模型
+            model_name = config_util.gpt_model_engine if model == 'llm' else model
             payload = _prepare_llm_proxy_payload(data, model_name)
             if not payload.get("messages"):
                 return jsonify({'error': 'messages is required'}), 400
