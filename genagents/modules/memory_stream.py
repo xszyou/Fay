@@ -741,7 +741,10 @@ class MemoryStream:
 
   def reflect(self, anchor, reflection_count=5, 
               retrieval_count=120, time_step=0): 
-    records = self.retrieve([anchor], time_step, retrieval_count)[anchor]
+    retrieved = self.retrieve([anchor], time_step, retrieval_count)
+    records = retrieved.get(anchor, [])
+    if not records:
+      return
     record_ids = [i.node_id for i in records]
     reflections = generate_reflection(records, anchor, reflection_count)
     scores = generate_importance_score(reflections)

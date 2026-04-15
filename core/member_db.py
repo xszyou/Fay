@@ -180,6 +180,12 @@ class Member_Db:
     def get_all_users(self):
         conn = sqlite3.connect('memory/user_profiles.db')
         c = conn.cursor()
+        # 确保表存在（数据库文件可能被清空或替换）
+        c.execute('''CREATE TABLE IF NOT EXISTS T_Member
+            (id INTEGER PRIMARY KEY     autoincrement,
+            username        TEXT    NOT NULL UNIQUE,
+            extra_info      TEXT    DEFAULT '',
+            user_portrait   TEXT    DEFAULT '');''')
         c.execute('SELECT * FROM T_Member')
         results = c.fetchall()
         conn.close()
