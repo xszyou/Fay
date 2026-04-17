@@ -58,6 +58,20 @@
         font-weight: bold;
         font-size: 16px;
       }
+      .autostart-badge {
+        margin-left: 8px;
+        padding: 1px 8px;
+        border-radius: 10px;
+        font-size: 12px;
+        line-height: 1.4;
+        background-color: #409eff;
+        color: #fff;
+        white-space: nowrap;
+        display: inline-block;
+      }
+      .autostart-badge.hidden {
+        display: none;
+      }
       .status-online {
         color: #67c23a;
         display: flex;
@@ -511,9 +525,12 @@
           <div class="mcp-container">
             <!-- 使用Jinja2模板循环渲染MCP服务器卡片 -->
             {% for server in mcp_servers %}
-            <div class="mcp-card tooltip" data-server-id="{{ server.id }}" data-transport="{{ server.transport or 'sse' }}" data-command="{{ server.command or '' }}" data-args="{{ (server.args | join(' ')) if server.args else '' }}" data-cwd="{{ server.cwd or '' }}" data-key="{{ server.key or '' }}" data-env='{{ server.env | tojson }}'>
+            <div class="mcp-card tooltip" data-server-id="{{ server.id }}" data-transport="{{ server.transport or 'sse' }}" data-command="{{ server.command or '' }}" data-args="{{ (server.args | join(' ')) if server.args else '' }}" data-cwd="{{ server.cwd or '' }}" data-key="{{ server.key or '' }}" data-env='{{ server.env | tojson }}' data-autostart="{{ '1' if server.autostart else '0' }}">
               <div class="mcp-header">
-                <div class="mcp-title">{{ server.name }}</div>
+                <div style="display:flex; align-items:center;">
+                  <div class="mcp-title">{{ server.name }}</div>
+                  <span class="autostart-badge{% if not server.autostart %} hidden{% endif %}">开机启动</span>
+                </div>
                 <div class="status-{{ server.status }}">
                   <div class="status-dot {{ server.status }}-dot"></div>
                   {{ '在线' if server.status == 'online' else '离线' }}
@@ -600,6 +617,10 @@
                       <input type="text" class="mcp-input" id="mcpEnv" placeholder='例如: {"MODE":"local"}'>
                     </div>
                   </div>
+                  <div class="mcp-form-item">
+                    <label class="mcp-label">开机启动:</label>
+                    <input type="checkbox" id="mcpAutostart">
+                  </div>
                 </div>
                 <div class="mcp-dialog-footer">
                   <button class="add-server-btn" id="addServerBtn">添加</button>
@@ -655,6 +676,10 @@
                       <label class="mcp-label">环境变量(JSON):</label>
                       <input type="text" class="mcp-input" id="editMcpEnv" placeholder='例如: {"MODE":"local"}'>
                     </div>
+                  </div>
+                  <div class="mcp-form-item">
+                    <label class="mcp-label">开机启动:</label>
+                    <input type="checkbox" id="editAutostart">
                   </div>
                   <div class="mcp-form-item">
                     <label class="mcp-label">保存后重连:</label>
@@ -773,6 +798,7 @@
         const args = card.getAttribute('data-args') || '';
         const cwd = card.getAttribute('data-cwd') || '';
         const env = card.getAttribute('data-env') || '';
+        const autostart = card.getAttribute('data-autostart') === '1';
 
         // 填充表单
         document.getElementById('editMcpName').value = name;
@@ -783,6 +809,7 @@
         document.getElementById('editMcpArgs').value = args;
         document.getElementById('editMcpCwd').value = cwd;
         document.getElementById('editMcpEnv').value = env && env !== 'null' ? env : '';
+        document.getElementById('editAutostart').checked = autostart;
 
         // 切换显示
         const editTransportSel = document.getElementById('editMcpTransport');
@@ -817,6 +844,7 @@
         const cwd = document.getElementById('editMcpCwd').value.trim();
         const envText = document.getElementById('editMcpEnv').value.trim();
         const autoReconnect = document.getElementById('editAutoReconnect').checked;
+        const autostart = document.getElementById('editAutostart').checked;
 
         // 获取保存按钮并设置加载状态
         const saveBtn = document.getElementById('editSaveBtn');
@@ -824,7 +852,7 @@
         saveBtn.textContent = '保存中...';
         saveBtn.disabled = true;
 
-        let payload = { name, transport, auto_reconnect: autoReconnect };
+        let payload = { name, transport, auto_reconnect: autoReconnect, autostart };
         if (transport === 'sse') {
           payload.ip = ip;
           payload.key = key;
@@ -857,6 +885,12 @@
 
             // 传输类型与属性
             card.setAttribute('data-transport', transport);
+            card.setAttribute('data-autostart', autostart ? '1' : '0');
+            const badgeEl = card.querySelector('.autostart-badge');
+            if (badgeEl) {
+              if (autostart) badgeEl.classList.remove('hidden');
+              else badgeEl.classList.add('hidden');
+            }
             if (transport === 'sse') {
               const ipEl = card.querySelector('.mcp-info .mcp-value');
               if (ipEl) {
@@ -913,8 +947,9 @@
         // 获取输入值
         const name = document.getElementById('mcpName').value.trim();
         const transport = document.getElementById('mcpTransport').value;
+        const autostart = document.getElementById('mcpAutostart').checked;
 
-        let data = { name, transport };
+        let data = { name, transport, autostart };
         if (transport === 'stdio') {
           const command = document.getElementById('mcpCommand').value.trim();
           const argsStr = document.getElementById('mcpArgs').value.trim();

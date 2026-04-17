@@ -3,7 +3,7 @@
         "id": 1,
         "name": "tools",
         "ip": "",
-        "connection_time": "2026-03-27 10:58:07",
+        "connection_time": "2026-04-15 21:58:59",
         "key": "",
         "transport": "stdio",
         "command": "python",
@@ -11,7 +11,8 @@
             "test/mcp_stdio_example.py"
         ],
         "cwd": "",
-        "env": {}
+        "env": {},
+        "autostart": false
     },
     {
         "id": 2,
@@ -25,7 +26,8 @@
             "server.py"
         ],
         "cwd": "mcp_servers/schedule_manager",
-        "env": {}
+        "env": {},
+        "autostart": false
     },
     {
         "id": 3,
@@ -41,7 +43,8 @@
         "cwd": "mcp_servers/logseq",
         "env": {
             "LOGSEQ_GRAPH_DIR": "D:/iCloudDrive/iCloud~com~logseq~logseq/第二大脑"
-        }
+        },
+        "autostart": false
     },
     {
         "id": 4,
@@ -55,7 +58,8 @@
             "mcp_servers/yueshen_rag/server.py"
         ],
         "cwd": "",
-        "env": {}
+        "env": {},
+        "autostart": false
     },
     {
         "id": 5,
@@ -69,13 +73,14 @@
             "mcp_servers/window_capture/server.py"
         ],
         "cwd": "",
-        "env": {}
+        "env": {},
+        "autostart": false
     },
     {
         "id": 6,
         "name": "课程知识库",
         "ip": "",
-        "connection_time": "2026-04-10 10:19:46",
+        "connection_time": "2026-04-17 16:28:31",
         "key": "",
         "transport": "stdio",
         "command": "python",
@@ -85,6 +90,7 @@
             "./fay_player_knowledge"
         ],
         "cwd": "",
-        "env": {}
+        "env": {},
+        "autostart": true
     }
 ]

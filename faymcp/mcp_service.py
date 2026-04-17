@@ -60,6 +60,8 @@ def load_mcp_servers():
                 for server in servers:
                     server['status'] = 'offline'
                     server['latency'] = '0ms'
+                    if 'autostart' not in server:
+                        server['autostart'] = False
                 return servers
         else:
             # 如果文件不存在，使用默认数据并保存
@@ -122,7 +124,8 @@ def save_mcp_servers(servers):
                 "command": server.get('command', ''),
                 "args": server.get('args', []),
                 "cwd": server.get('cwd', ''),
-                "env": server.get('env', {})
+                "env": server.get('env', {}),
+                "autostart": bool(server.get('autostart', False))
             }
             servers_to_save.append(server_copy)
             
@@ -449,7 +452,8 @@ def add_mcp_server():
         "command": data.get('command', ''),
         "args": data.get('args', []),
         "cwd": data.get('cwd', ''),
-        "env": data.get('env', {})
+        "env": data.get('env', {}),
+        "autostart": bool(data.get('autostart', False))
     }
     
     # 如果请求中包含 auto_connect 字段并且为 True，则尝试连接
@@ -651,6 +655,8 @@ def update_mcp_server(server_id):
     server['name'] = data.get('name', server['name'])
     transport = data.get('transport', server.get('transport', 'sse'))
     server['transport'] = transport
+    if 'autostart' in data:
+        server['autostart'] = bool(data.get('autostart'))
 
     # 根据传输类型更新配置
     if transport == 'stdio':
@@ -1660,17 +1666,50 @@ def run():
     )
     server.serve_forever()
 
+# 启动时自动连接标记为 autostart 的服务器
+def _autostart_connect_servers():
+    """在 Flask 启动后，后台连接所有配置了开机启动的服务器。"""
+    global mcp_servers
+    # 稍等片刻让 Flask 完成启动，避免与其它初始化抢占日志
+    time.sleep(2)
+    targets = [s for s in mcp_servers if s.get('autostart')]
+    if not targets:
+        return
+    util.log(1, f"开机启动：准备连接 {len(targets)} 个MCP服务器")
+    for server in targets:
+        try:
+            server_id = server['id']
+            success, updated_server, _ = connect_to_real_mcp(server)
+            for i, s in enumerate(mcp_servers):
+                if s['id'] == server_id:
+                    mcp_servers[i] = updated_server
+                    break
+            if success:
+                util.log(1, f"开机启动：{updated_server.get('name')} 已连接")
+            else:
+                util.log(1, f"开机启动：{updated_server.get('name')} 连接失败")
+        except Exception as e:
+            util.log(1, f"开机启动连接异常: {e}")
+    try:
+        save_mcp_servers(mcp_servers)
+    except Exception as e:
+        util.log(1, f"开机启动后保存状态失败: {e}")
+
+
 # 启动MCP服务器
 def start():
     # 启动连接检查定时任务
     # start_connection_check() TODO 暂时取消定时检查任务
-    
+
     # 输出启动信息
     util.log(1, "MCP服务已启动在端口5010")
-    
+
     # 启动服务器
     from scheduler.thread_manager import MyThread
     MyThread(target=run).start()
+
+    # 后台触发 autostart 连接
+    MyThread(target=_autostart_connect_servers).start()
 
 if __name__ == '__main__':
     import logging
