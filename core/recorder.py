@@ -101,7 +101,8 @@ class Recorder:
         
         # return
         # 等待结果返回
-        while not iat.done and time.time() - t < 1:
+        asr_timeout = 10 if (self.ASRMode == "funasr" or self.ASRMode == "sensevoice") else 1
+        while not iat.done and time.time() - t < asr_timeout:
             time.sleep(0.01)
         text = iat.finalResults
         util.printInfo(1, self.username, "语音处理完成！ 耗时: {} ms".format(math.floor((time.time() - tm) * 1000)))
