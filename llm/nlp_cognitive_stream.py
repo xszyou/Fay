@@ -823,7 +823,16 @@ def _build_planner_messages(state: AgentState) -> List[SystemMessage | HumanMess
 
     planner_system = _merge_system_input(
         "你是一个闲聊判断器。判断用户的话是不是闲聊，请严格输出合法 JSON，不要输出其他内容。",
-        '输出格式只有两种：'
+        '【你在系统里的角色】'
+        '\n你是第一响应者。你的回答如果涉及事实信息，系统会在后台另起一个大模型自动核实并修正，'
+        '用户最终看到的是"你的回答 + 系统加的过渡语 + 核实模型的修正"。'
+        '\n所以：不要自己演过渡过程。不要在 message 里写'
+        '"我来查一下""等等我核实一下""稍等我看看""马上好""我这就重新跑一下"这类描述动作的话 —— '
+        '那些过渡语由系统统一插入，你写了只会和系统的话重复。'
+        '\n你只需要：'
+        '\n- 直接给出你当前最好的答案（闲聊时输出 finish）'
+        '\n- 如果非得调工具才能答，直接输出 tool，不要在 finish 里编查询过程'
+        '\n\n输出格式只有两种：'
         '\n1. 是闲聊: {"action": "finish", "message": "你的回复内容"}'
         '\n2. 不是闲聊: {"action": "tool", "keyword": "提取的搜索关键词"}'
         '\n\n什么是闲聊（输出 finish）：'
@@ -3096,14 +3105,18 @@ def question(content, username, observation=None):
         return ""
 
     if first_action == "tool":
-        # 不是闲聊 → 走工具搜索（规划器只做闲聊判断，具体工具由大模型执行循环决定）
-        search_tool = "kb_search" if "kb_search" in tool_registry else next(iter(tool_registry), "kb_search")
-        # 用规划器提取的关键词作为搜索词，提取失败时回退到用户原话
-        search_query = (first_decision.get("keyword") or "").strip() or content.strip()
-        # 如果流式阶段已提前推送过渡语，不再重复
+        # 不是闲聊 → 走工具执行（规划器只做闲聊判断）
         already_notified = first_decision.get("_tool_early_streamed", False)
+        if "kb_search" in tool_registry:
+            # 知识问答场景：先用 kb_search 搜一次，后续步骤由大模型决定
+            search_query = (first_decision.get("keyword") or "").strip() or content.strip()
+            return _submit_tool_execution(
+                {"tool": "kb_search", "args": {"query": search_query}},
+                show_plan_msg=not already_notified,
+            )
+        # 无 kb_search（如纯 MCP 工具场景）→ 不硬塞首工具，交由大模型自行规划
         return _submit_tool_execution(
-            {"tool": search_tool, "args": {"query": search_query}},
+            {"tool": None, "args": {}},
             show_plan_msg=not already_notified,
         )
 
@@ -3114,10 +3127,10 @@ def question(content, username, observation=None):
         # ---- 兜底：闲聊判断器的 finish 不该产生长回复 ----
         # 真正的闲聊（问候、确认、简短回答）一般不超过 80 字
         # 超过说明弱模型在 finish 里编造事实性内容，追加工具核实
-        # 但用户消息本身是纯语气词（哈哈、嗯、好 等 ≤3字）时不触发核实
-        has_kb_search = 'kb_search' in tool_registry
+        # 条件：有任何可用工具 + finish 内容超过 80 字 + 用户消息非纯语气词（>3字）
+        has_tools = bool(tool_registry)
         user_msg_stripped = content.strip()
-        need_verify = (has_kb_search
+        need_verify = (has_tools
                        and len(finish_msg) > 80
                        and len(user_msg_stripped) > 3)
         if need_verify:
@@ -3129,8 +3142,9 @@ def question(content, username, observation=None):
             verify_msg = "\n\n等等，我再帮你核实一下…\n\n---\n"
             write_sentence(verify_msg)
             full_response_text += verify_msg
+            # 不硬编码工具，交由大模型基于 unverified_response 自行选择核实工具
             return _submit_tool_execution(
-                {"tool": "kb_search", "args": {"query": content.strip()}},
+                {"tool": None, "args": {}},
                 show_plan_msg=False,
                 unverified_response=finish_msg,
             )
