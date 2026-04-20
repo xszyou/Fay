@@ -34,13 +34,27 @@ volcano_tts_cluster=volcano_tts
 volcano_tts_voice_type=
 
 #key
+#小模型（日常对话/工具编排使用）api key
 gpt_api_key=
-#gpt base url 如：https://api.openai.com/v1、https://rwkv.ai-creator.net/chntuned/v1、https://api.fastgpt.in/api/v1、https://api.moonshot.cn/v1
+#小模型 base url 如：https://api.openai.com/v1、https://rwkv.ai-creator.net/chntuned/v1、https://api.fastgpt.in/api/v1、https://api.moonshot.cn/v1
 gpt_base_url=
-#gpt model engine 如：glm4、deepseek、qwen3-4b等
+#小模型 model engine 如：glm4、deepseek、qwen3-4b等
 gpt_model_engine=
-# Embedding API 配置（复用 LLM 的 url 和 key）
+
+#大模型（复杂推理/核实场景使用，未配置时降级为小模型）
+#大模型 model engine 如：MiniMax-M2.7、gpt-4o、deepseek-r1等
+big_model_engine=
+#大模型 base url（留空则复用小模型的 gpt_base_url）
+big_model_base_url=
+#大模型 api key（留空则复用小模型的 gpt_api_key）
+big_model_api_key=
+
+# Embedding 模型配置
+# Embedding 模型名称，如 text-embedding-qwen3-embedding-0.6b、BAAI/bge-large-zh-v1.5
 embedding_api_model=
+# Embedding 服务 base url（可单独配置；留空则复用小模型的 gpt_base_url，key 始终复用 gpt_api_key）
+embedding_base_url=
+
 #gpt(fastgpt)代理(可为空，填写例子：127.0.0.1:7890)
 proxy_config=
 
