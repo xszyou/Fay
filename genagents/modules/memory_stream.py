@@ -427,9 +427,9 @@ def extract_relevance(seq_nodes, embeddings, focal_pt):
 # ###                              CONCEPT NODE                              ###
 # ##############################################################################
 
-class ConceptNode: 
-  def __init__(self, node_dict): 
-    # Loading the content of a memory node in the memory stream. 
+class ConceptNode:
+  def __init__(self, node_dict):
+    # Loading the content of a memory node in the memory stream.
     self.node_id = node_dict["node_id"]
     self.node_type = node_dict["node_type"]
     self.content = node_dict["content"]
@@ -440,15 +440,19 @@ class ConceptNode:
     # 确保last_retrieved是整数类型
     self.last_retrieved = int(node_dict["last_retrieved"]) if node_dict["last_retrieved"] is not None else 0
     self.pointer_id = node_dict["pointer_id"]
+    # tags: 外部 agent / 内部调用打的业务标签，按命名空间前缀约定（kind:/source:/domain:/...）
+    # 老数据无此字段时默认空列表，向后兼容
+    raw_tags = node_dict.get("tags", [])
+    self.tags = list(raw_tags) if isinstance(raw_tags, (list, tuple)) else []
 
 
-  def package(self): 
+  def package(self):
     """
-    Packaging the ConceptNode 
+    Packaging the ConceptNode
 
     Parameters:
       None
-    Returns: 
+    Returns:
       packaged dictionary
     """
     curr_package = {}
@@ -460,6 +464,7 @@ class ConceptNode:
     curr_package["created"] = self.created
     curr_package["last_retrieved"] = self.last_retrieved
     curr_package["pointer_id"] = self.pointer_id
+    curr_package["tags"] = list(self.tags) if self.tags else []
 
     return curr_package
 
@@ -580,22 +585,27 @@ class MemoryStream:
 
 
   def retrieve(self, focal_points, time_step, n_count=120, curr_filter="all",
-               hp=[0, 1, 0.5], stateless=False, verbose=False): 
+               hp=[0, 1, 0.5], stateless=False, verbose=False,
+               filter_tags_all=None, filter_tags_any=None):
     """
-    Retrieve elements from the memory stream. 
+    Retrieve elements from the memory stream.
 
     Parameters:
-      focal_points: This is the query sentence. It is in a list form where 
+      focal_points: This is the query sentence. It is in a list form where
         the elemnts of the list are the query sentences.
-      time_step: Current time_step 
-      n_count: The number of nodes that we want to retrieve. 
-      curr_filter: Filtering the node.type that we want to retrieve. 
-        Acceptable values are 'all', 'reflection', 'observation', 'conversation' 
+      time_step: Current time_step
+      n_count: The number of nodes that we want to retrieve.
+      curr_filter: Filtering the node.type that we want to retrieve.
+        Acceptable values are 'all', 'reflection', 'observation', 'conversation'
       hp: Hyperparameter for [recency_w, relevance_w, importance_w]
       verbose: verbose
-    Returns: 
+      filter_tags_all: 只保留同时带有全部这些 tag 的节点（AND 语义），例如
+        ["kind:rule", "persistent:true"]。None 或空表示不过滤。
+      filter_tags_any: 只保留至少带有其中一个 tag 的节点（OR 语义）。
+        None 或空表示不过滤。与 filter_tags_all 同时给定时两者都要满足。
+    Returns:
       retrieved: A dictionary whose keys are a focal_pt query str, and whose
-        values are a list of nodes that are retrieved for that query str. 
+        values are a list of nodes that are retrieved for that query str.
     """
     curr_nodes = []
 
@@ -605,12 +615,23 @@ class MemoryStream:
 
     # Filtering for the desired node type. curr_filter can be one of the
     # elements: 'all', 'reflection', 'observation', 'conversation'
-    if curr_filter == "all": 
-      curr_nodes = self.seq_nodes
-    else: 
-      for curr_node in self.seq_nodes: 
-        if curr_node.node_type == curr_filter: 
+    if curr_filter == "all":
+      curr_nodes = list(self.seq_nodes)
+    else:
+      for curr_node in self.seq_nodes:
+        if curr_node.node_type == curr_filter:
           curr_nodes += [curr_node]
+
+    # tag 过滤：支持 AND + OR 组合
+    if filter_tags_all:
+      required = set(filter_tags_all)
+      curr_nodes = [n for n in curr_nodes if required.issubset(set(n.tags or []))]
+    if filter_tags_any:
+      any_set = set(filter_tags_any)
+      curr_nodes = [n for n in curr_nodes if any_set.intersection(set(n.tags or []))]
+
+    if not curr_nodes:
+      return {fp: [] for fp in focal_points}
 
     # 确保embeddings不为None
     if self.embeddings is None:
@@ -667,19 +688,20 @@ class MemoryStream:
     return retrieved 
 
 
-  def _add_node(self, time_step, node_type, content, importance, pointer_id):
+  def _add_node(self, time_step, node_type, content, importance, pointer_id, tags=None):
     """
-    Adding a new node to the memory stream. 
+    Adding a new node to the memory stream.
 
     Parameters:
-      time_step: Current time_step 
+      time_step: Current time_step
       node_type: type of node -- it's either reflection, observation, conversation
       content: the str content of the memory record
       importance: int score of the importance score
-      pointer_id: the str of the parent node 
-    Returns: 
+      pointer_id: the str of the parent node
+      tags: 业务标签列表（kind:/source:/domain:/... 命名空间）
+    Returns:
       retrieved: A dictionary whose keys are a focal_pt query str, and whose
-        values are a list of nodes that are retrieved for that query str. 
+        values are a list of nodes that are retrieved for that query str.
     """
     node_dict = dict()
     node_dict["node_id"] = len(self.seq_nodes)
@@ -690,15 +712,16 @@ class MemoryStream:
     node_dict["created"] = time_step
     node_dict["last_retrieved"] = time_step
     node_dict["pointer_id"] = pointer_id
+    node_dict["tags"] = list(tags) if tags else []
     new_node = ConceptNode(node_dict)
 
     self.seq_nodes += [new_node]
     self.id_to_node[new_node.node_id] = new_node
-    
+
     # 确保embeddings不为None
     if self.embeddings is None:
         self.embeddings = {}
-    
+
     try:
         self.embeddings[content] = get_text_embedding(content)
     except Exception as e:
@@ -706,16 +729,18 @@ class MemoryStream:
         # 如果获取嵌入失败，使用空列表代替
         self.embeddings[content] = []
 
+    return new_node
 
-  def remember(self, content, time_step=0):
+
+  def remember(self, content, time_step=0, tags=None):
     score = generate_importance_score([content])[0]
-    self._add_node(time_step, "observation", content, score, None)
+    return self._add_node(time_step, "observation", content, score, None, tags=tags)
 
-  def remember_conversation(self, content, time_step=0):
+  def remember_conversation(self, content, time_step=0, tags=None):
     score = generate_importance_score([content])[0]
-    self._add_node(time_step, "conversation", content, score, None)
+    return self._add_node(time_step, "conversation", content, score, None, tags=tags)
 
-  def append_prepared_node(self, time_step, node_type, content, importance, embedding, pointer_id=None):
+  def append_prepared_node(self, time_step, node_type, content, importance, embedding, pointer_id=None, tags=None):
     """
     使用预先计算好的 importance 与 embedding 直接落库，避免在调用方持锁时
     再发起任何网络请求。仅做内存数据结构变更。
@@ -729,6 +754,7 @@ class MemoryStream:
     node_dict["created"] = time_step
     node_dict["last_retrieved"] = time_step
     node_dict["pointer_id"] = pointer_id
+    node_dict["tags"] = list(tags) if tags else []
     new_node = ConceptNode(node_dict)
 
     self.seq_nodes += [new_node]
@@ -738,9 +764,11 @@ class MemoryStream:
         self.embeddings = {}
     self.embeddings[content] = embedding if embedding is not None else []
 
+    return new_node
 
-  def reflect(self, anchor, reflection_count=5, 
-              retrieval_count=120, time_step=0): 
+
+  def reflect(self, anchor, reflection_count=5,
+              retrieval_count=120, time_step=0):
     retrieved = self.retrieve([anchor], time_step, retrieval_count)
     records = retrieved.get(anchor, [])
     if not records:
@@ -749,6 +777,25 @@ class MemoryStream:
     reflections = generate_reflection(records, anchor, reflection_count)
     scores = generate_importance_score(reflections)
 
-    for count, reflection in enumerate(reflections): 
-      self._add_node(time_step, "reflection", reflections[count], 
-                     scores[count], record_ids)
+    # 反思节点的 tags：从源节点继承业务命名空间（kind/domain/strategy/symbol/...），
+    # 过滤掉太具体的、在反思语义上无意义的维度（session/date）。
+    # 再自动追加 kind:insight 与 source:fay_reflection，标明节点出处。
+    inherited = set()
+    SKIP_PREFIXES = ("session:", "date:", "schedule:")
+    for rec in records:
+      for t in (rec.tags or []):
+        if any(t.startswith(p) for p in SKIP_PREFIXES):
+          continue
+        # 源节点本身若是旧 insight，不再继承其 kind:insight
+        if t == "kind:insight":
+          continue
+        inherited.add(t)
+    # 反思永远覆盖为 insight
+    inherited = {t for t in inherited if not t.startswith("kind:")}
+    inherited.add("kind:insight")
+    inherited.add("source:fay_reflection")
+    reflection_tags = sorted(inherited)
+
+    for count, reflection in enumerate(reflections):
+      self._add_node(time_step, "reflection", reflections[count],
+                     scores[count], record_ids, tags=reflection_tags)

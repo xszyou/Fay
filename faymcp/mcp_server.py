@@ -32,6 +32,14 @@ except ImportError:
     print("缺少 mcp 库，请先安装：pip install mcp", file=sys.stderr)
     sys.exit(1)
 
+# 记忆服务：所有 memory_* 工具都代理到 core.memory_service，保证
+# "MCP 暴露" 与 "Fay 内部调用" 共用同一条落盘/检索路径。
+try:
+    from core import memory_service
+except ImportError as e:
+    memory_service = None
+    logging.getLogger("fay_mcp_server").warning(f"core.memory_service 不可用: {e}")
+
 try:
     from starlette.applications import Starlette
     from starlette.datastructures import MutableHeaders
@@ -83,6 +91,172 @@ def _text_content(text: str) -> TextContent:
         return {"type": "text", "text": text}  # type: ignore[return-value]
 
 
+_KIND_ENUM = [
+    "decision", "event", "fact", "rule", "error",
+    "insight", "preference", "observation",
+]
+
+_MEMORY_TOOLS: list[Tool] = [
+    Tool(
+        name="memory_remember",
+        description=(
+            "把一条记忆写入 Fay 的长期记忆流。用于让外部 agent（如 Claude Code、"
+            "Cursor、排程脚本）或 Fay 自身把发生的事、做的决策、学到的规则回写到 Fay，"
+            "使未来的会话能基于它做检索与反思。\n\n"
+            "Fay 不只服务于量化交易，典型使用场景包括：\n"
+            "- 居家养老/陪伴：记录\"老人今天血压偏高\"（kind=event, domain=homecare, persistent=false）\n"
+            "- 智能家居：记录\"客厅空调坏了，预约周五维修\"（kind=event, domain=home_automation）\n"
+            "- 量化交易：记录\"上午 AAPL 策略触发止损 2%\"（kind=event, domain=quant, symbol:AAPL, strategy:<名>）\n"
+            "- 教育辅导：记录\"小明已掌握一元二次方程\"（kind=fact, domain=education）\n"
+            "- 生活助理：记录\"用户偏好晚上 10 点之后不被打扰\"（kind=preference, domain=life_assistant, persistent=true）\n"
+            "- 长期规则：记录\"每小时检查一次策略有无异常\"（kind=rule, persistent=true, schedule:hourly）\n\n"
+            "kind 必须从枚举里选；kind='rule' 时务必同时置 persistent=true，否则"
+            "get_active_rules 取不到。如不确定 kind 该选什么，用 'observation'。\n"
+            "extra_tags 请用 `<namespace>:<value>` 形式，见 memory_get_schema。"
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "content": {"type": "string", "description": "记忆文本。建议一句话描述一件事。"},
+                "kind": {
+                    "type": "string",
+                    "enum": _KIND_ENUM,
+                    "description": (
+                        "这条记忆是什么类型："
+                        "decision=做出的决定；event=发生的事件；fact=事实；"
+                        "rule=长期规则（需配合 persistent=true）；error=失败/错误；"
+                        "insight=洞察/总结；preference=偏好；observation=普通观察（默认）。"
+                    ),
+                    "default": "observation",
+                },
+                "source": {
+                    "type": "string",
+                    "description": "谁写入的，如 claude_code / cursor / fay_self / user / schedule_manager。",
+                },
+                "persistent": {
+                    "type": "boolean",
+                    "description": "是否长期保留。kind=rule 时应设 true。",
+                    "default": False,
+                },
+                "extra_tags": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": (
+                        "额外标签，建议形如 domain:quant, strategy:mean_reversion, "
+                        "symbol:AAPL, session:<id>, schedule:hourly, date:2026-04-23。"
+                    ),
+                },
+                "username": {
+                    "type": "string",
+                    "description": "目标用户名。留空则使用默认/全局用户。",
+                },
+            },
+            "required": ["content"],
+        },
+    ),
+    Tool(
+        name="memory_search",
+        description=(
+            "按语义相关度从 Fay 长期记忆里检索节点。可叠加 tag 过滤（AND/OR）。"
+            "常用于外部 agent 在任务开始前回溯\"上次发生过什么\"。"
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "自然语言查询，例如 '最近 AAPL 的止损情况' 或 '用户的饮食偏好'"},
+                "n": {"type": "integer", "description": "返回条数，默认 10", "default": 10},
+                "filter_tags_all": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "AND 过滤，全部 tag 都要匹配。例：['domain:quant','kind:event']",
+                },
+                "filter_tags_any": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "OR 过滤，任一 tag 匹配即可。",
+                },
+                "node_type": {
+                    "type": "string",
+                    "enum": ["all", "observation", "conversation", "reflection"],
+                    "default": "all",
+                    "description": "按节点类型过滤，默认 all。",
+                },
+                "username": {"type": "string"},
+            },
+            "required": ["query"],
+        },
+    ),
+    Tool(
+        name="memory_get_recent",
+        description="按时间倒序返回最近 N 条记忆（不依赖语义相似度）。可配合 tag 过滤，查\"今天发生过什么\"。",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "n": {"type": "integer", "default": 20},
+                "filter_tags_all": {"type": "array", "items": {"type": "string"}},
+                "node_type": {
+                    "type": "string",
+                    "enum": ["all", "observation", "conversation", "reflection"],
+                    "default": "all",
+                },
+                "username": {"type": "string"},
+            },
+            "required": [],
+        },
+    ),
+    Tool(
+        name="memory_get_active_rules",
+        description=(
+            "返回所有 kind=rule 且 persistent=true 的记忆，即\"长期有效的规则\"。"
+            "典型用途：外部 agent 每次开新任务前拉一次，看用户/场景有没有长期约束"
+            "（如\"每小时检查策略异常\"、\"晚上 10 点后不要打扰\"、\"老人晨起必须测血压\"）。"
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "n": {"type": "integer", "default": 50},
+                "username": {"type": "string"},
+            },
+            "required": [],
+        },
+    ),
+    Tool(
+        name="memory_get_reflections",
+        description="返回最近的反思节点（通常由 Fay 每晚 23 点生成的 insight，也包括外部写入的 kind=insight）。",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "n": {"type": "integer", "default": 10},
+                "username": {"type": "string"},
+            },
+            "required": [],
+        },
+    ),
+    Tool(
+        name="memory_get_user_profile",
+        description=(
+            "返回指定用户的画像（portrait）和补充信息（extra_info），来自 T_Member 表。"
+            "画像由 Fay 每天 22 点基于对话历史自动生成，描述性格、偏好、与 Fay 的关系等。"
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "username": {"type": "string"},
+            },
+            "required": [],
+        },
+    ),
+    Tool(
+        name="memory_get_schema",
+        description=(
+            "返回 Fay 记忆系统的 kind 枚举与 tag 命名空间规范。"
+            "外部 agent 在不确定参数结构时先调用它一次，即可拿到完整约定。"
+        ),
+        inputSchema={"type": "object", "properties": {}, "required": []},
+    ),
+]
+
+
 TOOLS: list[Tool] = [
     Tool(
         name="broadcast_message",
@@ -104,7 +278,8 @@ TOOLS: list[Tool] = [
             },
             "required": [],
         },
-    )
+    ),
+    *_MEMORY_TOOLS,
 ]
 
 async def _handle_list_tools() -> list[Tool]:
@@ -237,6 +412,10 @@ async def _handle_call_tool(name: str, arguments: Dict[str, Any]) -> list[TextCo
         prefix = "成功" if ok else "失败"
         return [_text_content(f"{prefix}: {message}")]
 
+    # 记忆工具：全部代理到 core.memory_service，进程内直接调用，不走 HTTP
+    if name.startswith("memory_"):
+        return await _handle_memory_tool(name, arguments or {})
+
     target = _aggregated_index.get(name)
     if not target:
         return [_text_content(f"未知工具: {name}")]
@@ -249,6 +428,78 @@ async def _handle_call_tool(name: str, arguments: Dict[str, Any]) -> list[TextCo
         return _normalize_result(result)
     except Exception as e:
         return [_text_content(f"error: {type(e).__name__}: {e}")]
+
+
+async def _handle_memory_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
+    """派发 memory_* 工具到 core.memory_service 的同名函数。
+
+    走 asyncio.to_thread 是因为 memory_service 内部会拿 agent_lock 并做 I/O，
+    不能阻塞 MCP 事件循环。
+    """
+    if memory_service is None:
+        return [_text_content(json.dumps(
+            {"ok": False, "error": "core.memory_service 未加载，请检查启动路径"},
+            ensure_ascii=False,
+        ))]
+
+    try:
+        if name == "memory_remember":
+            content = arguments.get("content", "")
+            kind = arguments.get("kind", "observation")
+            source = arguments.get("source")
+            persistent = bool(arguments.get("persistent", False))
+            extra_tags = arguments.get("extra_tags") or []
+            username = arguments.get("username")
+            result = await asyncio.to_thread(
+                memory_service.remember,
+                username, content,
+                kind=kind, source=source, persistent=persistent,
+                extra_tags=extra_tags,
+            )
+        elif name == "memory_search":
+            result = await asyncio.to_thread(
+                memory_service.search,
+                arguments.get("username"), arguments.get("query", ""),
+                n=int(arguments.get("n", 10)),
+                filter_tags_all=arguments.get("filter_tags_all"),
+                filter_tags_any=arguments.get("filter_tags_any"),
+                node_type=arguments.get("node_type", "all"),
+            )
+        elif name == "memory_get_recent":
+            result = await asyncio.to_thread(
+                memory_service.get_recent,
+                arguments.get("username"),
+                n=int(arguments.get("n", 20)),
+                filter_tags_all=arguments.get("filter_tags_all"),
+                node_type=arguments.get("node_type", "all"),
+            )
+        elif name == "memory_get_active_rules":
+            result = await asyncio.to_thread(
+                memory_service.get_active_rules,
+                arguments.get("username"),
+                n=int(arguments.get("n", 50)),
+            )
+        elif name == "memory_get_reflections":
+            result = await asyncio.to_thread(
+                memory_service.get_reflections,
+                arguments.get("username"),
+                n=int(arguments.get("n", 10)),
+            )
+        elif name == "memory_get_user_profile":
+            result = await asyncio.to_thread(
+                memory_service.get_user_profile,
+                arguments.get("username"),
+            )
+        elif name == "memory_get_schema":
+            result = memory_service.get_schema()
+        else:
+            return [_text_content(f"未知记忆工具: {name}")]
+    except Exception as e:
+        return [_text_content(json.dumps(
+            {"ok": False, "error": f"{type(e).__name__}: {e}"}, ensure_ascii=False,
+        ))]
+
+    return [_text_content(json.dumps(result, ensure_ascii=False, indent=2))]
 
 
 def _normalize_result(result: Any) -> List[TextContent]:
