@@ -542,9 +542,10 @@ def load_config(force_reload=False):
     volcano_tts_cluster = system_config.get('key', 'volcano_tts_cluster', fallback=None)
     volcano_tts_voice_type = system_config.get('key', 'volcano_tts_voice_type', fallback=None)
 
-    # 读取 Embedding API 配置（复用 LLM 的 url 和 key）
+    # 读取 Embedding API 配置（base_url 可单独配置，未配置则复用 LLM）
     embedding_api_model = system_config.get('key', 'embedding_api_model', fallback='BAAI/bge-large-zh-v1.5')
-    embedding_api_base_url = gpt_base_url  # 复用 LLM base_url
+    _embedding_base_url_cfg = system_config.get('key', 'embedding_base_url', fallback='')
+    embedding_api_base_url = _embedding_base_url_cfg.strip() or gpt_base_url
     embedding_api_key = key_gpt_api_key  # 复用 LLM api_key
 
     start_mode = system_config.get('key', 'start_mode', fallback=None)
