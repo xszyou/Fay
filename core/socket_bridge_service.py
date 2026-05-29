@@ -4,6 +4,18 @@ import socket
 import threading
 import time
 import sys
+import traceback
+
+try:
+    from utils import util
+    def _log(msg):
+        try:
+            util.log(1, msg)
+        except Exception:
+            print(msg, file=sys.stderr)
+except Exception:
+    def _log(msg):
+        print(msg, file=sys.stderr)
 
 __wss = None
 
@@ -13,105 +25,127 @@ def new_instance():
         __wss = SocketBridgeService()
     return __wss
 
+def _reset_instance():
+    global __wss
+    __wss = None
+
 class SocketBridgeService:
     def __init__(self):
-        self.websockets = {}  
-        self.sockets = {}     
-        self.message_queue = asyncio.Queue()  
+        self.websockets = {}
+        self.sockets = {}
+        self.send_locks = {}
         self.running = True
         self.loop = None
         self.tasks = set()
         self.server = None
+        self._connect_timeout = 5.0
+        self._send_timeout = 10.0
 
     async def handler(self, websocket, path):
         ws_id = id(websocket)
         self.websockets[ws_id] = websocket
+        receive_task = None
         try:
-            if ws_id not in self.sockets:
-                sock = await self.create_socket_client()
-                if sock:
-                    self.sockets[ws_id] = sock
-                else:
-                    print(f"Failed to connect TCP socket for WebSocket {ws_id}")
+            sock = await self.create_socket_client()
+            if sock is None:
+                _log(f"[9001] 连接 10001 失败，断开 WebSocket {ws_id}")
+                try:
                     await websocket.close()
-                    return
+                except Exception:
+                    pass
+                return
+            self.sockets[ws_id] = sock
+            self.send_locks[ws_id] = asyncio.Lock()
+
             receive_task = asyncio.create_task(self.receive_from_socket(ws_id))
             self.tasks.add(receive_task)
             receive_task.add_done_callback(self.tasks.discard)
+
             async for message in websocket:
                 await self.send_to_socket(ws_id, message)
         except websockets.ConnectionClosed:
             pass
-        except Exception as e:
-            pass
+        except Exception:
+            _log(f"[9001] handler 异常 ws_id={ws_id}: {traceback.format_exc()}")
         finally:
+            if receive_task and not receive_task.done():
+                receive_task.cancel()
             self.close_socket_client(ws_id)
             self.websockets.pop(ws_id, None)
+            self.send_locks.pop(ws_id, None)
 
     async def create_socket_client(self):
+        loop = asyncio.get_event_loop()
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(self._connect_timeout)
         try:
-            sock.connect(('127.0.0.1', 10001))
-            sock.setblocking(True)  # 设置为阻塞模式
+            await loop.run_in_executor(None, sock.connect, ('127.0.0.1', 10001))
+            sock.settimeout(None)
             return sock
-        except Exception as e:
+        except Exception:
+            _log(f"[9001] 连接 10001 失败: {traceback.format_exc()}")
+            try:
+                sock.close()
+            except Exception:
+                pass
             return None
 
     async def send_to_socket(self, ws_id, message):
         sock = self.sockets.get(ws_id)
-        if sock:
-            try:
-                await asyncio.to_thread(sock.sendall, message)
-            except Exception as e:
-                self.close_socket_client(ws_id)
+        lock = self.send_locks.get(ws_id)
+        if sock is None or lock is None:
+            return
+        try:
+            async with lock:
+                await asyncio.wait_for(
+                    asyncio.to_thread(sock.sendall, message),
+                    timeout=self._send_timeout,
+                )
+        except Exception:
+            _log(f"[9001] send_to_socket 异常 ws_id={ws_id}: {traceback.format_exc()}")
+            self.close_socket_client(ws_id)
 
     async def receive_from_socket(self, ws_id):
         sock = self.sockets.get(ws_id)
-        if not sock:
+        websocket = self.websockets.get(ws_id)
+        if not sock or not websocket:
             return
         try:
             while self.running:
                 data = await asyncio.to_thread(sock.recv, 4096)
-                if data:
-                    await self.message_queue.put((ws_id, data))
-                else:
+                if not data:
                     break
-        except Exception as e:
-            pass
+                if not websocket.open:
+                    break
+                try:
+                    await websocket.send(data)
+                except websockets.ConnectionClosed:
+                    break
+                except Exception:
+                    _log(f"[9001] websocket.send 异常 ws_id={ws_id}: {traceback.format_exc()}")
+                    break
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            _log(f"[9001] receive_from_socket 异常 ws_id={ws_id}: {traceback.format_exc()}")
         finally:
             self.close_socket_client(ws_id)
-
-    async def process_message_queue(self):
-        while self.running or not self.message_queue.empty():
-            try:
-                ws_id, data = await asyncio.wait_for(self.message_queue.get(), timeout=1.0)
-                websocket = self.websockets.get(ws_id)
-                if websocket and websocket.open:
-                    try:
-                        await websocket.send(data)
-                    except Exception as e:
-                        pass
-                self.message_queue.task_done()
-            except asyncio.TimeoutError:
-                continue
-            except Exception as e:
-                pass
 
     def close_socket_client(self, ws_id):
         sock = self.sockets.pop(ws_id, None)
         if sock:
             try:
                 sock.shutdown(socket.SHUT_RDWR)
-            except Exception as e:
+            except Exception:
                 pass
-                # print(f"Error shutting down socket for WebSocket {ws_id}: {e}", file=sys.stderr)
-            sock.close()
+            try:
+                sock.close()
+            except Exception:
+                pass
 
     async def start(self, host='0.0.0.0', port=9001):
         self.server = await websockets.serve(self.handler, host, port)
-        process_task = asyncio.create_task(self.process_message_queue())
-        self.tasks.add(process_task)
-        process_task.add_done_callback(self.tasks.discard)
+        _log(f"[9001] socket_bridge_service 已监听 {host}:{port}")
         try:
             await self.server.wait_closed()
         except asyncio.CancelledError:
@@ -127,42 +161,43 @@ class SocketBridgeService:
         for ws_id, ws in list(self.websockets.items()):
             try:
                 await ws.close()
-            except Exception as e:
+            except Exception:
                 pass
-                # print(f"Error closing WebSocket {ws_id}: {e}", file=sys.stderr)
         self.websockets.clear()
 
-        for ws_id, sock in list(self.sockets.items()):
-            try:
-                sock.shutdown(socket.SHUT_RDWR)
-            except Exception as e:
-                pass
-                # print(f"Error shutting down socket for WebSocket {ws_id}: {e}", file=sys.stderr)
-            sock.close()
-        self.sockets.clear()
+        for ws_id in list(self.sockets.keys()):
+            self.close_socket_client(ws_id)
+        self.send_locks.clear()
 
-        await self.message_queue.join()
-
-        for task in self.tasks:
+        for task in list(self.tasks):
             task.cancel()
-        await asyncio.gather(*self.tasks, return_exceptions=True)
+        if self.tasks:
+            await asyncio.gather(*self.tasks, return_exceptions=True)
         self.tasks.clear()
 
         if self.server:
             self.server.close()
-            await self.server.wait_closed()
-
+            try:
+                await self.server.wait_closed()
+            except Exception:
+                pass
+            self.server = None
 
     def start_service(self):
         self.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.loop)
         try:
             self.loop.run_until_complete(self.start(host='0.0.0.0', port=9001))
-        except Exception as e:
-            pass
-            # print(f"Service exception: {e}", file=sys.stderr)
+        except OSError as e:
+            _log(f"[9001] 端口绑定失败（可能被占用）: {e}")
+        except Exception:
+            _log(f"[9001] start_service 启动异常: {traceback.format_exc()}")
         finally:
-            self.loop.close()
+            try:
+                self.loop.close()
+            except Exception:
+                pass
+            _reset_instance()
 
 if __name__ == '__main__':
     service = new_instance()
@@ -173,14 +208,13 @@ if __name__ == '__main__':
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
-        # 在服务的事件循环中运行 shutdown 协程
         print("Initiating shutdown...")
         if service.loop and service.loop.is_running():
             future = asyncio.run_coroutine_threadsafe(service.shutdown(), service.loop)
             try:
-                future.result()  # 等待关闭完成
+                future.result(timeout=5)
                 print("Shutdown coroutine completed.")
             except Exception as e:
                 print(f"Shutdown exception: {e}", file=sys.stderr)
-        service_thread.join()
+        service_thread.join(timeout=5)
         print("Service has been shut down.")

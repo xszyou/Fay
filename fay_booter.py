@@ -2,6 +2,7 @@
 import time
 import os
 import re
+import asyncio
 import pyaudio
 import socket
 import requests
@@ -342,8 +343,19 @@ def stop():
                 value.stop()
         deviceSocketServer.close()
         if socket_service_instance is not None:
-            socket_service_instance.stop_server()
-            socket_service_instance = None 
+            try:
+                loop = socket_service_instance.loop
+                if loop is not None and loop.is_running():
+                    future = asyncio.run_coroutine_threadsafe(
+                        socket_service_instance.shutdown(), loop
+                    )
+                    try:
+                        future.result(timeout=5)
+                    except Exception as e:
+                        util.log(1, f'socket_bridge_service 关闭超时/异常: {e}')
+            except Exception as e:
+                util.log(1, f'关闭 socket_bridge_service 时异常: {e}')
+            socket_service_instance = None
     except:
         pass
 
