@@ -999,6 +999,10 @@ def api_delete_user():
         if username == 'User':
             return jsonify({'success': False, 'message': '无法删除主人账户'}), 400
 
+        # 防止路径穿越攻击
+        if not username or '/' in username or '\\' in username or '..' in username or os.path.isabs(username):
+            return jsonify({'success': False, 'message': '用户名包含非法字符'}), 400
+
         deleted_msgs = 0
         deleted_memory = False
         deleted_user = False
@@ -1013,7 +1017,11 @@ def api_delete_user():
         try:
             base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             mem_base = os.path.join(base_dir, "memory")
-            user_memory_dir = os.path.join(mem_base, str(username))
+            user_memory_dir = os.path.realpath(os.path.join(mem_base, str(username)))
+
+            # 确保路径在 memory 目录内
+            if not user_memory_dir.startswith(os.path.realpath(mem_base) + os.sep):
+                return jsonify({'success': False, 'message': '路径非法'}), 400
 
             if os.path.exists(user_memory_dir) and os.path.isdir(user_memory_dir):
                 import shutil
@@ -1767,17 +1775,27 @@ def api_local_image():
         if not file_path:
             return jsonify({'error': '缺少文件路径参数'}), 400
 
+        # 限制图片访问范围
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        allowed_dirs = [
+            os.path.realpath(base_dir),
+            os.path.realpath(os.path.join(base_dir, "cache_data")),
+        ]
+        real_path = os.path.realpath(file_path)
+        if not any(real_path.startswith(d + os.sep) for d in allowed_dirs):
+            return jsonify({'error': '无权访问该路径'}), 403
+
         # 检查文件是否存在
-        if not os.path.exists(file_path):
+        if not os.path.exists(real_path):
             return jsonify({'error': f'文件不存在: {file_path}'}), 404
 
         # 检查是否为图片文件
         valid_extensions = ('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp')
-        if not file_path.lower().endswith(valid_extensions):
+        if not real_path.lower().endswith(valid_extensions):
             return jsonify({'error': '不是有效的图片文件'}), 400
 
         # 返回图片文件
-        return send_file(file_path)
+        return send_file(real_path)
     except Exception as e:
         return jsonify({'error': f'获取图片时出错: {str(e)}'}), 500
 
@@ -1791,13 +1809,19 @@ def api_open_image():
 
         file_path = data['path']
 
+        # 限制文件访问范围
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        real_path = os.path.realpath(file_path)
+        if not real_path.startswith(os.path.realpath(base_dir) + os.sep):
+            return jsonify({'success': False, 'message': '无权访问该路径'}), 403
+
         # 检查文件是否存在
-        if not os.path.exists(file_path):
+        if not os.path.exists(real_path):
             return jsonify({'success': False, 'message': f'文件不存在: {file_path}'}), 404
 
         # 检查是否为图片文件
         valid_extensions = ('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp')
-        if not file_path.lower().endswith(valid_extensions):
+        if not real_path.lower().endswith(valid_extensions):
             return jsonify({'success': False, 'message': '不是有效的图片文件'}), 400
 
         # 使用系统默认程序打开图片
@@ -1806,11 +1830,11 @@ def api_open_image():
 
         system = platform.system()
         if system == 'Windows':
-            os.startfile(file_path)
+            os.startfile(real_path)
         elif system == 'Darwin':  # macOS
-            subprocess.run(['open', file_path])
+            subprocess.run(['open', real_path])
         else:  # Linux
-            subprocess.run(['xdg-open', file_path])
+            subprocess.run(['xdg-open', real_path])
 
         return jsonify({'success': True, 'message': '已打开图片'}), 200
     except Exception as e:
