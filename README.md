@@ -117,7 +117,6 @@ https://qqk9ntwbcit.feishu.cn/wiki/Mcw3wbA3RiNZzwkexz6cnKCsnhh
 
 **交流群及资料教程**关注公众号 **fay数字人**（**请先star本仓库**）
 
-![](readme/gzh.png)
 
 **商务联系**
 
