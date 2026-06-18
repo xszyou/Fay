@@ -2218,7 +2218,13 @@ def _auto_reply_after_execution(username, finished_exec_state):
                 prefix = "_<isfirst>" if force_first else ""
                 suffix = "_<isend>" if force_end else ""
                 marked = f"{prefix}{text}{suffix}"
-            sm.write_sentence(username, marked, conversation_id=conv_id)
+            ok = sm.write_sentence(username, marked, conversation_id=conv_id)
+            # 结束标记确实写入成功后才标记 is_end_sent
+            if ok and force_end and state_mgr is not None:
+                try:
+                    state_mgr.mark_end_sent(username, conversation_id=conv_id)
+                except Exception:
+                    pass
 
         # 先写出 think 标签（执行日志）
         _write(think_tag, force_first=is_first)
@@ -2592,7 +2598,13 @@ def question(content, username, observation=None):
             prefix = "_<isfirst>" if force_first else ""
             suffix = "_<isend>" if force_end else ""
             marked_text = f"{prefix}{text}{suffix}"
-        stream_manager.new_instance().write_sentence(username, marked_text, conversation_id=conversation_id)
+        ok = stream_manager.new_instance().write_sentence(username, marked_text, conversation_id=conversation_id)
+        # 结束标记确实写入成功后才标记 is_end_sent，确保被丢弃时兜底补发能够触发
+        if ok and force_end and state_mgr is not None:
+            try:
+                state_mgr.mark_end_sent(username, conversation_id=conversation_id)
+            except Exception:
+                pass
 
     def stream_response_chunks(chunks, prepend_text: str = "") -> None:
         nonlocal accumulated_text, full_response_text, is_first_sentence

@@ -46,6 +46,10 @@ from flask_httpauth import HTTPBasicAuth
 from core import qa_service
 from core import stream_manager
 
+# 文字接口读取回复流时的空闲超时（秒）：连续这么久读不到任何数据则判定异常并收尾，
+# 避免因结束标记(_<isend>)丢失导致 /v1/chat/completions 永久挂起。
+_STREAM_READ_IDLE_TIMEOUT = 180
+
 # 全局变量，用于跟踪当前的genagents服务器
 genagents_server = None
 genagents_thread = None
@@ -1235,11 +1239,24 @@ def gpt_stream_response(last_content, username):
     _, nlp_Stream = sm.get_Stream(username)
     def generate():
         conversation_id = sm.get_conversation_id(username)
+        # 兜底退出条件：避免因结束标记(_<isend>)丢失而无限挂起
+        idle_timeout = _STREAM_READ_IDLE_TIMEOUT   # 无任何数据可读的最大空闲秒数
+        last_activity = time.time()
+        ended = False
         while True:
             sentence = nlp_Stream.read()
             if sentence is None:
+                # 会话已被新的请求顶替：本轮已失效，立即收尾，避免无限丢弃新会话内容
+                if sm.get_conversation_id(username) != conversation_id:
+                    break
+                # 长时间无任何输出：判定为异常（结束标记丢失/生产侧异常），收尾退出
+                if time.time() - last_activity > idle_timeout:
+                    util.printInfo(1, username, '[文字沟通接口(流式)] 等待回复超时，提前结束', time.time())
+                    break
                 gsleep(0.01)
                 continue
+
+            last_activity = time.time()
 
             # 跳过非当前会话
             try:
@@ -1281,8 +1298,26 @@ def gpt_stream_response(last_content, username):
                 }
                 yield f"data: {json.dumps(message)}\n\n"
             if is_end:
+                ended = True
                 break
             gsleep(0.01)
+        # 非正常结束（超时/会话切换）时补发一个结束块，保证客户端不会一直等待
+        if not ended:
+            message = {
+                "id": "faystreaming-" + str(uuid.uuid4()),
+                "object": "chat.completion.chunk",
+                "created": int(time.time()),
+                "model": "fay-streaming",
+                "choices": [
+                    {
+                        "delta": {"content": ""},
+                        "index": 0,
+                        "finish_reason": "stop"
+                    }
+                ],
+                "system_fingerprint": ""
+            }
+            yield f"data: {json.dumps(message)}\n\n"
         yield 'data: [DONE]\n\n'
 
     return Response(generate(), mimetype='text/event-stream')
@@ -1335,11 +1370,23 @@ def non_streaming_response(last_content, username):
     _, nlp_Stream = sm.get_Stream(username)
     text = ""
     conversation_id = sm.get_conversation_id(username)
+    # 兜底退出条件：避免因结束标记(_<isend>)丢失而无限挂起
+    idle_timeout = _STREAM_READ_IDLE_TIMEOUT
+    last_activity = time.time()
     while True:
         sentence = nlp_Stream.read()
         if sentence is None:
+            # 会话已被新的请求顶替：本轮已失效，返回已累计内容
+            if sm.get_conversation_id(username) != conversation_id:
+                break
+            # 长时间无任何输出：判定为异常，返回已累计内容，避免无限等待
+            if time.time() - last_activity > idle_timeout:
+                util.printInfo(1, username, '[文字沟通接口(非流式)] 等待回复超时，返回已生成内容', time.time())
+                break
             gsleep(0.01)
             continue
+
+        last_activity = time.time()
 
         # 跳过非当前会话
         try:

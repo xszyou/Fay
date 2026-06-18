@@ -155,18 +155,22 @@ class StreamTextProcessor:
                 is_qa=is_qa,
                 conversation_id=conversation_id,
             )
-            stream_manager.new_instance().write_sentence(
+            ok = stream_manager.new_instance().write_sentence(
                 username, marked_text, conversation_id=conversation_id
             )
+            if ok:
+                state_manager.mark_end_sent(username, conversation_id=conversation_id)
             first_sentence_sent = True
         elif not first_sentence_sent:
             # 如果整个文本都没有找到合适的分割点，作为完整句子发送
             marked_text, _, _ = state_manager.prepare_sentence(
                 username, text, force_first=True, force_end=True, conversation_id=conversation_id
             )
-            stream_manager.new_instance().write_sentence(
+            ok = stream_manager.new_instance().write_sentence(
                 username, marked_text, conversation_id=conversation_id
             )
+            if ok:
+                state_manager.mark_end_sent(username, conversation_id=conversation_id)
         else:
             # 如果没有剩余文本，需要确保最后发送的句子包含结束标记
             session_info = state_manager.get_session_info(username)
@@ -174,9 +178,11 @@ class StreamTextProcessor:
                 marked_text, _, _ = state_manager.prepare_sentence(
                     username, "", force_first=False, force_end=True, conversation_id=conversation_id
                 )
-                stream_manager.new_instance().write_sentence(
+                ok = stream_manager.new_instance().write_sentence(
                     username, marked_text, conversation_id=conversation_id
                 )
+                if ok:
+                    state_manager.mark_end_sent(username, conversation_id=conversation_id)
 
         # 结束会话
         state_manager.end_session(username, conversation_id=conversation_id)
@@ -291,9 +297,11 @@ class StreamTextProcessor:
             marked_text, _, _ = state_manager.prepare_sentence(
                 username, text, force_first=True, force_end=True, conversation_id=conversation_id
             )
-            stream_manager.new_instance().write_sentence(
+            ok = stream_manager.new_instance().write_sentence(
                 username, marked_text, conversation_id=conversation_id
             )
+            if ok:
+                state_manager.mark_end_sent(username, conversation_id=conversation_id)
             util.log(1, "使用备用方案发送完整文本")
         except Exception as e:
             util.log(1, f"备用发送方案也失败: {str(e)}")

@@ -95,7 +95,10 @@ class StreamStateManager:
             # 判定是否为尾句
             is_end = bool(force_end)
             if is_end:
-                state_info["is_end_sent"] = True
+                # 注意：此处仅推进状态，不再抢先置 is_end_sent。
+                # is_end_sent 必须等结束标记真正写入缓冲成功后，由 mark_end_sent() 置位，
+                # 否则一旦写入被 stream_manager 丢弃（停止标志/会话切换），兜底补发会被错误跳过，
+                # 导致结束标记永久丢失、读取端无限挂起。
                 state_info["state"] = StreamState.LAST_SENTENCE
 
             # 句子计数 +1
@@ -110,6 +113,20 @@ class StreamStateManager:
             if is_qa and not marked_text.endswith("_<isqa>"):
                 marked_text += "_<isqa>"
             return marked_text, is_first, is_end
+
+    def mark_end_sent(self, username, conversation_id=None):
+        """在结束标记(_<isend>)确实写入缓冲成功后调用，标记本会话结束标记已提交。
+
+        仅当会话ID匹配时才置位，避免误标记到已切换的新会话。
+        """
+        with self.lock:
+            info = self.user_states.get(username)
+            if not info:
+                return
+            if conversation_id is not None and info.get("conversation_id") != conversation_id:
+                return
+            info["is_end_sent"] = True
+            info["state"] = StreamState.LAST_SENTENCE
 
     def end_session(self, username, conversation_id=None):
         """
