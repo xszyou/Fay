@@ -122,6 +122,8 @@ def gpt_request(prompt: str,
         messages=[{"role": "user", "content": prompt}]
       )
       # 确保返回的内容是UTF-8编码
+      if not response.choices or response.choices[0].message is None:
+        raise ValueError("LLM returned empty or filtered response")
       return response.choices[0].message.content
     except Exception as e:
       error_msg = f"GENERATION ERROR: {str(e)}"
@@ -137,6 +139,8 @@ def gpt_request(prompt: str,
       temperature=0.7
     )
     # 确保返回的内容是UTF-8编码
+    if not response.choices or response.choices[0].message is None:
+      raise ValueError("LLM returned empty or filtered response")
     return response.choices[0].message.content
   except Exception as e:
     error_msg = f"GENERATION ERROR: {str(e)}"
@@ -159,6 +163,8 @@ def gpt4_vision(messages: List[dict], max_tokens: int = 1500) -> str:
       max_tokens=max_tokens,
       temperature=0.7
     )
+    if not response.choices or response.choices[0].message is None:
+      raise ValueError("LLM returned empty or filtered response")
     return response.choices[0].message.content
   except Exception as e:
     return f"GENERATION ERROR: {str(e)}"
