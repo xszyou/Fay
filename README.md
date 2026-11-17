@@ -36,7 +36,7 @@
 - 支持deepseek等thinking llm
 - 自我认知提高
 - 仿生记忆
-- 支持MCP工具管理（sse、studio）
+- 支持MCP工具管理（SSE、STDIO、[Streamable HTTP](docs/mcp_streamable_http.md)）
 - 提供配置管理中心
 - 全链路交互互通
 

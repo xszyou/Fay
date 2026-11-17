@@ -17,6 +17,12 @@ from mcp import ClientSession
 from mcp.client.sse import sse_client
 from faymcp import tool_registry
 
+# Optional for installations using an older MCP SDK.
+try:
+    from mcp.client.streamable_http import streamablehttp_client
+except ImportError:
+    streamablehttp_client = None
+
 # 尝试导入本地 stdio 传输
 try:
     from mcp.client.stdio import stdio_client, StdioServerParameters
@@ -235,7 +241,7 @@ async def _await_or_value(obj, timeout: Optional[float] = None):
 
 class McpClient:
     """
-    兼容多版本 mcp 的 MCP 客户端，支持 SSE 与 STDIO。
+    兼容多版本 mcp 的 MCP 客户端，支持 SSE、STDIO 与 Streamable HTTP。
     修复：部分版本的 list_tools 返回同步 list，如果对其 await 会报
     "object list can't be used in 'await' expression"。
     """
@@ -247,7 +253,7 @@ class McpClient:
         self.server_url = server_url
         self.api_key = api_key
         self.transport = transport or "sse"
-        if self.transport not in ("sse", "stdio"):
+        if self.transport not in ("sse", "stdio", "streamable_http"):
             self.transport = "sse"
         self.stdio_config = stdio_config or {}
         self.server_id = server_id
@@ -575,9 +581,17 @@ class McpClient:
                     headers = {}
                     if self.api_key:
                         headers['Authorization'] = f'Bearer {self.api_key}'
-                    read_stream, write_stream = await stack.enter_async_context(
-                        sse_client(self.server_url, headers=headers)
-                    )
+                    if self.transport == "streamable_http":
+                        if streamablehttp_client is None:
+                            raise RuntimeError("Missing Streamable HTTP MCP client, run: pip install -U mcp")
+                        headers['User-Agent'] = 'Fay-MCP/1.0'
+                        read_stream, write_stream, _ = await stack.enter_async_context(
+                            streamablehttp_client(self.server_url, headers=headers)
+                        )
+                    else:
+                        read_stream, write_stream = await stack.enter_async_context(
+                            sse_client(self.server_url, headers=headers)
+                        )
 
                 self.session = await stack.enter_async_context(ClientSession(read_stream, write_stream))
                 try:
