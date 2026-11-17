@@ -262,6 +262,7 @@ def connect_to_real_mcp(server):
             client = McpClient(
                 endpoint,
                 api_key,
+                transport=transport,
                 server_id=server_id,
                 enabled_lookup=_enabled_lookup,
             )

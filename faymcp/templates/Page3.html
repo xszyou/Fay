@@ -584,14 +584,15 @@
                     <label class="mcp-label">类型:</label>
                     <select class="mcp-input" id="mcpTransport">
                       <option value="sse" selected>SSE（远程）</option>
+                      <option value="streamable_http">Streamable HTTP（远程）</option>
                       <option value="stdio">STDIO（本地）</option>
                     </select>
                   </div>
                   <!-- SSE 配置 -->
                   <div id="sseFields">
                     <div class="mcp-form-item">
-                      <label class="mcp-label">SSE服务器:</label>
-                      <input type="text" class="mcp-input" id="mcpIp" placeholder="请输入SSE地址">
+                      <label class="mcp-label">远程服务器:</label>
+                      <input type="text" class="mcp-input" id="mcpIp" placeholder="请输入MCP地址">
                     </div>
                     <div class="mcp-form-item">
                       <label class="mcp-label">Key:</label>
@@ -644,14 +645,15 @@
                     <label class="mcp-label">类型:</label>
                     <select class="mcp-input" id="editMcpTransport">
                       <option value="sse">SSE（远程）</option>
+                      <option value="streamable_http">Streamable HTTP（远程）</option>
                       <option value="stdio">STDIO（本地）</option>
                     </select>
                   </div>
                   <!-- SSE 配置 -->
                   <div id="editSseFields">
                     <div class="mcp-form-item">
-                      <label class="mcp-label">SSE服务器:</label>
-                      <input type="text" class="mcp-input" id="editMcpIp" placeholder="请输入SSE地址">
+                      <label class="mcp-label">远程服务器:</label>
+                      <input type="text" class="mcp-input" id="editMcpIp" placeholder="请输入MCP地址">
                     </div>
                     <div class="mcp-form-item">
                       <label class="mcp-label">Key:</label>
@@ -853,7 +855,7 @@
         saveBtn.disabled = true;
 
         let payload = { name, transport, auto_reconnect: autoReconnect, autostart };
-        if (transport === 'sse') {
+        if (transport !== 'stdio') {
           payload.ip = ip;
           payload.key = key;
         } else {
@@ -891,7 +893,7 @@
               if (autostart) badgeEl.classList.remove('hidden');
               else badgeEl.classList.add('hidden');
             }
-            if (transport === 'sse') {
+            if (transport !== 'stdio') {
               const ipEl = card.querySelector('.mcp-info .mcp-value');
               if (ipEl) {
                 ipEl.textContent = truncateText(ip);
@@ -978,7 +980,7 @@
           const ip = document.getElementById('mcpIp').value.trim();
           const key = document.getElementById('mcpKey').value.trim();
           if (!name || !ip) {
-            alert('请填写名称与SSE地址');
+            alert('请填写名称与MCP地址');
             return;
           }
           data = { ...data, ip, key };
@@ -1496,7 +1498,7 @@
           ipValue.title = server.ip; 
         }
         if (typeValue) {
-          typeValue.textContent = transport === 'stdio' ? 'STDIO（本地）' : 'SSE（远程）';
+          typeValue.textContent = transport === 'stdio' ? 'STDIO（本地）' : (transport === 'streamable_http' ? 'Streamable HTTP（远程）' : 'SSE（远程）');
         }
         if (latencyValue) { 
           latencyValue.textContent = server.latency; 
